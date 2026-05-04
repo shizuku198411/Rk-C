@@ -1,4 +1,4 @@
-import lib/syscall_ids
+import ../../lib/syscall_ids
 
 type
   U32* = uint32
