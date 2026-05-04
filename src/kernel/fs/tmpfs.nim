@@ -135,11 +135,6 @@ proc tmpfsInit*() =
   nodes[0].typ = TmpfsTypeDir
   nodes[0].parent = 0
   copyName(nodes[0].name, "/")
-
-  let readmeIdx = allocNode(0, "README", TmpfsTypeFile)
-  let text = cstring("hello from tmpfs\nthis file disappears after reboot\n")
-  discard tmpfsWriteText("/README", text)
-  discard readmeIdx
   ready = true
 
 proc printNodeName(idx: int) =

@@ -18,9 +18,7 @@ const
   SysExit = U64(5)
   SysLs = U64(6)
   SysCat = U64(7)
-  SysWriteDemo = U64(8)
   SysMkdir = U64(9)
-  SysWriteTmpDemo = U64(10)
   SysExec = U64(11)
   SysWait = U64(12)
   SysUnlink = U64(13)
@@ -150,14 +148,8 @@ proc handleSyscall*(frame: ptr TrapFrame) =
   of SysCat:
     frame.a0 = U64(fsCat(cast[cstring](frame.a0)))
   
-  of SysWriteDemo:
-    frame.a0 = U64(fsWriteText("/NOTE", "note written from U-mode shell\n"))
-  
   of SysMkdir:
     frame.a0 = U64(fsMkdir(cast[cstring](frame.a0)))
-  
-  of SysWriteTmpDemo:
-    frame.a0 = U64(fsWriteText("/tmp/NOTE", "note written to tmpfs\n"))
   
   of SysExec:
     frame.a0 = U64(execUserApp(cast[cstring](frame.a0), cast[cstring](frame.a1)))

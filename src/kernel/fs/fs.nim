@@ -362,11 +362,6 @@ proc formatFs() =
   superBlock.nodes[0].parent = 0
   copyName(superBlock.nodes[0].name, "/")
 
-  let readmeIdx = allocNode(0, "README", FsTypeFile)
-  let readme = cstring("hello from disk fs\ntry: ls /, ls /tmp, cat /README, mkdir /home\n")
-  superBlock.nodes[readmeIdx].size = U32(cstrlen(readme))
-  discard writeFileData(superBlock.nodes[readmeIdx], readme)
-
   discard allocNode(0, "tmp", FsTypeMount)
   discard allocNode(0, "bin", FsTypeDir)
 
