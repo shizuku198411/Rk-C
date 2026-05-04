@@ -21,7 +21,7 @@ proc printBanner() =
 proc printHelp() =
   write("commands:\n")
   write("  help                show this help\n")
-  write("  ls [path]           list directory\n")
+  write("  ls [-l] [path]      list directory\n")
   write("  cat <path>          print file\n")
   write("  mkdir <path>        create directory\n")
   write("  rm <path>           remove file\n")
@@ -83,7 +83,7 @@ proc parseCommand(line: cstring): bool =
 
   skipSpaces(line, pos)
   i = 0
-  while line[pos] != '\0' and line[pos] != ' ' and i < LineMax - 1:
+  while line[pos] != '\0' and i < LineMax - 1:
     argBuf[i] = line[pos]
     inc i
     inc pos

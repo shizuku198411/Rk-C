@@ -1,10 +1,8 @@
 import ../../kernel/console
 import ../../kernel/fs/blockdev
+import ../../kernel/fs/dirent
 import ../../kernel/fs/tmpfs
 import ../../lib/types
-
-type
-  U32 = uint32
 
 const
   FsMagic = U32(0x4e465332) # NFS2
@@ -401,61 +399,88 @@ proc fsInit*() =
   printBootMsg("mounted tmpfs on /tmp\n")
   fsReady = true
 
-proc printNodeName(idx: int) =
-  print(cast[cstring](addr superBlock.nodes[idx].name[0]))
-  if superBlock.nodes[idx].typ == FsTypeDir or superBlock.nodes[idx].typ == FsTypeMount:
-    putChar('/')
+proc fillNodeEntry(idx: int, outEntry: ptr FsDirEntry) =
+  outEntry.typ = superBlock.nodes[idx].typ
+  outEntry.size = superBlock.nodes[idx].size
 
-proc fsList*(path: cstring = "/") =
+  var i = 0
+  while i < FsDirEntryNameMax:
+    outEntry.name[i] = superBlock.nodes[idx].name[i]
+    inc i
+
+proc fillAppfsEntry(idx: int, outEntry: ptr FsDirEntry) =
+  outEntry.typ = FsDirEntryTypeFile
+  outEntry.size = appfsEntries[idx].size
+
+  var i = 0
+  while i < FsDirEntryNameMax:
+    outEntry.name[i] = appfsEntries[idx].name[i]
+    inc i
+
+proc fsReadDirEntry*(path: cstring, entryIndex: U64, outEntry: ptr FsDirEntry): int =
   if not fsReady:
-    println("fs not ready")
-    return
+    return -1
 
   let mountIdx = findMount(path)
   if mountIdx >= 0 and mounts[mountIdx].backend == vfsTmpfs:
-    discard tmpfsList(mountLocalPath(path, mounts[mountIdx].pathLen))
-    return
+    return tmpfsReadDirEntry(mountLocalPath(path, mounts[mountIdx].pathLen), entryIndex, outEntry)
+
+  let appFileIdx = resolveAppfsPath(path)
+  if appFileIdx >= 0:
+    if entryIndex != 0:
+      return 0
+    fillAppfsEntry(appFileIdx, outEntry)
+    return 1
 
   if isBinRoot(path):
     if not appfsReady:
-      println("appfs not ready")
-      return
-    var appIdx = 0
-    while appIdx < int(appfsEntryCount):
-      print(cast[cstring](addr appfsEntries[appIdx].name[0]))
-      putChar(' ')
-      printUnsigned(U64(appfsEntries[appIdx].size))
-      println(" bytes")
-      inc appIdx
-    return
+      return -1
+    if entryIndex >= U64(appfsEntryCount):
+      return 0
+    fillAppfsEntry(int(entryIndex), outEntry)
+    return 1
 
   let dir = resolvePath(path)
   if dir < 0:
-    println("not found")
-    return
+    return -1
+
   if superBlock.nodes[dir].typ == FsTypeFile:
-    printNodeName(dir)
-    putChar(' ')
-    printUnsigned(U64(superBlock.nodes[dir].size))
-    println(" bytes")
-    return
+    if entryIndex != 0:
+      return 0
+    fillNodeEntry(dir, outEntry)
+    return 1
 
   if superBlock.nodes[dir].typ == FsTypeMount:
-    discard tmpfsList("/")
-    return
+    return tmpfsReadDirEntry("/", entryIndex, outEntry)
 
+  var seen = U64(0)
   var i = 0
   while i < FsMaxNodes:
     if superBlock.nodes[i].used != 0 and superBlock.nodes[i].parent == U32(dir) and i != dir:
-      printNodeName(i)
-      if superBlock.nodes[i].typ == FsTypeFile:
-        putChar(' ')
-        printUnsigned(U64(superBlock.nodes[i].size))
-        print(" bytes")
-      elif superBlock.nodes[i].typ == FsTypeMount:
-        print(" mount")
-      putChar('\n')
+      if seen == entryIndex:
+        fillNodeEntry(i, outEntry)
+        return 1
+      inc seen
     inc i
+  0
+
+proc fsReadDirEntries*(path: cstring, outEntries: ptr FsDirEntry, maxEntries: U64): int =
+  if outEntries == nil or maxEntries == 0:
+    return -1
+
+  let entries = cast[ptr UncheckedArray[FsDirEntry]](outEntries)
+  var count = U64(0)
+  while count < maxEntries:
+    let readResult = fsReadDirEntry(path, count, addr entries[count])
+    if readResult < 0:
+      if count == 0:
+        return -1
+      return int(count)
+    if readResult == 0:
+      return int(count)
+    inc count
+
+  int(count)
 
 proc fsCat*(path: cstring): int =
   if not fsReady:

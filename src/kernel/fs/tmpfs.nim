@@ -1,8 +1,7 @@
 import ../../kernel/console
+import ../../kernel/fs/dirent
 import ../../lib/types
 
-type
-  U32 = uint32
 
 const
   TmpfsMaxNodes = 16
@@ -137,35 +136,37 @@ proc tmpfsInit*() =
   copyName(nodes[0].name, "/")
   ready = true
 
-proc printNodeName(idx: int) =
-  print(cast[cstring](addr nodes[idx].name[0]))
-  if nodes[idx].typ == TmpfsTypeDir:
-    putChar('/')
+proc fillDirEntry(idx: int, outEntry: ptr FsDirEntry) =
+  outEntry.typ = nodes[idx].typ
+  outEntry.size = nodes[idx].size
 
-proc tmpfsList*(path: cstring = "/"): int =
-  if not ready:
+  var i = 0
+  while i < FsDirEntryNameMax:
+    outEntry.name[i] = nodes[idx].name[i]
+    inc i
+
+proc tmpfsReadDirEntry*(path: cstring, entryIndex: U64, outEntry: ptr FsDirEntry): int =
+  if not ready or outEntry == nil:
     return -1
 
   let dir = resolvePath(path)
   if dir < 0:
-    println("not found")
     return -1
-  if nodes[dir].typ == TmpfsTypeFile:
-    printNodeName(dir)
-    putChar(' ')
-    printUnsigned(U64(nodes[dir].size))
-    println(" bytes")
-    return 0
 
+  if nodes[dir].typ == TmpfsTypeFile:
+    if entryIndex != 0:
+      return 0
+    fillDirEntry(dir, outEntry)
+    return 1
+
+  var seen = U64(0)
   var i = 0
   while i < TmpfsMaxNodes:
     if nodes[i].used != 0 and nodes[i].parent == U32(dir) and i != dir:
-      printNodeName(i)
-      if nodes[i].typ == TmpfsTypeFile:
-        putChar(' ')
-        printUnsigned(U64(nodes[i].size))
-        print(" bytes")
-      putChar('\n')
+      if seen == entryIndex:
+        fillDirEntry(i, outEntry)
+        return 1
+      inc seen
     inc i
   0
 

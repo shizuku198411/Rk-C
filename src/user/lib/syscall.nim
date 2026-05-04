@@ -1,13 +1,26 @@
 type
+  U32* = uint32
   U64* = uint64
   I32* = int32
+
+const
+  DirEntryNameMax* = 16
+  DirEntryTypeFile* = U32(1)
+  DirEntryTypeDir* = U32(2)
+  DirEntryTypeMount* = U32(3)
+
+type
+  DirEntry* {.packed.} = object
+    typ*: U32
+    size*: U32
+    name*: array[DirEntryNameMax, char]
 
 proc sysWrite*(buf: pointer, len: U64): U64 {.importc: "user_sys_write", cdecl.}
 proc sysRead*(buf: pointer, len: U64): U64 {.importc: "user_sys_read", cdecl.}
 proc sysPs*(): U64 {.importc: "user_sys_ps", cdecl.}
 proc sysTicks*(): U64 {.importc: "user_sys_ticks", cdecl.}
 proc sysExit*(status: U64) {.importc: "user_sys_exit", cdecl, noreturn.}
-proc sysLs*(path: cstring): U64 {.importc: "user_sys_ls", cdecl.}
+proc sysLs*(path: cstring, entries: ptr DirEntry, maxEntries: U64): I32 {.importc: "user_sys_ls", cdecl.}
 proc sysCat*(path: cstring): I32 {.importc: "user_sys_cat", cdecl.}
 proc sysMkdir*(path: cstring): I32 {.importc: "user_sys_mkdir", cdecl.}
 proc sysExec*(path: cstring, arg: cstring): I32 {.importc: "user_sys_exec", cdecl.}

@@ -1,5 +1,6 @@
 import ../kernel/console
 import ../kernel/exec
+import ../kernel/fs/dirent
 import ../kernel/fs/fs
 import ../kernel/process
 import ../kernel/timer
@@ -139,11 +140,10 @@ proc handleSyscall*(frame: ptr TrapFrame) =
     frame.a0 = syscallExit(frame.a0)
   
   of SysLs:
-    if frame.a0 == 0:
-      fsList()
-    else:
-      fsList(cast[cstring](frame.a0))
-    frame.a0 = 0
+    let path =
+      if frame.a0 == 0: cstring("/")
+      else: cast[cstring](frame.a0)
+    frame.a0 = U64(fsReadDirEntries(path, cast[ptr FsDirEntry](frame.a1), frame.a2))
   
   of SysCat:
     frame.a0 = U64(fsCat(cast[cstring](frame.a0)))

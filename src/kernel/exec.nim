@@ -52,10 +52,11 @@ proc loadUserProcess(path: cstring, base, stackTop: VAddr, arg: cstring): int32 
 
   let argPa = stackPa + PageSize - UserArgMax
   let argVa = stackTop - UserArgMax
+  let userSp = argVa
   copyArg(argPa, arg, UserArgMax)
 
   flushTlb()
-  createUserProcess(path, base, stackTop, argVa, 0)
+  createUserProcess(path, base, userSp, argVa, 0)
 
 proc createShellUserProcess*(): int32 =
   loadUserProcess("/bin/shell", ShellBase, ShellStackTop, nil)
