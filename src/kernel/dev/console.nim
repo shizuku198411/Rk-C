@@ -1,5 +1,5 @@
-import ../arch/riscv64/arch
-import ../lib/types
+import ../../arch/riscv64/arch
+import ../../lib/types
 
 const
   Uart0Base = U64(0x10000000)

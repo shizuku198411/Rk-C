@@ -1,6 +1,6 @@
-import ../arch/riscv64/arch
-import ../kernel/memory
-import ../lib/types
+import ../../arch/riscv64/arch
+import ../../lib/types
+import ../mm/memory
 
 type
   Pte* = U64

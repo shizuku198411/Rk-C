@@ -1,13 +1,13 @@
-import ../arch/riscv64/arch
-import ../kernel/console
-import ../kernel/fs/fs
-import ../kernel/memory
-import ../kernel/paging
-import ../kernel/process
-import ../kernel/timer
-import ../kernel/rtc
-import ../lib/mem
-import ../lib/types
+import ../../arch/riscv64/arch
+import ../../lib/mem
+import ../../lib/types
+import ../dev/console
+import ../dev/rtc
+import ../dev/timer
+import ../fs/fs
+import ../mm/memory
+import ../mm/paging
+import ../task/process
 
 const
   QemuUart0Base = PAddr(0x10000000)

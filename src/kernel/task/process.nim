@@ -1,7 +1,7 @@
-import ../arch/riscv64/arch
-import ../kernel/console
-import ../kernel/memory
-import ../lib/types
+import ../../arch/riscv64/arch
+import ../../lib/types
+import ../dev/console
+import ../mm/memory
 
 const
   MaxProcs* = 16

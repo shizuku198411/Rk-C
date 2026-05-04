@@ -18,7 +18,3 @@ sbi_shutdown:
     li a7, 8
     li a6, 0
     ecall
-    j loop
-loop:
-    wfi
-    j loop

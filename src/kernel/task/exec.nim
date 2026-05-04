@@ -1,10 +1,10 @@
-import ../kernel/bootstrap
-import ../kernel/console
-import ../kernel/fs/fs
-import ../kernel/memory
-import ../kernel/paging
-import ../kernel/process
-import ../lib/types
+import ../../lib/types
+import ../dev/console
+import ../fs/fs
+import ../init/bootstrap
+import ../mm/memory
+import ../mm/paging
+import ../task/process
 
 const
   ShellBase* = VAddr(0x01000000)

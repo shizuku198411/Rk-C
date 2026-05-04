@@ -1,6 +1,6 @@
-import ../kernel/console
-import ../lib/mem
-import ../lib/types
+import ../../lib/mem
+import ../../lib/types
+import ../dev/console
 
 type
   MemoryInfo* = object

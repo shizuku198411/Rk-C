@@ -1,4 +1,4 @@
-import ../lib/types
+import ../../lib/types
 
 const
   GoldfishRtcBase = U64(0x101000)

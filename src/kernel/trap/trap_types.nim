@@ -1,4 +1,4 @@
-import ../lib/types
+import ../../lib/types
 
 type
   TrapFrame* {.bycopy.} = object

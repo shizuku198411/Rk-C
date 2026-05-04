@@ -1,6 +1,6 @@
-import ../../kernel/console
-import ../../kernel/fs/dirent
 import ../../lib/types
+import ../dev/console
+import ../fs/dirent
 
 
 const

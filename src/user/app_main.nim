@@ -1,5 +1,9 @@
 {.warning[UnusedImport]: off.}
 
+import lib/string
+
+discard sizeof(string.CSize)
+
 when defined(userApp_shell):
   import apps/shell/shell
 elif defined(userApp_ls):

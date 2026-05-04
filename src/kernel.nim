@@ -1,9 +1,9 @@
-import kernel/bootstrap
-import kernel/console
-import kernel/exec
-import kernel/process
-import kernel/trap
-import kernel/trap_types
+import kernel/dev/console
+import kernel/init/bootstrap
+import kernel/task/exec
+import kernel/task/process
+import kernel/trap/trap
+import kernel/trap/trap_types
 import lib/string
 import lib/types
 

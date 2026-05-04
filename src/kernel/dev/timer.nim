@@ -1,5 +1,5 @@
-import ../arch/riscv64/arch
-import ../lib/types
+import ../../arch/riscv64/arch
+import ../../lib/types
 
 const
   TimerInterval* = U64(200000)

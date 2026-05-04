@@ -1,8 +1,8 @@
-import ../../kernel/console
-import ../../kernel/fs/blockdev
-import ../../kernel/fs/dirent
-import ../../kernel/fs/tmpfs
 import ../../lib/types
+import ../dev/console
+import ../fs/blockdev
+import ../fs/dirent
+import ../fs/tmpfs
 
 const
   FsMagic = U32(0x4e465332) # NFS2

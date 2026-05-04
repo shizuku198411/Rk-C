@@ -1,12 +1,12 @@
-import ../kernel/console
-import ../kernel/exec
-import ../kernel/fs/dirent
-import ../kernel/fs/fs
-import ../kernel/process
-import ../kernel/timer
-import ../kernel/trap_types
-import ../kernel/rtc
-import ../lib/types
+import ../../lib/types
+import ../dev/console
+import ../dev/rtc
+import ../dev/timer
+import ../fs/dirent
+import ../fs/fs
+import ../task/exec
+import ../task/process
+import ../trap/trap_types
 
 proc sbiShutdown() {.importc: "sbi_shutdown", cdecl.}
 

@@ -1,10 +1,10 @@
-import ../arch/riscv64/arch
-import ../kernel/console
-import ../kernel/process
-import ../kernel/syscall
-import ../kernel/timer
-import ../kernel/trap_types
-import ../lib/types
+import ../../arch/riscv64/arch
+import ../../lib/types
+import ../dev/console
+import ../dev/timer
+import ../task/process
+import ../trap/syscall
+import ../trap/trap_types
 
 const
   ScauseInstructionAddressMMisaligned   = U64(0x00)
