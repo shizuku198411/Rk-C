@@ -1,0 +1,7 @@
+.vscode/
+aqua_core/
+bin/
+build/
+map/
+opensbi/
+virt.*
