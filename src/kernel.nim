@@ -8,7 +8,6 @@ import lib/string
 import lib/types
 
 discard sizeof(trap_types.TrapFrame)
-discard sizeof(CSize)
 discard cast[pointer](trap.trapHandler)
 discard cast[pointer](string.strlen)
 
