@@ -1,3 +1,5 @@
+import ../../lib/io
+import ../../lib/strutils
 import ../../lib/syscall
 
 const

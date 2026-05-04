@@ -1,3 +1,4 @@
+import ../../lib/io
 import ../../lib/syscall
 
 const

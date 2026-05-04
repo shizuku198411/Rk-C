@@ -39,6 +39,7 @@ USER_APP_NAMES := ls cat mkdir ps rm rmdir date
 USER_APP_BINS := $(foreach app,$(USER_APP_NAMES),$(BIN_DIR)/$(app).bin)
 USER_SYSCALL_OBJ := $(OBJ_DIR)/user/lib/syscall.o
 USER_ENTRY_OBJ := $(OBJ_DIR)/user/lib/entry.o
+USER_LIB_SRCS := $(shell find $(SRC_DIR)/user/lib -type f -name '*.nim' | sort)
 
 OPENSBI_FW ?= opensbi/build/platform/generic/firmware/fw_jump.bin
 
@@ -140,7 +141,7 @@ $(USER_ENTRY_OBJ): $(SRC_DIR)/user/lib/entry.S
 	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c -o $@ $<
 
-$(USER_SHELL_ELF): $(SRC_DIR)/user/app_main.nim $(SRC_DIR)/user/apps/shell/shell.nim $(SRC_DIR)/user/panicoverride.nim $(SRC_DIR)/user/lib/syscall.nim $(USER_SYSCALL_OBJ) $(USER_ENTRY_OBJ) $(USER_LINKER_SCRIPT) | $(BIN_DIR)
+$(USER_SHELL_ELF): $(SRC_DIR)/user/app_main.nim $(SRC_DIR)/user/apps/shell/shell.nim $(SRC_DIR)/user/panicoverride.nim $(USER_LIB_SRCS) $(USER_SYSCALL_OBJ) $(USER_ENTRY_OBJ) $(USER_LINKER_SCRIPT) | $(BIN_DIR)
 	$(NIM) c $(USER_NIMFLAGS) -d:userApp_shell --nimcache:$(USER_NIMCACHE_DIR)/shell --passL:"$(USER_ENTRY_OBJ)" --passL:"$(USER_SYSCALL_OBJ)" --passL:"-Wl,-T,$(USER_LINKER_SCRIPT)" -o:$@ $<
 
 $(USER_SHELL_BIN): $(USER_SHELL_ELF) | $(BIN_DIR)
@@ -150,7 +151,7 @@ appfs: $(DISK_IMG) $(USER_SHELL_BIN) $(USER_APP_BINS)
 	python3 scripts/pack_appfs.py --disk $(DISK_IMG) --bin-dir $(BIN_DIR) --apps shell $(USER_APP_NAMES)
 
 define USER_APP_template
-$(BIN_DIR)/$(1).elf: $(SRC_DIR)/user/app_main.nim $(SRC_DIR)/user/apps/$(1)/$(1).nim $(SRC_DIR)/user/panicoverride.nim $(SRC_DIR)/user/lib/syscall.nim $(USER_SYSCALL_OBJ) $(USER_ENTRY_OBJ) $(USER_APP_LINKER_SCRIPT) | $(BIN_DIR)
+$(BIN_DIR)/$(1).elf: $(SRC_DIR)/user/app_main.nim $(SRC_DIR)/user/apps/$(1)/$(1).nim $(SRC_DIR)/user/panicoverride.nim $$(USER_LIB_SRCS) $(USER_SYSCALL_OBJ) $(USER_ENTRY_OBJ) $(USER_APP_LINKER_SCRIPT) | $(BIN_DIR)
 	$$(NIM) c $$(USER_NIMFLAGS) -d:userApp_$(1) --nimcache:$$(USER_NIMCACHE_DIR)/$(1) --passL:"$$(USER_ENTRY_OBJ)" --passL:"$$(USER_SYSCALL_OBJ)" --passL:"-Wl,-T,$$(USER_APP_LINKER_SCRIPT)" -o:$$@ $$<
 
 $(BIN_DIR)/$(1).bin: $(BIN_DIR)/$(1).elf | $(BIN_DIR)

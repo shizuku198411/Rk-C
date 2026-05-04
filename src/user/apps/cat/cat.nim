@@ -1,3 +1,5 @@
+import ../../lib/io
+import ../../lib/strutils
 import ../../lib/syscall
 
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =

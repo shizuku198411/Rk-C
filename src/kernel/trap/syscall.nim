@@ -1,3 +1,4 @@
+import ../../lib/syscall_ids
 import ../../lib/types
 import ../dev/console
 import ../dev/rtc
@@ -9,24 +10,6 @@ import ../task/process
 import ../trap/trap_types
 
 proc sbiShutdown() {.importc: "sbi_shutdown", cdecl.}
-
-# system call number
-const
-  SysWrite = U64(1)
-  SysRead = U64(2)
-  SysPs = U64(3)
-  SysTicks = U64(4)
-  SysExit = U64(5)
-  SysLs = U64(6)
-  SysCat = U64(7)
-  SysMkdir = U64(9)
-  SysExec = U64(11)
-  SysWait = U64(12)
-  SysUnlink = U64(13)
-  SysRmdir = U64(14)
-  SysShutdown = U64(15)
-  SysGetDateTime = U64(16)
-
 
 proc syscallWrite(buf: U64, len: U64): U64 =
   let p = cast[ptr UncheckedArray[char]](buf)
