@@ -7,7 +7,6 @@ const
   SysTicks* = U64(4)
   SysExit* = U64(5)
   SysLs* = U64(6)
-  SysCat* = U64(7)
   SysMkdir* = U64(9)
   SysExec* = U64(11)
   SysWait* = U64(12)
@@ -15,3 +14,5 @@ const
   SysRmdir* = U64(14)
   SysShutdown* = U64(15)
   SysGetDateTime* = U64(16)
+  SysReadFile* = U64(17)
+  SysWriteFile* = U64(18)

@@ -3,6 +3,7 @@ type
   U16* = uint16
   U32* = uint32
   U64* = uint64
+  I32* = int32
   CSize* = uint
   Size* = uint64
   PAddr* = uint64

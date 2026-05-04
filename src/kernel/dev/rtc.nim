@@ -1,4 +1,5 @@
 import ../../lib/types
+import ../../lib/syscall_types
 
 const
   GoldfishRtcBase = U64(0x101000)
@@ -6,16 +7,6 @@ const
   RtcTimeHigh = U32(0x04)
 
   NsecPerSec = U64(1_000_000_000)
-
-type
-  DateTimeParts = object
-    year: U32
-    month: U32
-    day: U32
-    hour: U32
-    minute: U32
-    second: U32
-
 
 proc rtcRead32(off: U32): U32 =
   let mmioAddr = GoldfishRtcBase + U64(off)
@@ -68,7 +59,7 @@ proc daysInMonth(year: U32, month: U32): U32 =
   of 12: 31
   else: 0
 
-proc unixSecondsToDateTime(secInput: U64): DateTimeParts =
+proc unixSecondsToDateTime(secInput: U64): SysDateTime =
   var sec = secInput
 
   result.second = U32(sec mod U64(60))
@@ -93,6 +84,9 @@ proc unixSecondsToDateTime(secInput: U64): DateTimeParts =
   result.year = U32(year)
   result.month = U32(month)
   result.day = U32(days) + 1
+
+proc nowDateTime*(): SysDateTime =
+  unixSecondsToDateTime(rtcNowNS() div NsecPerSec)
 
 proc put2(buf: var array[32, char], pos: var U32, value: U32) =
   buf[pos] = char(ord('0') + ((value div 10) mod 10))

@@ -28,6 +28,7 @@ proc printHelp() =
   write("  mkdir <path>        create directory\n")
   write("  rm <path>           remove file\n")
   write("  rmdir <path>        remove empty directory\n")
+  write("  edit <path>         edit file\n")
   write("  ps                  show process slots\n")
   write("  date                show current time\n")
   write("  ticks               show timer ticks\n")

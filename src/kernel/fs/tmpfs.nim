@@ -1,5 +1,4 @@
 import ../../lib/types
-import ../dev/console
 import ../fs/dirent
 
 
@@ -25,6 +24,7 @@ var
   ready: bool
 
 proc tmpfsWriteText*(path: cstring, data: cstring): int
+proc tmpfsWriteBytes*(path: cstring, data: pointer, size: U64): int
 
 proc hasChildren(idx: int): bool =
   var i = 0
@@ -170,20 +170,23 @@ proc tmpfsReadDirEntry*(path: cstring, entryIndex: U64, outEntry: ptr FsDirEntry
     inc i
   0
 
-proc tmpfsCat*(path: cstring): int =
-  if not ready:
+proc tmpfsReadFile*(path: cstring, dst: pointer, capacity: U64): int =
+  if not ready or dst == nil:
     return -1
   let idx = resolvePath(path)
   if idx < 0 or nodes[idx].typ != TmpfsTypeFile:
     return -1
 
-  var i = U32(0)
-  while i < nodes[idx].size:
-    putChar(nodes[idx].data[i])
+  let size = U64(nodes[idx].size)
+  if size > capacity:
+    return -1
+
+  let outBuf = cast[ptr UncheckedArray[char]](dst)
+  var i = U64(0)
+  while i < size:
+    outBuf[i] = nodes[idx].data[i]
     inc i
-  if nodes[idx].size == 0 or nodes[idx].data[nodes[idx].size - 1] != '\n':
-    putChar('\n')
-  0
+  int(size)
 
 proc tmpfsMkdir*(path: cstring): int =
   if not ready:
@@ -219,6 +222,17 @@ proc tmpfsRmdir*(path: cstring): int =
   0
 
 proc tmpfsWriteText*(path: cstring, data: cstring): int =
+  var size = U64(0)
+  while data[size] != '\0' and size < U64(TmpfsFileMax):
+    inc size
+  tmpfsWriteBytes(path, cast[pointer](data), size)
+
+proc tmpfsWriteBytes*(path: cstring, data: pointer, size: U64): int =
+  if data == nil and size > 0:
+    return -1
+  if size > U64(TmpfsFileMax):
+    return -1
+
   var idx = resolvePath(path)
   if idx < 0:
     var leaf: array[TmpfsNameMax, char]
@@ -230,9 +244,10 @@ proc tmpfsWriteText*(path: cstring, data: cstring): int =
   if idx < 0 or nodes[idx].typ != TmpfsTypeFile:
     return -1
 
-  var size = U32(0)
-  while data[size] != '\0' and size < U32(TmpfsFileMax):
-    nodes[idx].data[size] = data[size]
-    inc size
-  nodes[idx].size = size
+  let src = cast[ptr UncheckedArray[char]](data)
+  var i = U64(0)
+  while i < size:
+    nodes[idx].data[i] = src[i]
+    inc i
+  nodes[idx].size = U32(size)
   0

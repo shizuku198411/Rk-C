@@ -1,4 +1,7 @@
 import ../../lib/syscall_ids
+import ../../lib/syscall_types
+
+export syscall_types
 
 type
   U32* = uint32
@@ -29,8 +32,8 @@ proc sysWrite*(buf: pointer, len: U64): U64 =
 proc sysRead*(buf: pointer, len: U64): U64 =
   rawSyscall3(SysRead, cast[U64](buf), len, 0)
 
-proc sysPs*(): U64 =
-  rawSyscall3(SysPs, 0, 0, 0)
+proc sysPs*(entries: ptr SysProcessInfo, maxEntries: U64): I32 =
+  I32(rawSyscall3(SysPs, cast[U64](entries), maxEntries, 0))
 
 proc sysTicks*(): U64 =
   rawSyscall3(SysTicks, 0, 0, 0)
@@ -41,9 +44,6 @@ proc sysExit*(status: U64) {.noreturn.} =
 
 proc sysLs*(path: cstring, entries: ptr DirEntry, maxEntries: U64): I32 =
   I32(rawSyscall3(SysLs, cast[U64](path), cast[U64](entries), maxEntries))
-
-proc sysCat*(path: cstring): I32 =
-  I32(rawSyscall3(SysCat, cast[U64](path), 0, 0))
 
 proc sysMkdir*(path: cstring): I32 =
   I32(rawSyscall3(SysMkdir, cast[U64](path), 0, 0))
@@ -63,5 +63,11 @@ proc sysRmdir*(path: cstring): I32 =
 proc sysShutdown*() =
   discard rawSyscall3(SysShutdown, 0, 0, 0)
 
-proc sysGetDateTime*() =
-  discard rawSyscall3(SysGetDateTime, 0, 0, 0)
+proc sysGetDateTime*(dt: ptr SysDateTime): I32 =
+  I32(rawSyscall3(SysGetDateTime, cast[U64](dt), 0, 0))
+
+proc sysReadFile*(path: cstring, buf: pointer, capacity: U64): I32 =
+  I32(rawSyscall3(SysReadFile, cast[U64](path), cast[U64](buf), capacity))
+
+proc sysWriteFile*(path: cstring, buf: pointer, size: U64): I32 =
+  I32(rawSyscall3(SysWriteFile, cast[U64](path), cast[U64](buf), size))

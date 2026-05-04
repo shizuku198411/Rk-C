@@ -63,6 +63,8 @@ var
   appfsEntryCount: U32
   appfsReady: bool
 
+proc fsWriteFile*(path: cstring, data: pointer, size: U64): int
+
 proc cstrlen(s: cstring): int =
   var n = 0
   while s[n] != '\0':
@@ -334,16 +336,21 @@ proc resolveParent(path: cstring, leaf: var array[FsNameMax, char]): int =
     current = next
   -1
 
-proc writeFileData(node: FsNode, data: cstring): int =
+proc writeFileBytes(node: FsNode, data: pointer, size: U64): int =
+  if data == nil and size > 0:
+    return -1
+  if size > FsFileBlocks * BlockSize:
+    return -1
+
+  let src = cast[ptr UncheckedArray[U8]](data)
   var written = U64(0)
-  let remaining = U64(cstrlen(data))
 
   var blk = U64(0)
   while blk < FsFileBlocks:
     clearBlock()
     var i = U64(0)
-    while i < BlockSize and written < remaining:
-      blockBuf[i] = U8(ord(data[written]))
+    while i < BlockSize and written < size:
+      blockBuf[i] = src[written]
       inc i
       inc written
     if blockWrite(U64(node.startBlock) + blk, addr blockBuf[0]) < 0:
@@ -482,35 +489,6 @@ proc fsReadDirEntries*(path: cstring, outEntries: ptr FsDirEntry, maxEntries: U6
 
   int(count)
 
-proc fsCat*(path: cstring): int =
-  if not fsReady:
-    return -1
-  let mountIdx = findMount(path)
-  if mountIdx >= 0 and mounts[mountIdx].backend == vfsTmpfs:
-    return tmpfsCat(mountLocalPath(path, mounts[mountIdx].pathLen))
-  if resolveAppfsPath(path) >= 0:
-    return -1
-
-  let idx = resolvePath(path)
-  if idx < 0 or superBlock.nodes[idx].typ != FsTypeFile:
-    return -1
-
-  let node = superBlock.nodes[idx]
-  var done = U64(0)
-  var blk = U64(0)
-  while done < U64(node.size) and blk < FsFileBlocks:
-    if blockRead(U64(node.startBlock) + blk, addr blockBuf[0]) < 0:
-      return -1
-    var i = U64(0)
-    while i < BlockSize and done < U64(node.size):
-      putChar(char(blockBuf[i]))
-      inc i
-      inc done
-    inc blk
-  if done == 0 or blockBuf[(done - 1) mod BlockSize] != U8(ord('\n')):
-    putChar('\n')
-  0
-
 proc fsMkdir*(path: cstring): int =
   if not fsReady:
     return -1
@@ -531,11 +509,22 @@ proc fsMkdir*(path: cstring): int =
   writeSuper()
 
 proc fsWriteText*(path: cstring, data: cstring): int =
+  var size = U64(0)
+  while data[size] != '\0' and size < FsFileBlocks * BlockSize:
+    inc size
+  fsWriteFile(path, cast[pointer](data), size)
+
+proc fsWriteFile*(path: cstring, data: pointer, size: U64): int =
   if not fsReady:
     return -1
+  if data == nil and size > 0:
+    return -1
+  if size > FsFileBlocks * BlockSize:
+    return -1
+
   let mountIdx = findMount(path)
   if mountIdx >= 0 and mounts[mountIdx].backend == vfsTmpfs:
-    return tmpfsWriteText(mountLocalPath(path, mounts[mountIdx].pathLen), data)
+    return tmpfsWriteBytes(mountLocalPath(path, mounts[mountIdx].pathLen), data, size)
 
   var idx = resolvePath(path)
   if idx < 0:
@@ -548,12 +537,9 @@ proc fsWriteText*(path: cstring, data: cstring): int =
   if idx < 0 or superBlock.nodes[idx].typ != FsTypeFile:
     return -1
 
-  var size = U32(0)
-  while data[size] != '\0' and U64(size) < FsFileBlocks * BlockSize:
-    inc size
-  superBlock.nodes[idx].size = size
+  superBlock.nodes[idx].size = U32(size)
 
-  if writeFileData(superBlock.nodes[idx], data) < 0:
+  if writeFileBytes(superBlock.nodes[idx], data, size) < 0:
     return -1
   writeSuper()
 
@@ -598,6 +584,10 @@ proc fsRmdir*(path: cstring): int =
 proc fsReadFile*(path: cstring, dst: pointer, capacity: U64): int =
   if not fsReady or dst == nil:
     return -1
+
+  let mountIdx = findMount(path)
+  if mountIdx >= 0 and mounts[mountIdx].backend == vfsTmpfs:
+    return tmpfsReadFile(mountLocalPath(path, mounts[mountIdx].pathLen), dst, capacity)
 
   let appIdx = resolveAppfsPath(path)
   if appIdx >= 0:

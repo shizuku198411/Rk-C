@@ -1,4 +1,5 @@
 import ../../lib/syscall_ids
+import ../../lib/syscall_types
 import ../../lib/types
 import ../dev/console
 import ../dev/rtc
@@ -37,26 +38,43 @@ proc syscallRead(buf: U64, len: U64): U64 =
   i
 
 
-proc syscallPs(): U64 =
-  println("pid\tstate\t\tmode\texe")
+proc processStateValue(state: ProcessState): U32 =
+  case state
+  of procUnused: SysProcessUnused
+  of procRunnable: SysProcessRunnable
+  of procRunning: SysProcessRunning
+  of procSleeping: SysProcessSleeping
+  of procZombie: SysProcessZombie
 
+proc copyProcessName(dst: var array[SysProcessNameMax, char], src: cstring) =
   var i = 0
-  while i < MaxProcs:
+  while i < SysProcessNameMax - 1:
+    if src == nil or src[i] == '\0':
+      break
+    dst[i] = src[i]
+    inc i
+  dst[i] = '\0'
+
+proc syscallPs(outEntries: U64, maxEntries: U64): U64 =
+  if outEntries == 0 or maxEntries == 0:
+    return U64(-1'i64)
+
+  let entries = cast[ptr UncheckedArray[SysProcessInfo]](outEntries)
+  var count = U64(0)
+  var i = 0
+  while i < MaxProcs and count < maxEntries:
     if procs[i].state != procUnused:
-      printUnsigned(U64(procs[i].pid))
-      putChar('\t')
-      printProcessState(procs[i].state)
-      putChar('\t')
+      entries[count].pid = procs[i].pid
+      entries[count].state = processStateValue(procs[i].state)
       if procs[i].isUser:
-        print("user")
+        entries[count].isUser = 1
       else:
-        print("kernel")
-      putChar('\t')
-      print(procs[i].exePath)
-      putChar('\n')
+        entries[count].isUser = 0
+      copyProcessName(entries[count].exePath, procs[i].exePath)
+      inc count
     inc i
 
-  0
+  count
 
 proc syscallExit(status: U64): U64 =
   if currentProc == nil:
@@ -99,9 +117,11 @@ proc syscallWait(pidVal: U64): U64 =
   status
 
 
-proc syscallGetDateTime(): U64 =
-  print(nowCString())
-  putChar('\n')
+proc syscallGetDateTime(outDateTime: U64): U64 =
+  if outDateTime == 0:
+    return U64(-1'i64)
+
+  cast[ptr SysDateTime](outDateTime)[] = nowDateTime()
   0
 
 
@@ -114,7 +134,7 @@ proc handleSyscall*(frame: ptr TrapFrame) =
     frame.a0 = syscallRead(frame.a0, frame.a1)
   
   of SysPs:
-    frame.a0 = syscallPs()
+    frame.a0 = syscallPs(frame.a0, frame.a1)
   
   of SysTicks:
     frame.a0 = timerTickCount
@@ -127,9 +147,6 @@ proc handleSyscall*(frame: ptr TrapFrame) =
       if frame.a0 == 0: cstring("/")
       else: cast[cstring](frame.a0)
     frame.a0 = U64(fsReadDirEntries(path, cast[ptr FsDirEntry](frame.a1), frame.a2))
-  
-  of SysCat:
-    frame.a0 = U64(fsCat(cast[cstring](frame.a0)))
   
   of SysMkdir:
     frame.a0 = U64(fsMkdir(cast[cstring](frame.a0)))
@@ -150,7 +167,13 @@ proc handleSyscall*(frame: ptr TrapFrame) =
     syscallShutdown()
   
   of SysGetDateTime:
-    frame.a0 = U64(syscallGetDateTime())
+    frame.a0 = U64(syscallGetDateTime(frame.a0))
+
+  of SysReadFile:
+    frame.a0 = U64(fsReadFile(cast[cstring](frame.a0), cast[pointer](frame.a1), frame.a2))
+
+  of SysWriteFile:
+    frame.a0 = U64(fsWriteFile(cast[cstring](frame.a0), cast[pointer](frame.a1), frame.a2))
   
   else:
     print("PANIC: unknown syscall ")

@@ -22,5 +22,7 @@ elif defined(userApp_rmdir):
   import apps/rmdir/rmdir
 elif defined(userApp_date):
   import apps/date/date
+elif defined(userApp_edit):
+  import apps/edit/edit
 else:
   {.error: "missing user app define".}
