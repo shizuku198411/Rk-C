@@ -8,8 +8,9 @@ import lib/string
 import lib/types
 
 discard sizeof(trap_types.TrapFrame)
-discard sizeof(string.CSize)
+discard sizeof(CSize)
 discard cast[pointer](trap.trapHandler)
+discard cast[pointer](string.strlen)
 
 proc kernel_main*(hartid: U64, dtb: pointer) {.exportc, cdecl.} =
   kernelBootstrap(hartid, dtb)

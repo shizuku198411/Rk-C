@@ -1,15 +1,66 @@
 import types
 
-proc memset*(buf: pointer, c: U8, n: Size): pointer =
-  var p = cast[ptr UncheckedArray[U8]](buf)
+proc fillMem*(buf: pointer, value: U8, n: Size): pointer =
+  let p = cast[ptr UncheckedArray[U8]](buf)
   var i = U64(0)
   while i < n:
-    p[i] = c
+    p[i] = value
     inc i
-  result = buf
+  buf
+
+proc copyMem*(dest: pointer, src: pointer, n: Size): pointer =
+  let d = cast[ptr UncheckedArray[U8]](dest)
+  let s = cast[ptr UncheckedArray[U8]](src)
+  var i = U64(0)
+  while i < n:
+    d[i] = s[i]
+    inc i
+  dest
+
+proc moveMem*(dest: pointer, src: pointer, n: Size): pointer =
+  let d = cast[ptr UncheckedArray[U8]](dest)
+  let s = cast[ptr UncheckedArray[U8]](src)
+
+  if dest == src or n == 0:
+    return dest
+
+  if cast[U64](dest) < cast[U64](src):
+    var i = U64(0)
+    while i < n:
+      d[i] = s[i]
+      inc i
+  else:
+    var i = n
+    while i > 0:
+      dec i
+      d[i] = s[i]
+
+  dest
+
+proc compareMem*(s1: pointer, s2: pointer, n: Size): cint =
+  let a = cast[ptr UncheckedArray[U8]](s1)
+  let b = cast[ptr UncheckedArray[U8]](s2)
+  var i = U64(0)
+  while i < n:
+    if a[i] != b[i]:
+      return cint(a[i]) - cint(b[i])
+    inc i
+  0
+
+proc memset*(s: pointer, c: cint, n: CSize): pointer {.exportc: "memset", cdecl.} =
+  fillMem(s, U8(c and 0xff), Size(n))
+
+proc memcpy*(dest: pointer, src: pointer, n: CSize): pointer {.exportc: "memcpy", cdecl.} =
+  copyMem(dest, src, Size(n))
+
+proc memmove*(dest: pointer, src: pointer, n: CSize): pointer {.exportc: "memmove", cdecl.} =
+  moveMem(dest, src, Size(n))
+
+proc memcmp*(s1: pointer, s2: pointer, n: CSize): cint {.exportc: "memcmp", cdecl.} =
+  compareMem(s1, s2, Size(n))
 
 proc zeroMem*(buf: pointer, n: Size) =
-  discard memset(buf, 0'u8, n)
+  discard fillMem(buf, 0'u8, n)
 
 proc isZeroed*(buf: pointer, n: Size): bool =
   let p = cast[ptr UncheckedArray[U8]](buf)

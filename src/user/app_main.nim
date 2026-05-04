@@ -1,8 +1,10 @@
 {.warning[UnusedImport]: off.}
 
+import lib/mem
 import lib/string
+import lib/types
 
-discard sizeof(string.CSize)
+discard sizeof(CSize)
 
 when defined(userApp_shell):
   import apps/shell/shell
