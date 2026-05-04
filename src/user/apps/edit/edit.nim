@@ -138,7 +138,7 @@ proc renderBuffer(len, cursor, topLine: U64, path, status: cstring) =
 
 proc insertChar(ch: char, len, cursor: var U64): cstring =
   if len >= U64(BufferMax):
-    return "[edit] Buffer full"
+    return "[warn] Buffer full"
 
   var p = len
   while p > cursor:
@@ -233,16 +233,16 @@ proc editorLoop(path: cstring, len: var U64) =
       prefixed = false
       if ch == CtrlS:
         if save(path, len):
-          status = "[edit] Saved"
+          status = "[op] Saved"
         else:
-          status = "[edit] Save failed"
+          status = "[op] Save failed"
       elif ch == CtrlC:
         gotoPos(StatusRow, 1)
         clearLine()
-        write("[edit] Exit\n")
+        write("[op] Exit\n")
         sysExit(0)
       else:
-        status = "[edit] Unknown Ctrl-X command"
+        status = "[op] Unknown Ctrl-X command"
 
       ensureCursorVisible(cursor, topLine)
       renderBuffer(len, cursor, topLine, path, status)
@@ -250,7 +250,7 @@ proc editorLoop(path: cstring, len: var U64) =
 
     if ch == CtrlX:
       prefixed = true
-      status = "[edit] Ctrl-X"
+      status = "[op] Ctrl-X"
     elif ch == Esc:
       handleEscape(cursor, len)
       status = ""
