@@ -25,6 +25,8 @@ proc modeName(isUser: U32): cstring =
 proc printProcess(entry: ptr SysProcessInfo) =
   writeUnsigned(U64(entry.pid))
   write("\t")
+  writeUnsigned(U64(entry.ppid))
+  write("\t")
   write(stateName(entry.state))
   write("\t")
   write(modeName(entry.isUser))
@@ -41,7 +43,7 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
     write("ps: failed\n")
     sysExit(1)
 
-  write("pid\tstate\t\tmode\texe\n")
+  write("pid\tppid\tstate\t\tmode\texe\n")
   var i = 0
   while i < int(count):
     printProcess(addr entries[i])

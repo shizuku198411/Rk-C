@@ -109,6 +109,13 @@ proc mapRangeReplace*(root: PageTable, va: VAddr, pa: PAddr, size: Size, flags: 
 
   0
 
+proc mappedPagePa*(root: PageTable, va: VAddr): PAddr =
+  let entry = walkPageTable(root, alignDown(va, PageSize), false)
+  if entry == nil or not pteIsValid(entry[]) or not pteIsLeaf(entry[]):
+    return NilPAddr
+
+  pteToPa(entry[])
+
 proc makeSatp*(rootPa: PAddr): U64 =
   SatpModeSv39 or (rootPa shr PageShift)
 

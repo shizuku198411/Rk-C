@@ -31,6 +31,7 @@ proc syscallPs*(outEntries: U64, maxEntries: U64): U64 =
   while i < MaxProcs and count < maxEntries:
     if procs[i].state != procUnused:
       entries[count].pid = procs[i].pid
+      entries[count].ppid = procs[i].parentPid
       entries[count].state = processStateValue(procs[i].state)
       if procs[i].isUser:
         entries[count].isUser = 1
@@ -73,7 +74,7 @@ proc syscallWait*(pidVal: U64): U64 =
       return U64(-1'i64)
 
   let status = target.exitStatus
-  target.state = procUnused
+  discardProcess(target)
   status
 
 proc syscallExec*(path, arg: U64): U64 =

@@ -12,6 +12,7 @@ const
 type
   SysProcessInfo* {.packed.} = object
     pid*: I32
+    ppid*: I32
     state*: U32
     isUser*: U32
     exePath*: array[SysProcessNameMax, char]

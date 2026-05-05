@@ -35,14 +35,19 @@ type
 
   Process* {.bycopy.} = object
     pid*: int32
+    parentPid*: int32
     exePath*: cstring
     state*: ProcessState
     context*: Context
     entry*: KernelTask
     kernelStack*: PAddr
     isUser*: bool
+    userBase*: VAddr
     userPc*: VAddr
+    userStackTop*: VAddr
     userSp*: VAddr
+    userImagePages*: U64
+    userStackPages*: U64
     userArg0*: U64
     userArg1*: U64
     waitingForInput*: bool
@@ -95,12 +100,17 @@ proc createKernelProcessInternal(entry: KernelTask, isIdle: bool): int32 =
 
   p.pid = nextPid
   inc nextPid
+  p.parentPid = 0
   p.state = procRunnable
   p.entry = entry
   p.kernelStack = stack
   p.isUser = false
+  p.userBase = 0
   p.userPc = 0
+  p.userStackTop = 0
   p.userSp = 0
+  p.userImagePages = 0
+  p.userStackPages = 0
   p.userArg0 = 0
   p.userArg1 = 0
   p.waitingForInput = false
@@ -119,14 +129,19 @@ proc processInit*() =
   var i = 0
   while i < MaxProcs:
     procs[i].pid = 0
+    procs[i].parentPid = 0
     procs[i].exePath = "init_proc"
     procs[i].state = procUnused
     procs[i].context = Context()
     procs[i].entry = nil
     procs[i].kernelStack = NilPAddr
     procs[i].isUser = false
+    procs[i].userBase = 0
     procs[i].userPc = 0
+    procs[i].userStackTop = 0
     procs[i].userSp = 0
+    procs[i].userImagePages = 0
+    procs[i].userStackPages = 0
     procs[i].userArg0 = 0
     procs[i].userArg1 = 0
     procs[i].waitingForInput = false
@@ -152,24 +167,88 @@ proc userProcessBootstrap() {.cdecl, noreturn.} =
   let kernelSp = currentProc.kernelStack + KernelStackPages * PageSize
   arch.enterUser(currentProc.userPc, currentProc.userSp, kernelSp, currentProc.userArg0, currentProc.userArg1)
 
-proc createUserProcess*(path: cstring, userPc, userSp: VAddr, arg0: U64 = 0, arg1: U64 = 0): int32 =
-  let pid = createKernelProcessInternal(userProcessBootstrap, false)
-  if pid < 0:
-    return pid
-
+proc findProcessByPid*(pid: int32): ptr Process =
   var i = 0
   while i < MaxProcs:
-    if procs[i].pid == pid:
-      procs[i].exePath = path
-      procs[i].isUser = true
-      procs[i].userPc = userPc
-      procs[i].userSp = userSp
-      procs[i].userArg0 = arg0
-      procs[i].userArg1 = arg1
-      return pid
+    if procs[i].state != procUnused and procs[i].pid == pid:
+      return addr procs[i]
     inc i
+  nil
 
-  -1
+proc inheritProcessMetadata(child, parent: ptr Process) =
+  if parent == nil:
+    child.parentPid = 0
+    return
+
+  child.parentPid = parent.pid
+  # Future per-process attributes such as cwd/rootfs should be copied here.
+
+proc allocUserProcessFromParent*(parent: ptr Process): ptr Process =
+  let pid = createKernelProcessInternal(userProcessBootstrap, false)
+  if pid < 0:
+    return nil
+
+  let p = findProcessByPid(pid)
+  if p == nil:
+    return nil
+
+  p.state = procSleeping
+  p.isUser = true
+  inheritProcessMetadata(p, parent)
+  p
+
+proc configureUserProcess*(p: ptr Process, path: cstring, userBase, userPc, userStackTop, userSp: VAddr,
+                           imagePages, stackPages: U64, arg0: U64 = 0, arg1: U64 = 0) =
+  p.exePath = path
+  p.isUser = true
+  p.userBase = userBase
+  p.userPc = userPc
+  p.userStackTop = userStackTop
+  p.userSp = userSp
+  p.userImagePages = imagePages
+  p.userStackPages = stackPages
+  p.userArg0 = arg0
+  p.userArg1 = arg1
+  p.waitingForInput = false
+  p.waitingForPid = 0
+  p.exitStatus = 0
+  p.state = procRunnable
+
+proc discardProcess*(p: ptr Process) =
+  if p == nil:
+    return
+
+  if p.kernelStack != NilPAddr:
+    discard pfree(p.kernelStack, KernelStackPages)
+
+  p.pid = 0
+  p.parentPid = 0
+  p.exePath = "init_proc"
+  p.state = procUnused
+  p.context = Context()
+  p.entry = nil
+  p.kernelStack = NilPAddr
+  p.isUser = false
+  p.userBase = 0
+  p.userPc = 0
+  p.userStackTop = 0
+  p.userSp = 0
+  p.userImagePages = 0
+  p.userStackPages = 0
+  p.userArg0 = 0
+  p.userArg1 = 0
+  p.waitingForInput = false
+  p.waitingForPid = 0
+  p.exitStatus = 0
+
+proc createUserProcess*(path: cstring, userBase, userPc, userStackTop, userSp: VAddr,
+                        imagePages, stackPages: U64, arg0: U64 = 0, arg1: U64 = 0): int32 =
+  let p = allocUserProcessFromParent(nil)
+  if p == nil:
+    return -1
+
+  configureUserProcess(p, path, userBase, userPc, userStackTop, userSp, imagePages, stackPages, arg0, arg1)
+  p.pid
 
 proc hasRunnableProcess*(): bool =
   var i = 0
