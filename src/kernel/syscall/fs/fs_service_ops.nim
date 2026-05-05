@@ -19,6 +19,7 @@ type
 
 var
   fsServerPid: int32
+  fsServerRegistered: bool
   nextReqId = U64(1)
   pending: array[FsPendingMax, PendingFsRequest]
   rawEntries: array[FsRawDirEntryMax, FsDirEntry]
@@ -29,9 +30,17 @@ proc currentIsFsServer(): bool =
   currentProc != nil and fsServerPid != 0 and currentProc.pid == fsServerPid
 
 
+proc isFsServicePid*(pid: int32): bool =
+  fsServerRegistered and fsServerPid == pid
+
+
 proc fsServerAvailable(): bool =
   let p = findProcessByPid(fsServerPid)
   p != nil and p.state != procZombie and p.state != procUnused
+
+
+proc canFallbackToRawFs(): bool =
+  not fsServerRegistered or currentIsFsServer()
 
 
 proc copyPath(dst: var array[SysFsPathMax, char], src: cstring) =
@@ -93,6 +102,9 @@ proc queueFsRequest(op: U32, path: cstring, data: pointer, size, capacity: U64):
 
 proc waitFsResponse(p: ptr PendingFsRequest): ptr SysFsResponse =
   while p.used and not p.completed:
+    if not fsServerAvailable():
+      return nil
+
     sleepCurrentForFsReq(p.request.id)
 
   if not p.used:
@@ -119,6 +131,7 @@ proc syscallFsServiceRegister*(): U64 =
     return U64(-1'i64)
 
   fsServerPid = currentProc.pid
+  fsServerRegistered = true
   0
 
 
@@ -161,6 +174,9 @@ proc serviceLs*(path: cstring, entriesVal, maxEntries: U64): U64 =
   let entryBytes = maxEntries * U64(sizeof(FsDirEntry))
   let req = queueFsRequest(SysFsOpLs, path, nil, 0, entryBytes)
   if req == nil:
+    if not canFallbackToRawFs():
+      return U64(-1'i64)
+
     let rawMax =
       if maxEntries > U64(FsRawDirEntryMax):
         U64(FsRawDirEntryMax)
@@ -192,6 +208,9 @@ proc serviceLs*(path: cstring, entriesVal, maxEntries: U64): U64 =
 proc serviceMkdir*(path: cstring): U64 =
   let req = queueFsRequest(SysFsOpMkdir, path, nil, 0, 0)
   if req == nil:
+    if not canFallbackToRawFs():
+      return U64(-1'i64)
+
     return U64(fsMkdir(path))
 
   let resp = waitFsResponse(req)
@@ -208,6 +227,9 @@ proc serviceMkdir*(path: cstring): U64 =
 proc serviceUnlink*(path: cstring): U64 =
   let req = queueFsRequest(SysFsOpUnlink, path, nil, 0, 0)
   if req == nil:
+    if not canFallbackToRawFs():
+      return U64(-1'i64)
+
     return U64(fsUnlink(path))
 
   let resp = waitFsResponse(req)
@@ -224,6 +246,9 @@ proc serviceUnlink*(path: cstring): U64 =
 proc serviceRmdir*(path: cstring): U64 =
   let req = queueFsRequest(SysFsOpRmdir, path, nil, 0, 0)
   if req == nil:
+    if not canFallbackToRawFs():
+      return U64(-1'i64)
+
     return U64(fsRmdir(path))
 
   let resp = waitFsResponse(req)
@@ -240,6 +265,9 @@ proc serviceRmdir*(path: cstring): U64 =
 proc serviceReadFile*(path: cstring, bufVal, capacity: U64): U64 =
   let req = queueFsRequest(SysFsOpReadFile, path, nil, 0, capacity)
   if req == nil:
+    if not canFallbackToRawFs():
+      return U64(-1'i64)
+
     let readLen = rawReadFileKernel(path, addr rawFileBuf[0], capacity)
     if readLen < 0:
       return U64(-1'i64)
@@ -264,6 +292,9 @@ proc serviceReadFile*(path: cstring, bufVal, capacity: U64): U64 =
 proc serviceWriteFile*(path: cstring, data: pointer, size: U64): U64 =
   let req = queueFsRequest(SysFsOpWriteFile, path, data, size, 0)
   if req == nil:
+    if not canFallbackToRawFs():
+      return U64(-1'i64)
+
     return U64(fsWriteFile(path, data, size))
 
   let resp = waitFsResponse(req)

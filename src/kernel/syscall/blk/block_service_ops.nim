@@ -18,6 +18,7 @@ type
 
 var
   blockServerPid: int32
+  blockServerRegistered: bool
   nextReqId = U64(1)
   pending: array[BlockPendingMax, PendingBlockRequest]
   rawBlockBuf: array[SysBlockDataSize, U8]
@@ -31,9 +32,17 @@ proc currentIsBlockServer(): bool =
   currentProc != nil and blockServerPid != 0 and currentProc.pid == blockServerPid
 
 
+proc isBlockServicePid*(pid: int32): bool =
+  blockServerRegistered and blockServerPid == pid
+
+
 proc blockServerAvailable(): bool =
   let p = findProcessByPid(blockServerPid)
   p != nil and p.state != procZombie and p.state != procUnused
+
+
+proc canFallbackToRawBlock(): bool =
+  not blockServerRegistered or currentIsBlockServer()
 
 
 proc allocPending(): ptr PendingBlockRequest =
@@ -80,6 +89,9 @@ proc queueBlockRequest(op: U32, blockIndex: U64, data: pointer): ptr PendingBloc
 
 proc waitBlockResponse(p: ptr PendingBlockRequest): ptr SysBlockResponse =
   while p.used and not p.completed:
+    if not blockServerAvailable():
+      return nil
+
     sleepCurrentForBlockReq(p.request.id)
 
   if not p.used:
@@ -99,6 +111,9 @@ proc serviceBlockRead*(blockIndex: U64, outBlock: pointer): int =
 
   let req = queueBlockRequest(SysBlockOpRead, blockIndex, nil)
   if req == nil:
+    if not canFallbackToRawBlock():
+      return -1
+
     return blockdev.blockRead(blockIndex, outBlock)
 
   let resp = waitBlockResponse(req)
@@ -117,6 +132,9 @@ proc serviceBlockWrite*(blockIndex: U64, inBlock: pointer): int =
 
   let req = queueBlockRequest(SysBlockOpWrite, blockIndex, inBlock)
   if req == nil:
+    if not canFallbackToRawBlock():
+      return -1
+
     return blockdev.blockWrite(blockIndex, inBlock)
 
   let resp = waitBlockResponse(req)
@@ -135,6 +153,7 @@ proc syscallBlockServiceRegister*(): U64 =
     return U64(-1'i64)
 
   blockServerPid = currentProc.pid
+  blockServerRegistered = true
   0
 
 
