@@ -17,7 +17,8 @@ SECTIONS
         __text_end = .;
     }
 
-    .rodata : ALIGN(16) {
+    . = ALIGN(4096);
+    .rodata : ALIGN(4096) {
         __rodata_start = .;
         *(.srodata .srodata.*)
         *(.rodata .rodata.*)
@@ -25,14 +26,16 @@ SECTIONS
         __rodata_end = .;
     }
 
-    .data : ALIGN(16) {
+    . = ALIGN(4096);
+    .data : ALIGN(4096) {
         __data_start = .;
         *(.sdata .sdata.*)
         *(.data .data.*)
         __data_end = .;
     }
 
-    .bss (NOLOAD) : ALIGN(16) {
+    . = ALIGN(4096);
+    .bss (NOLOAD) : ALIGN(4096) {
         __bss_start = .;
         *(.sbss .sbss.*)
         *(.bss .bss.*)
@@ -40,10 +43,10 @@ SECTIONS
         __bss_end = .;
     }
 
-    . = ALIGN(16);
+    . = ALIGN(4096);
     __kernel_end = .;
 
-    .kernel_stack (NOLOAD) : ALIGN(16) {
+    .kernel_stack (NOLOAD) : ALIGN(4096) {
         __stack_bottom = .;
         . += KERNEL_STACK_SIZE;
         __stack_top = .;

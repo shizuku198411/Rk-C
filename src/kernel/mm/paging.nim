@@ -153,6 +153,14 @@ proc mappedPagePa*(root: PageTable, va: VAddr): PAddr =
   pteToPa(entry[])
 
 
+proc mappedPageFlags*(root: PageTable, va: VAddr): U64 =
+  let entry = walkPageTable(root, alignDown(va, PageSize), false)
+  if entry == nil or not pteIsValid(entry[]) or not pteIsLeaf(entry[]):
+    return 0
+
+  entry[] and 0x3ff'u64
+
+
 proc unmapRangeFree*(root: PageTable, va: VAddr, pages: U64): int =
   if root == nil:
     return -1

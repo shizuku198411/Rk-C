@@ -22,6 +22,11 @@ var
   bssEndSym {.importc: "__bss_end".}: char
   kernelBaseSym {.importc: "__kernel_base".}: char
   kernelEndSym {.importc: "__kernel_end".}: char
+  textStartSym {.importc: "__text_start".}: char
+  textEndSym {.importc: "__text_end".}: char
+  rodataStartSym {.importc: "__rodata_start".}: char
+  rodataEndSym {.importc: "__rodata_end".}: char
+  dataStartSym {.importc: "__data_start".}: char
   stackBottomSym {.importc: "__stack_bottom".}: char
   stackTopSym {.importc: "__stack_top".}: char
   freeRamStartSym {.importc: "__free_ram_start".}: char
@@ -45,15 +50,25 @@ proc setTrapVector() =
 
 proc enableTimerInterrupt() =
   arch.writeSie(arch.readSie() or SieStie)
-  arch.writeSstatus(arch.readSstatus() or SstatusSie or SstatusSum)
+  arch.writeSstatus((arch.readSstatus() or SstatusSie) and not SstatusSum)
 
 
 proc mapKernelRanges(root: PageTable) =
-  let kernelMapStart = cast[VAddr](addr kernelBaseSym) and not (PageSize - 1'u64)
-  let kernelMapSize = alignUp(cast[U64](addr freeRamEndSym) - kernelMapStart, PageSize)
+  let textStart = alignDown(cast[VAddr](addr textStartSym), PageSize)
+  let textSize = alignUp(cast[U64](addr textEndSym) - textStart, PageSize)
+  let rodataStart = alignDown(cast[VAddr](addr rodataStartSym), PageSize)
+  let rodataSize = alignUp(cast[U64](addr rodataEndSym) - rodataStart, PageSize)
+  let dataStart = alignDown(cast[VAddr](addr dataStartSym), PageSize)
+  let dataSize = alignUp(cast[U64](addr freeRamEndSym) - dataStart, PageSize)
 
-  if mapRange(root, kernelMapStart, kernelMapStart, kernelMapSize, PteR or PteW or PteX) != 0:
-    panic("failed to map kernel identity range")
+  if mapRange(root, textStart, textStart, textSize, PteR or PteX) != 0:
+    panic("failed to map kernel text range")
+
+  if mapRange(root, rodataStart, rodataStart, rodataSize, PteR) != 0:
+    panic("failed to map kernel rodata range")
+
+  if mapRange(root, dataStart, dataStart, dataSize, PteR or PteW) != 0:
+    panic("failed to map kernel data range")
 
   if mapRange(root, QemuUart0Base, QemuUart0Base, QemuMmioSize, PteR or PteW) != 0:
     panic("failed to map qemu mmio")

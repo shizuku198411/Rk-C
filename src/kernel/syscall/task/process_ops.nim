@@ -2,8 +2,14 @@ import ../../../lib/syscall_types
 import ../../../lib/types
 import ../../dev/console
 import ../../fs/fs
+import ../../mm/usercopy
 import ../../task/exec
 import ../../task/process
+
+var
+  processEntries: array[MaxProcs, SysProcessInfo]
+  pathBuf: array[UserCStringMax, char]
+  argBuf: array[UserCStringMax, char]
 
 
 proc processStateValue(state: ProcessState): U32 =
@@ -29,21 +35,24 @@ proc syscallPs*(outEntries: U64, maxEntries: U64): U64 =
   if outEntries == 0 or maxEntries == 0:
     return U64(-1'i64)
 
-  let entries = cast[ptr UncheckedArray[SysProcessInfo]](outEntries)
   var count = U64(0)
   var i = 0
   while i < MaxProcs and count < maxEntries:
     if procs[i].state != procUnused:
-      entries[count].pid = procs[i].pid
-      entries[count].ppid = procs[i].parentPid
-      entries[count].state = processStateValue(procs[i].state)
+      processEntries[count].pid = procs[i].pid
+      processEntries[count].ppid = procs[i].parentPid
+      processEntries[count].state = processStateValue(procs[i].state)
       if procs[i].isUser:
-        entries[count].isUser = 1
+        processEntries[count].isUser = 1
       else:
-        entries[count].isUser = 0
-      copyProcessName(entries[count].exePath, procs[i].exePath)
+        processEntries[count].isUser = 0
+      copyProcessName(processEntries[count].exePath, procs[i].exePath)
       inc count
     inc i
+
+  let bytes = count * U64(sizeof(SysProcessInfo))
+  if copyToUser(outEntries, addr processEntries[0], bytes) != 0:
+    return U64(-1'i64)
 
   count
 
@@ -86,7 +95,18 @@ proc syscallWait*(pidVal: U64): U64 =
 
 
 proc syscallExec*(path, arg: U64): U64 =
-  U64(execUserApp(cast[cstring](path), cast[cstring](arg)))
+  if copyUserCString(addr pathBuf[0], path, UserCStringMax) < 0:
+    return U64(-1'i64)
+
+  let copiedArg =
+    if arg == 0:
+      nil
+    else:
+      if copyUserCString(addr argBuf[0], arg, UserCStringMax) < 0:
+        return U64(-1'i64)
+      cast[cstring](addr argBuf[0])
+
+  U64(execUserApp(cast[cstring](addr pathBuf[0]), copiedArg))
 
 
 proc syscallGetCwd*(outBuf, capacity: U64): U64 =
@@ -95,13 +115,18 @@ proc syscallGetCwd*(outBuf, capacity: U64): U64 =
   if outBuf == 0 or capacity == 0:
     return U64(-1'i64)
 
-  let dst = cast[ptr UncheckedArray[char]](outBuf)
+  var cwd: array[SysProcessCwdMax, char]
   var i = U64(0)
-  while i + 1 < capacity and i < U64(SysProcessCwdMax) and currentProc.cwd[i] != '\0':
-    dst[i] = currentProc.cwd[i]
+  while i + 1 < U64(SysProcessCwdMax) and currentProc.cwd[i] != '\0':
+    cwd[i] = currentProc.cwd[i]
     inc i
 
-  dst[i] = '\0'
+  cwd[i] = '\0'
+  if capacity < i + 1:
+    return U64(-1'i64)
+  if copyToUser(outBuf, addr cwd[0], i + 1) != 0:
+    return U64(-1'i64)
+
   i
 
 
@@ -124,7 +149,10 @@ proc syscallSetCwd*(pathVal: U64): U64 =
   if pathVal == 0:
     return U64(-1'i64)
 
-  let path = cast[cstring](pathVal)
+  if copyUserCString(addr pathBuf[0], pathVal, UserCStringMax) < 0:
+    return U64(-1'i64)
+
+  let path = cast[cstring](addr pathBuf[0])
   if path[0] != '/':
     return U64(-1'i64)
   if not fsIsDir(path):
