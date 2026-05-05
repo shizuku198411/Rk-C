@@ -62,7 +62,7 @@ proc printCompact(entries: ptr UncheckedArray[DirEntry], count: int) =
       write("\n")
       col = 0
     elif i < count:
-      write(" ")
+      write("\t")
 
   if col != 0:
     write("\n")
