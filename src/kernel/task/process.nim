@@ -17,6 +17,35 @@ type
     procSleeping
     procZombie
 
+  WaitKind* = enum
+    waitNone = 0
+    waitInput
+    waitIpc
+    waitPid
+    waitFsReq
+    waitBlockReq
+
+  WaitTarget* {.bycopy.} = object
+    kind*: WaitKind
+    value*: U64
+
+  IpcState* {.bycopy.} = object
+    queue*: array[SysIpcQueueCap, SysIpcMessage]
+    head*: int
+    tail*: int
+    count*: int
+
+  UserState* {.bycopy.} = object
+    active*: bool
+    base*: VAddr
+    pc*: VAddr
+    stackTop*: VAddr
+    sp*: VAddr
+    imagePages*: U64
+    stackPages*: U64
+    arg0*: U64
+    arg1*: U64
+
   Context* {.bycopy.} = object
     ra*: U64
     sp*: U64
@@ -46,26 +75,11 @@ type
     entry*: KernelTask
     kernelStack*: PAddr
     rootPageTable*: PageTable
-    isUser*: bool
-    userBase*: VAddr
-    userPc*: VAddr
-    userStackTop*: VAddr
-    userSp*: VAddr
-    userImagePages*: U64
-    userStackPages*: U64
-    userArg0*: U64
-    userArg1*: U64
-    waitingForInput*: bool
-    waitingForIpc*: bool
-    waitingForFsReq*: U64
-    waitingForBlockReq*: U64
-    waitingForPid*: int32
+    user*: UserState
+    wait*: WaitTarget
     detached*: bool
     exitStatus*: U64
-    ipcQueue*: array[SysIpcQueueCap, SysIpcMessage]
-    ipcHead*: int
-    ipcTail*: int
-    ipcCount*: int
+    ipc*: IpcState
 
 
 var
@@ -93,6 +107,7 @@ proc wakeIpcWaiter*(pid: int32)
 proc wakeFsWaiter*(reqId: U64)
 proc wakeBlockWaiter*(reqId: U64)
 proc wakePidWaiters*(pid: int32)
+proc clearWait*(p: ptr Process)
 
 
 proc setKernelPageTable*(root: PageTable) =
@@ -127,13 +142,49 @@ proc copyCwd(dst: var array[SysProcessCwdMax, char], src: array[SysProcessCwdMax
 
 
 proc clearIpcQueue(p: ptr Process) =
-  p.ipcHead = 0
-  p.ipcTail = 0
-  p.ipcCount = 0
+  p.ipc.head = 0
+  p.ipc.tail = 0
+  p.ipc.count = 0
 
   var i = 0
   while i < SysIpcQueueCap:
-    p.ipcQueue[i] = SysIpcMessage()
+    p.ipc.queue[i] = SysIpcMessage()
+    inc i
+
+
+proc clearUserState(p: ptr Process) =
+  if p == nil:
+    return
+
+  p.user = UserState()
+
+
+proc clearWait*(p: ptr Process) =
+  if p == nil:
+    return
+
+  p.wait = WaitTarget()
+
+
+proc sleepCurrentFor(kind: WaitKind, value: U64) =
+  if currentProc == nil:
+    return
+
+  currentProc.wait.kind = kind
+  currentProc.wait.value = value
+  currentProc.state = procSleeping
+  schedule()
+
+
+proc wakeWaiters(kind: WaitKind, value: U64, wakeAll: bool) =
+  var i = 0
+  while i < MaxProcs:
+    if procs[i].state == procSleeping and procs[i].wait.kind == kind and
+        procs[i].wait.value == value:
+      clearWait(addr procs[i])
+      procs[i].state = procRunnable
+      if not wakeAll:
+        return
     inc i
 
 
@@ -171,20 +222,8 @@ proc createKernelProcessInternal(entry: KernelTask, isIdle: bool): int32 =
   p.kernelStack = stack
   p.rootPageTable = nil
   setRootCwd(p)
-  p.isUser = false
-  p.userBase = 0
-  p.userPc = 0
-  p.userStackTop = 0
-  p.userSp = 0
-  p.userImagePages = 0
-  p.userStackPages = 0
-  p.userArg0 = 0
-  p.userArg1 = 0
-  p.waitingForInput = false
-  p.waitingForIpc = false
-  p.waitingForFsReq = 0
-  p.waitingForBlockReq = 0
-  p.waitingForPid = 0
+  clearUserState(p)
+  clearWait(p)
   p.detached = false
   p.exitStatus = 0
   clearIpcQueue(p)
@@ -210,20 +249,8 @@ proc processInit*() =
     procs[i].entry = nil
     procs[i].kernelStack = NilPAddr
     procs[i].rootPageTable = nil
-    procs[i].isUser = false
-    procs[i].userBase = 0
-    procs[i].userPc = 0
-    procs[i].userStackTop = 0
-    procs[i].userSp = 0
-    procs[i].userImagePages = 0
-    procs[i].userStackPages = 0
-    procs[i].userArg0 = 0
-    procs[i].userArg1 = 0
-    procs[i].waitingForInput = false
-    procs[i].waitingForIpc = false
-    procs[i].waitingForFsReq = 0
-    procs[i].waitingForBlockReq = 0
-    procs[i].waitingForPid = 0
+    clearUserState(addr procs[i])
+    clearWait(addr procs[i])
     procs[i].detached = false
     procs[i].exitStatus = 0
     clearIpcQueue(addr procs[i])
@@ -244,11 +271,11 @@ proc createKernelProcess*(entry: KernelTask): int32 =
 
 
 proc userProcessBootstrap() {.cdecl, noreturn.} =
-  if currentProc == nil or not currentProc.isUser:
+  if currentProc == nil or not currentProc.user.active:
     panic("invalid user process")
 
   let kernelSp = currentProc.kernelStack + KernelStackPages * PageSize
-  arch.enterUser(currentProc.userPc, currentProc.userSp, kernelSp, currentProc.userArg0, currentProc.userArg1)
+  arch.enterUser(currentProc.user.pc, currentProc.user.sp, kernelSp, currentProc.user.arg0, currentProc.user.arg1)
 
 
 proc findProcessByPid*(pid: int32): ptr Process =
@@ -281,7 +308,7 @@ proc allocUserProcessFromParent*(parent: ptr Process): ptr Process =
     return nil
 
   p.state = procSleeping
-  p.isUser = true
+  p.user.active = true
   inheritProcessMetadata(p, parent)
   p
 
@@ -291,20 +318,16 @@ proc configureUserProcess*(p: ptr Process, root: PageTable, path: cstring,
                            imagePages, stackPages: U64, arg0: U64 = 0, arg1: U64 = 0) =
   setExePath(p, path)
   p.rootPageTable = root
-  p.isUser = true
-  p.userBase = userBase
-  p.userPc = userPc
-  p.userStackTop = userStackTop
-  p.userSp = userSp
-  p.userImagePages = imagePages
-  p.userStackPages = stackPages
-  p.userArg0 = arg0
-  p.userArg1 = arg1
-  p.waitingForInput = false
-  p.waitingForIpc = false
-  p.waitingForFsReq = 0
-  p.waitingForBlockReq = 0
-  p.waitingForPid = 0
+  p.user.active = true
+  p.user.base = userBase
+  p.user.pc = userPc
+  p.user.stackTop = userStackTop
+  p.user.sp = userSp
+  p.user.imagePages = imagePages
+  p.user.stackPages = stackPages
+  p.user.arg0 = arg0
+  p.user.arg1 = arg1
+  clearWait(p)
   p.exitStatus = 0
   p.state = procRunnable
 
@@ -313,12 +336,12 @@ proc releaseUserAddressSpace(p: ptr Process) =
   if p.rootPageTable == nil or p.rootPageTable == kernelPageTable:
     return
 
-  discard unmapRangeFree(p.rootPageTable, p.userBase, p.userImagePages)
-  if p.userStackTop != 0 and p.userStackPages != 0:
+  discard unmapRangeFree(p.rootPageTable, p.user.base, p.user.imagePages)
+  if p.user.stackTop != 0 and p.user.stackPages != 0:
     discard unmapRangeFree(
       p.rootPageTable,
-      p.userStackTop - p.userStackPages * PageSize,
-      p.userStackPages,
+      p.user.stackTop - p.user.stackPages * PageSize,
+      p.user.stackPages,
     )
 
   freePageTablePages(p.rootPageTable)
@@ -343,20 +366,8 @@ proc discardProcess*(p: ptr Process) =
   p.entry = nil
   p.kernelStack = NilPAddr
   p.rootPageTable = nil
-  p.isUser = false
-  p.userBase = 0
-  p.userPc = 0
-  p.userStackTop = 0
-  p.userSp = 0
-  p.userImagePages = 0
-  p.userStackPages = 0
-  p.userArg0 = 0
-  p.userArg1 = 0
-  p.waitingForInput = false
-  p.waitingForIpc = false
-  p.waitingForFsReq = 0
-  p.waitingForBlockReq = 0
-  p.waitingForPid = 0
+  clearUserState(p)
+  clearWait(p)
   p.detached = false
   p.exitStatus = 0
   clearIpcQueue(p)
@@ -401,96 +412,49 @@ proc printProcessState*(state: ProcessState) =
 
 
 proc sleepCurrentForInput*() =
-  if currentProc == nil:
-    return
-
-  currentProc.waitingForInput = true
-  currentProc.state = procSleeping
-  schedule()
+  sleepCurrentFor(waitInput, 1)
 
 
 proc sleepCurrentForIpc*() =
-  if currentProc == nil:
-    return
-
-  currentProc.waitingForIpc = true
-  currentProc.state = procSleeping
-  schedule()
+  sleepCurrentFor(waitIpc, 1)
 
 
 proc sleepCurrentForFsReq*(reqId: U64) =
-  if currentProc == nil:
-    return
-
-  currentProc.waitingForFsReq = reqId
-  currentProc.state = procSleeping
-  schedule()
+  sleepCurrentFor(waitFsReq, reqId)
 
 
 proc sleepCurrentForBlockReq*(reqId: U64) =
-  if currentProc == nil:
-    return
-
-  currentProc.waitingForBlockReq = reqId
-  currentProc.state = procSleeping
-  schedule()
+  sleepCurrentFor(waitBlockReq, reqId)
 
 
 proc sleepCurrentForPid*(pid: int32) =
-  if currentProc == nil:
-    return
-
-  currentProc.waitingForPid = pid
-  currentProc.state = procSleeping
-  schedule()
+  sleepCurrentFor(waitPid, U64(pid))
 
 
 proc wakeInputWaiters*() =
-  var i = 0
-  while i < MaxProcs:
-    if procs[i].state == procSleeping and procs[i].waitingForInput:
-      procs[i].waitingForInput = false
-      procs[i].state = procRunnable
-    inc i
+  wakeWaiters(waitInput, 1, true)
 
 
 proc wakeIpcWaiter*(pid: int32) =
   var i = 0
   while i < MaxProcs:
-    if procs[i].state == procSleeping and procs[i].pid == pid and procs[i].waitingForIpc:
-      procs[i].waitingForIpc = false
+    if procs[i].state == procSleeping and procs[i].pid == pid and procs[i].wait.kind == waitIpc:
+      clearWait(addr procs[i])
       procs[i].state = procRunnable
       return
     inc i
 
 
 proc wakeFsWaiter*(reqId: U64) =
-  var i = 0
-  while i < MaxProcs:
-    if procs[i].state == procSleeping and procs[i].waitingForFsReq == reqId:
-      procs[i].waitingForFsReq = 0
-      procs[i].state = procRunnable
-      return
-    inc i
+  wakeWaiters(waitFsReq, reqId, false)
 
 
 proc wakeBlockWaiter*(reqId: U64) =
-  var i = 0
-  while i < MaxProcs:
-    if procs[i].state == procSleeping and procs[i].waitingForBlockReq == reqId:
-      procs[i].waitingForBlockReq = 0
-      procs[i].state = procRunnable
-      return
-    inc i
+  wakeWaiters(waitBlockReq, reqId, false)
 
 
 proc wakePidWaiters*(pid: int32) =
-  var i = 0
-  while i < MaxProcs:
-    if procs[i].state == procSleeping and procs[i].waitingForPid == pid:
-      procs[i].waitingForPid = 0
-      procs[i].state = procRunnable
-    inc i
+  wakeWaiters(waitPid, U64(pid), true)
 
 
 proc reapDetachedZombies() =

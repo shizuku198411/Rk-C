@@ -143,7 +143,7 @@ proc serviceBlockWrite*(blockIndex: U64, inBlock: pointer): int =
 
 
 proc syscallBlockServiceRegister*(): U64 =
-  if currentProc == nil or not currentProc.isUser:
+  if currentProc == nil or not currentProc.user.active:
     return U64(-1'i64)
 
   registerService(serviceBlock, currentProc.pid)

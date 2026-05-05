@@ -42,7 +42,7 @@ proc syscallPs*(outEntries: U64, maxEntries: U64): U64 =
       processEntries[count].pid = procs[i].pid
       processEntries[count].ppid = procs[i].parentPid
       processEntries[count].state = processStateValue(procs[i].state)
-      if procs[i].isUser:
+      if procs[i].user.active:
         processEntries[count].isUser = 1
       else:
         processEntries[count].isUser = 0

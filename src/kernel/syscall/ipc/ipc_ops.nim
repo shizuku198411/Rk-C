@@ -10,25 +10,25 @@ var sendBuf: array[SysIpcMessageMax, char]
 proc enqueueIpc(target: ptr Process, msg: ptr SysIpcMessage): int =
   if target == nil or msg == nil:
     return -1
-  if target.ipcCount >= SysIpcQueueCap:
+  if target.ipc.count >= SysIpcQueueCap:
     return -1
 
-  target.ipcQueue[target.ipcTail] = msg[]
-  target.ipcTail = (target.ipcTail + 1) mod SysIpcQueueCap
-  inc target.ipcCount
+  target.ipc.queue[target.ipc.tail] = msg[]
+  target.ipc.tail = (target.ipc.tail + 1) mod SysIpcQueueCap
+  inc target.ipc.count
   0
 
 
 proc dequeueIpc(p: ptr Process, msg: ptr SysIpcMessage): int =
   if p == nil or msg == nil:
     return -1
-  if p.ipcCount <= 0:
+  if p.ipc.count <= 0:
     return -1
 
-  msg[] = p.ipcQueue[p.ipcHead]
-  p.ipcQueue[p.ipcHead] = SysIpcMessage()
-  p.ipcHead = (p.ipcHead + 1) mod SysIpcQueueCap
-  dec p.ipcCount
+  msg[] = p.ipc.queue[p.ipc.head]
+  p.ipc.queue[p.ipc.head] = SysIpcMessage()
+  p.ipc.head = (p.ipc.head + 1) mod SysIpcQueueCap
+  dec p.ipc.count
   0
 
 
@@ -88,11 +88,7 @@ proc syscallKill*(pidVal: U64): U64 =
     return U64(-1'i64)
 
   target.exitStatus = U64(255)
-  target.waitingForInput = false
-  target.waitingForIpc = false
-  target.waitingForFsReq = 0
-  target.waitingForBlockReq = 0
-  target.waitingForPid = 0
+  clearWait(target)
   target.state = procZombie
   wakePidWaiters(pid)
 

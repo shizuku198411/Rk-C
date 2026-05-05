@@ -86,7 +86,7 @@ proc cloneMappedRange(srcRoot, dstRoot: PageTable, srcBase, dstBase: VAddr, page
 
 
 proc cloneParentUserMemory(childRoot: PageTable, parent: ptr Process, childBase, childStackTop: VAddr): int =
-  if parent == nil or not parent.isUser:
+  if parent == nil or not parent.user.active:
     return 0
 
   let parentRoot =
@@ -98,13 +98,13 @@ proc cloneParentUserMemory(childRoot: PageTable, parent: ptr Process, childBase,
   if parentRoot == nil:
     return -1
 
-  if cloneMappedRange(parentRoot, childRoot, parent.userBase, childBase, parent.userImagePages,
+  if cloneMappedRange(parentRoot, childRoot, parent.user.base, childBase, parent.user.imagePages,
                       PteU or PteR or PteW or PteX) != 0:
     return -1
 
-  let parentStackBase = parent.userStackTop - parent.userStackPages * PageSize
-  let childStackBase = childStackTop - parent.userStackPages * PageSize
-  if cloneMappedRange(parentRoot, childRoot, parentStackBase, childStackBase, parent.userStackPages,
+  let parentStackBase = parent.user.stackTop - parent.user.stackPages * PageSize
+  let childStackBase = childStackTop - parent.user.stackPages * PageSize
+  if cloneMappedRange(parentRoot, childRoot, parentStackBase, childStackBase, parent.user.stackPages,
                       PteU or PteR or PteW) != 0:
     return -1
 
@@ -209,11 +209,11 @@ proc execUserApp*(path: cstring, arg: cstring, detached: bool = false): int32 =
   let childBase = execBaseForPath(path)
   let childStackTop = execStackTopForPath(path)
   child.rootPageTable = root
-  if parent != nil and parent.isUser:
-    child.userBase = childBase
-    child.userStackTop = childStackTop
-    child.userImagePages = parent.userImagePages
-    child.userStackPages = parent.userStackPages
+  if parent != nil and parent.user.active:
+    child.user.base = childBase
+    child.user.stackTop = childStackTop
+    child.user.imagePages = parent.user.imagePages
+    child.user.stackPages = parent.user.stackPages
 
   if cloneParentUserMemory(root, parent, childBase, childStackTop) != 0:
     discardProcess(child)
