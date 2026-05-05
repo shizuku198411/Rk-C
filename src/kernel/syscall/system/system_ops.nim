@@ -3,6 +3,7 @@ import ../../../lib/types
 import ../../dev/rtc
 import ../../dev/timer
 import ../../mm/usercopy
+import ../../task/process
 
 
 proc sbiShutdown() {.importc: "sbi_shutdown", cdecl.}
@@ -14,6 +15,11 @@ proc syscallTicks*(): U64 =
 
 proc syscallShutdown*() =
   sbiShutdown()
+
+
+proc syscallYield*(): U64 =
+  yieldCpu()
+  0
 
 
 proc syscallGetDateTime*(outDateTime: U64): U64 =

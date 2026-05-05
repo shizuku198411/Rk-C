@@ -28,6 +28,8 @@ elif defined(userApp_ipc):
   import apps/ipc/ipc
 elif defined(userApp_kill):
   import apps/kill/kill
+elif defined(userApp_svcmgtd):
+  import apps/svcmgtd/svcmgtd
 elif defined(userApp_fsd):
   import apps/fsd/fsd
 elif defined(userApp_blockd):

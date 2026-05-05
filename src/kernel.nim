@@ -31,11 +31,8 @@ proc kernel_main*(hartid: U64, dtb: pointer) {.exportc, cdecl.} =
 
   kernelBanner()
 
-  if createBlockServerUserProcess() < 0:
-    panic("failed to create block server")
-
-  if createFsServerUserProcess() < 0:
-    panic("failed to create fs server")
+  if createServiceManagerUserProcess() < 0:
+    panic("failed to create service manager")
 
   if createShellUserProcess() < 0:
     panic("failed to create shell")

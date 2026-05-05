@@ -185,6 +185,10 @@ proc createShellUserProcess*(): int32 =
   loadUserProcess("/bin/shell", ShellBase, ShellStackTop, nil)
 
 
+proc createServiceManagerUserProcess*(): int32 =
+  loadUserProcess("/bin/svcmgtd", AppBase, AppStackTop, nil)
+
+
 proc createFsServerUserProcess*(): int32 =
   loadUserProcess("/bin/fsd", AppBase, AppStackTop, nil)
 

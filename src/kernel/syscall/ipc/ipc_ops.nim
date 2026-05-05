@@ -80,7 +80,7 @@ proc syscallKill*(pidVal: U64): U64 =
   let pid = int32(pidVal)
   if pid <= 1:
     return U64(-1'i64)
-  if isServicePid(pid):
+  if isServicePid(pid) and not currentIsService(serviceManager):
     return U64(-1'i64)
 
   let target = findProcessByPid(pid)

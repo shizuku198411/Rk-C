@@ -4,6 +4,7 @@ type
   ServiceKind* = enum
     serviceBlock = 0
     serviceFs
+    serviceManager
     serviceMax
 
   ServiceEntry = object
@@ -16,6 +17,11 @@ var services: array[serviceMax, ServiceEntry]
 proc registerService*(kind: ServiceKind, pid: int32) =
   services[kind].registered = true
   services[kind].pid = pid
+
+
+proc unregisterService*(kind: ServiceKind) =
+  services[kind].registered = false
+  services[kind].pid = 0
 
 
 proc serviceRegistered*(kind: ServiceKind): bool =

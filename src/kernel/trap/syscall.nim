@@ -6,6 +6,7 @@ import ../syscall/fs/fs_service_ops
 import ../syscall/io/console_io
 import ../syscall/ipc/ipc_ops
 import ../syscall/mm/memory_ops
+import ../syscall/service/service_ops
 import ../syscall/system/system_ops
 import ../syscall/task/process_ops
 import ../trap/trap_types
@@ -48,6 +49,9 @@ proc handleSyscall*(frame: ptr TrapFrame) =
 
   of SysShutdown:
     syscallShutdown()
+
+  of SysYield:
+    frame.a0 = syscallYield()
 
   of SysGetDateTime:
     frame.a0 = syscallGetDateTime(frame.a0)
@@ -117,6 +121,15 @@ proc handleSyscall*(frame: ptr TrapFrame) =
 
   of SysRawBlockWrite:
     frame.a0 = syscallRawBlockWrite(frame.a0, frame.a1)
+
+  of SysServiceManagerRegister:
+    frame.a0 = syscallServiceManagerRegister()
+
+  of SysServiceRegister:
+    frame.a0 = syscallServiceRegister(frame.a0, frame.a1)
+
+  of SysServiceUnregister:
+    frame.a0 = syscallServiceUnregister(frame.a0)
 
   else:
     print("PANIC: unknown syscall ")

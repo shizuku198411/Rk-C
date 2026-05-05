@@ -174,3 +174,19 @@ proc sysRawBlockRead*(blockIndex: U64, outBlock: pointer): I32 =
 
 proc sysRawBlockWrite*(blockIndex: U64, inBlock: pointer): I32 =
   I32(rawSyscall3(SysRawBlockWrite, blockIndex, cast[U64](inBlock), 0))
+
+
+proc sysServiceManagerRegister*(): I32 =
+  I32(rawSyscall3(SysServiceManagerRegister, 0, 0, 0))
+
+
+proc sysServiceRegister*(kind: U32, pid: I32): I32 =
+  I32(rawSyscall3(SysServiceRegister, U64(kind), U64(pid), 0))
+
+
+proc sysServiceUnregister*(kind: U32): I32 =
+  I32(rawSyscall3(SysServiceUnregister, U64(kind), 0, 0))
+
+
+proc sysYield*(): I32 =
+  I32(rawSyscall3(SysYield, 0, 0, 0))

@@ -17,6 +17,9 @@ const
   SysFsOpWriteFile* = U32(6)
   SysBlockOpRead* = U32(1)
   SysBlockOpWrite* = U32(2)
+  SysServiceKindBlock* = U32(0)
+  SysServiceKindFs* = U32(1)
+  SysServiceKindManager* = U32(2)
 
   SysProcessUnused* = U32(0)
   SysProcessRunnable* = U32(1)

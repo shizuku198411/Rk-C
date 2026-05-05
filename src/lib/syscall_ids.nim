@@ -36,3 +36,7 @@ const
   SysBlockServiceReply* = U64(36)
   SysRawBlockRead* = U64(37)
   SysRawBlockWrite* = U64(38)
+  SysServiceManagerRegister* = U64(39)
+  SysServiceRegister* = U64(40)
+  SysServiceUnregister* = U64(41)
+  SysYield* = U64(42)
