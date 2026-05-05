@@ -31,3 +31,8 @@ const
   SysRawRmdir* = U64(31)
   SysRawReadFile* = U64(32)
   SysRawWriteFile* = U64(33)
+  SysBlockServiceRegister* = U64(34)
+  SysBlockServiceReceive* = U64(35)
+  SysBlockServiceReply* = U64(36)
+  SysRawBlockRead* = U64(37)
+  SysRawBlockWrite* = U64(38)

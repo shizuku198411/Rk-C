@@ -30,5 +30,7 @@ elif defined(userApp_kill):
   import apps/kill/kill
 elif defined(userApp_fsd):
   import apps/fsd/fsd
+elif defined(userApp_blockd):
+  import apps/blockd/blockd
 else:
   {.error: "missing user app define".}

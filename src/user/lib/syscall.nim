@@ -154,3 +154,23 @@ proc sysRawReadFile*(path: cstring, buf: pointer, capacity: U64): I32 =
 
 proc sysRawWriteFile*(path: cstring, buf: pointer, size: U64): I32 =
   I32(rawSyscall3(SysRawWriteFile, cast[U64](path), cast[U64](buf), size))
+
+
+proc sysBlockServiceRegister*(): I32 =
+  I32(rawSyscall3(SysBlockServiceRegister, 0, 0, 0))
+
+
+proc sysBlockServiceReceive*(req: ptr SysBlockRequest): I32 =
+  I32(rawSyscall3(SysBlockServiceReceive, cast[U64](req), 0, 0))
+
+
+proc sysBlockServiceReply*(resp: ptr SysBlockResponse): I32 =
+  I32(rawSyscall3(SysBlockServiceReply, cast[U64](resp), 0, 0))
+
+
+proc sysRawBlockRead*(blockIndex: U64, outBlock: pointer): I32 =
+  I32(rawSyscall3(SysRawBlockRead, blockIndex, cast[U64](outBlock), 0))
+
+
+proc sysRawBlockWrite*(blockIndex: U64, inBlock: pointer): I32 =
+  I32(rawSyscall3(SysRawBlockWrite, blockIndex, cast[U64](inBlock), 0))

@@ -88,6 +88,7 @@ proc syscallKill*(pidVal: U64): U64 =
   target.waitingForInput = false
   target.waitingForIpc = false
   target.waitingForFsReq = 0
+  target.waitingForBlockReq = 0
   target.waitingForPid = 0
   target.state = procZombie
   wakePidWaiters(pid)

@@ -7,7 +7,7 @@ import ../mm/paging
 
 const
   MaxProcs* = 16
-  KernelStackPages* = U64(1)
+  KernelStackPages* = U64(4)
 
 type
   ProcessState* = enum
@@ -58,6 +58,7 @@ type
     waitingForInput*: bool
     waitingForIpc*: bool
     waitingForFsReq*: U64
+    waitingForBlockReq*: U64
     waitingForPid*: int32
     detached*: bool
     exitStatus*: U64
@@ -85,10 +86,12 @@ proc printProcessState*(state: ProcessState)
 proc sleepCurrentForInput*()
 proc sleepCurrentForIpc*()
 proc sleepCurrentForFsReq*(reqId: U64)
+proc sleepCurrentForBlockReq*(reqId: U64)
 proc sleepCurrentForPid*(pid: int32)
 proc wakeInputWaiters*()
 proc wakeIpcWaiter*(pid: int32)
 proc wakeFsWaiter*(reqId: U64)
+proc wakeBlockWaiter*(reqId: U64)
 proc wakePidWaiters*(pid: int32)
 
 
@@ -180,6 +183,7 @@ proc createKernelProcessInternal(entry: KernelTask, isIdle: bool): int32 =
   p.waitingForInput = false
   p.waitingForIpc = false
   p.waitingForFsReq = 0
+  p.waitingForBlockReq = 0
   p.waitingForPid = 0
   p.detached = false
   p.exitStatus = 0
@@ -218,6 +222,7 @@ proc processInit*() =
     procs[i].waitingForInput = false
     procs[i].waitingForIpc = false
     procs[i].waitingForFsReq = 0
+    procs[i].waitingForBlockReq = 0
     procs[i].waitingForPid = 0
     procs[i].detached = false
     procs[i].exitStatus = 0
@@ -298,6 +303,7 @@ proc configureUserProcess*(p: ptr Process, root: PageTable, path: cstring,
   p.waitingForInput = false
   p.waitingForIpc = false
   p.waitingForFsReq = 0
+  p.waitingForBlockReq = 0
   p.waitingForPid = 0
   p.exitStatus = 0
   p.state = procRunnable
@@ -349,6 +355,7 @@ proc discardProcess*(p: ptr Process) =
   p.waitingForInput = false
   p.waitingForIpc = false
   p.waitingForFsReq = 0
+  p.waitingForBlockReq = 0
   p.waitingForPid = 0
   p.detached = false
   p.exitStatus = 0
@@ -420,6 +427,15 @@ proc sleepCurrentForFsReq*(reqId: U64) =
   schedule()
 
 
+proc sleepCurrentForBlockReq*(reqId: U64) =
+  if currentProc == nil:
+    return
+
+  currentProc.waitingForBlockReq = reqId
+  currentProc.state = procSleeping
+  schedule()
+
+
 proc sleepCurrentForPid*(pid: int32) =
   if currentProc == nil:
     return
@@ -453,6 +469,16 @@ proc wakeFsWaiter*(reqId: U64) =
   while i < MaxProcs:
     if procs[i].state == procSleeping and procs[i].waitingForFsReq == reqId:
       procs[i].waitingForFsReq = 0
+      procs[i].state = procRunnable
+      return
+    inc i
+
+
+proc wakeBlockWaiter*(reqId: U64) =
+  var i = 0
+  while i < MaxProcs:
+    if procs[i].state == procSleeping and procs[i].waitingForBlockReq == reqId:
+      procs[i].waitingForBlockReq = 0
       procs[i].state = procRunnable
       return
     inc i

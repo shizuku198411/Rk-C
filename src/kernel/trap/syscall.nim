@@ -1,5 +1,6 @@
 import ../../lib/syscall_ids
 import ../dev/console
+import ../syscall/blk/block_service_ops
 import ../syscall/fs/file_ops
 import ../syscall/fs/fs_service_ops
 import ../syscall/io/console_io
@@ -101,6 +102,21 @@ proc handleSyscall*(frame: ptr TrapFrame) =
 
   of SysRawWriteFile:
     frame.a0 = syscallRawWriteFile(frame.a0, frame.a1, frame.a2)
+
+  of SysBlockServiceRegister:
+    frame.a0 = syscallBlockServiceRegister()
+
+  of SysBlockServiceReceive:
+    frame.a0 = syscallBlockServiceReceive(frame.a0)
+
+  of SysBlockServiceReply:
+    frame.a0 = syscallBlockServiceReply(frame.a0)
+
+  of SysRawBlockRead:
+    frame.a0 = syscallRawBlockRead(frame.a0, frame.a1)
+
+  of SysRawBlockWrite:
+    frame.a0 = syscallRawBlockWrite(frame.a0, frame.a1)
 
   else:
     print("PANIC: unknown syscall ")

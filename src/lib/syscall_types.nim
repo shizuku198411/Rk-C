@@ -7,6 +7,7 @@ const
   SysIpcQueueCap* = 4
   SysFsPathMax* = 128
   SysFsDataMax* = 4096
+  SysBlockDataSize* = 512
 
   SysFsOpLs* = U32(1)
   SysFsOpMkdir* = U32(2)
@@ -14,6 +15,8 @@ const
   SysFsOpRmdir* = U32(4)
   SysFsOpReadFile* = U32(5)
   SysFsOpWriteFile* = U32(6)
+  SysBlockOpRead* = U32(1)
+  SysBlockOpWrite* = U32(2)
 
   SysProcessUnused* = U32(0)
   SysProcessRunnable* = U32(1)
@@ -60,3 +63,14 @@ type
     result*: I32
     size*: U64
     data*: array[SysFsDataMax, U8]
+
+  SysBlockRequest* {.packed.} = object
+    id*: U64
+    op*: U32
+    blockIndex*: U64
+    data*: array[SysBlockDataSize, U8]
+
+  SysBlockResponse* {.packed.} = object
+    id*: U64
+    result*: I32
+    data*: array[SysBlockDataSize, U8]

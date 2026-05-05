@@ -1,8 +1,8 @@
 import ../../lib/types
 import ../dev/console
-import ../fs/blockdev
 import ../fs/dirent
 import ../fs/tmpfs
+import ../syscall/blk/block_service_ops
 
 const
   FsMagic = U32(0x4e465332) # NFS2
@@ -137,7 +137,7 @@ proc appfsReadBytes(absOff: U64, outBuf: pointer, n: U64): int =
     let cur = absOff + done
     let blk = cur div BlockSize
     let inBlk = cur mod BlockSize
-    if blockRead(blk, addr blockBuf[0]) < 0:
+    if serviceBlockRead(blk, addr blockBuf[0]) < 0:
       return -1
 
     var chunk = BlockSize - inBlk
@@ -265,7 +265,7 @@ proc writeSuper(): int =
       blockBuf[i] = src[copied]
       inc i
       inc copied
-    if blockWrite(blk, addr blockBuf[0]) < 0:
+    if serviceBlockWrite(blk, addr blockBuf[0]) < 0:
       return -1
     inc blk
   0
@@ -276,7 +276,7 @@ proc readSuper(): int =
   var copied = U64(0)
   var blk = U64(0)
   while blk < FsMetaBlocks:
-    if blockRead(blk, addr blockBuf[0]) < 0:
+    if serviceBlockRead(blk, addr blockBuf[0]) < 0:
       return -1
     var i = U64(0)
     while i < BlockSize and copied < U64(sizeof(FsSuper)):
@@ -377,7 +377,7 @@ proc writeFileBytes(node: FsNode, data: pointer, size: U64): int =
       blockBuf[i] = src[written]
       inc i
       inc written
-    if blockWrite(U64(node.startBlock) + blk, addr blockBuf[0]) < 0:
+    if serviceBlockWrite(U64(node.startBlock) + blk, addr blockBuf[0]) < 0:
       return -1
     inc blk
   0
@@ -407,7 +407,7 @@ proc ensureRootDir(name: cstring, typ: U32) =
 
 
 proc fsInit*() =
-  blockdevInit()
+  blockServiceInit()
   
   if readSuper() < 0:
     panic("fs super read failed")
@@ -669,7 +669,7 @@ proc fsReadFile*(path: cstring, dst: pointer, capacity: U64): int =
   var done = U64(0)
   var blk = U64(0)
   while done < size and blk < FsFileBlocks:
-    if blockRead(U64(node.startBlock) + blk, addr blockBuf[0]) < 0:
+    if serviceBlockRead(U64(node.startBlock) + blk, addr blockBuf[0]) < 0:
       return -1
     var i = U64(0)
     while i < BlockSize and done < size:
