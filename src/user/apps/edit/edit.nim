@@ -264,6 +264,7 @@ proc editorLoop(path: cstring, len: var U64) =
         gotoPos(StatusRow, 1)
         clearLine()
         write("[op] Exit\n")
+        clearScreen()
         sysExit(0)
       else:
         status = "[op] Unknown Ctrl-X command"
