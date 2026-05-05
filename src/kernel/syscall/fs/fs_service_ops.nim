@@ -4,6 +4,7 @@ import ../../../lib/types
 import ../../fs/dirent
 import ../../fs/fs
 import ../../mm/usercopy
+import ../../service/registry
 import ../../task/process
 
 const
@@ -18,8 +19,6 @@ type
     response: SysFsResponse
 
 var
-  fsServerPid: int32
-  fsServerRegistered: bool
   nextReqId = U64(1)
   pending: array[FsPendingMax, PendingFsRequest]
   rawEntries: array[FsRawDirEntryMax, FsDirEntry]
@@ -27,20 +26,15 @@ var
 
 
 proc currentIsFsServer(): bool =
-  currentProc != nil and fsServerPid != 0 and currentProc.pid == fsServerPid
-
-
-proc isFsServicePid*(pid: int32): bool =
-  fsServerRegistered and fsServerPid == pid
+  currentIsService(serviceFs)
 
 
 proc fsServerAvailable(): bool =
-  let p = findProcessByPid(fsServerPid)
-  p != nil and p.state != procZombie and p.state != procUnused
+  serviceAvailable(serviceFs)
 
 
 proc canFallbackToRawFs(): bool =
-  not fsServerRegistered or currentIsFsServer()
+  not serviceRegistered(serviceFs) or currentIsFsServer()
 
 
 proc copyPath(dst: var array[SysFsPathMax, char], src: cstring) =
@@ -96,7 +90,7 @@ proc queueFsRequest(op: U32, path: cstring, data: pointer, size, capacity: U64):
   if size > 0:
     discard copyMem(addr p.request.data[0], data, size)
 
-  wakeIpcWaiter(fsServerPid)
+  wakeIpcWaiter(servicePid(serviceFs))
   p
 
 
@@ -130,8 +124,7 @@ proc syscallFsServiceRegister*(): U64 =
   if currentProc == nil or not currentProc.isUser:
     return U64(-1'i64)
 
-  fsServerPid = currentProc.pid
-  fsServerRegistered = true
+  registerService(serviceFs, currentProc.pid)
   0
 
 

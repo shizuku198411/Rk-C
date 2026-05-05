@@ -1,8 +1,7 @@
 import ../../../lib/syscall_types
 import ../../../lib/types
 import ../../mm/usercopy
-import ../../syscall/blk/block_service_ops
-import ../../syscall/fs/fs_service_ops
+import ../../service/registry
 import ../../task/process
 
 var sendBuf: array[SysIpcMessageMax, char]
@@ -81,7 +80,7 @@ proc syscallKill*(pidVal: U64): U64 =
   let pid = int32(pidVal)
   if pid <= 1:
     return U64(-1'i64)
-  if isBlockServicePid(pid) or isFsServicePid(pid):
+  if isServicePid(pid):
     return U64(-1'i64)
 
   let target = findProcessByPid(pid)

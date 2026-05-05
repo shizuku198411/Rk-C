@@ -3,6 +3,7 @@ import ../../../lib/syscall_types
 import ../../../lib/types
 import ../../fs/blockdev
 import ../../mm/usercopy
+import ../../service/registry
 import ../../task/process
 
 const
@@ -17,8 +18,6 @@ type
     response: SysBlockResponse
 
 var
-  blockServerPid: int32
-  blockServerRegistered: bool
   nextReqId = U64(1)
   pending: array[BlockPendingMax, PendingBlockRequest]
   rawBlockBuf: array[SysBlockDataSize, U8]
@@ -29,20 +28,15 @@ proc blockServiceInit*() =
 
 
 proc currentIsBlockServer(): bool =
-  currentProc != nil and blockServerPid != 0 and currentProc.pid == blockServerPid
-
-
-proc isBlockServicePid*(pid: int32): bool =
-  blockServerRegistered and blockServerPid == pid
+  currentIsService(serviceBlock)
 
 
 proc blockServerAvailable(): bool =
-  let p = findProcessByPid(blockServerPid)
-  p != nil and p.state != procZombie and p.state != procUnused
+  serviceAvailable(serviceBlock)
 
 
 proc canFallbackToRawBlock(): bool =
-  not blockServerRegistered or currentIsBlockServer()
+  not serviceRegistered(serviceBlock) or currentIsBlockServer()
 
 
 proc allocPending(): ptr PendingBlockRequest =
@@ -83,7 +77,7 @@ proc queueBlockRequest(op: U32, blockIndex: U64, data: pointer): ptr PendingBloc
   if op == SysBlockOpWrite:
     discard copyMem(addr p.request.data[0], data, SysBlockDataSize)
 
-  wakeIpcWaiter(blockServerPid)
+  wakeIpcWaiter(servicePid(serviceBlock))
   p
 
 
@@ -152,8 +146,7 @@ proc syscallBlockServiceRegister*(): U64 =
   if currentProc == nil or not currentProc.isUser:
     return U64(-1'i64)
 
-  blockServerPid = currentProc.pid
-  blockServerRegistered = true
+  registerService(serviceBlock, currentProc.pid)
   0
 
 
