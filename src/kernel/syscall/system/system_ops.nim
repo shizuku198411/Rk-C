@@ -22,6 +22,14 @@ proc syscallYield*(): U64 =
   0
 
 
+proc syscallSleep*(ticks: U64): U64 =
+  if ticks == 0:
+    return 0
+
+  sleepCurrentUntilTick(timerTickCount + ticks)
+  0
+
+
 proc syscallGetDateTime*(outDateTime: U64): U64 =
   if outDateTime == 0:
     return U64(-1'i64)

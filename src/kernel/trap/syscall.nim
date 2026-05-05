@@ -53,6 +53,9 @@ proc handleSyscall*(frame: ptr TrapFrame) =
   of SysYield:
     frame.a0 = syscallYield()
 
+  of SysSleep:
+    frame.a0 = syscallSleep(frame.a0)
+
   of SysGetDateTime:
     frame.a0 = syscallGetDateTime(frame.a0)
 

@@ -190,3 +190,7 @@ proc sysServiceUnregister*(kind: U32): I32 =
 
 proc sysYield*(): I32 =
   I32(rawSyscall3(SysYield, 0, 0, 0))
+
+
+proc sysSleep*(ticks: U64): I32 =
+  I32(rawSyscall3(SysSleep, ticks, 0, 0))

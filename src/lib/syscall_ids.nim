@@ -40,3 +40,4 @@ const
   SysServiceRegister* = U64(40)
   SysServiceUnregister* = U64(41)
   SysYield* = U64(42)
+  SysSleep* = U64(43)

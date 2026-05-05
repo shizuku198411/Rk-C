@@ -24,6 +24,7 @@ type
     waitPid
     waitFsReq
     waitBlockReq
+    waitTimer
 
   WaitTarget* {.bycopy.} = object
     kind*: WaitKind
@@ -102,11 +103,13 @@ proc sleepCurrentForIpc*()
 proc sleepCurrentForFsReq*(reqId: U64)
 proc sleepCurrentForBlockReq*(reqId: U64)
 proc sleepCurrentForPid*(pid: int32)
+proc sleepCurrentUntilTick*(tick: U64)
 proc wakeInputWaiters*()
 proc wakeIpcWaiter*(pid: int32)
 proc wakeFsWaiter*(reqId: U64)
 proc wakeBlockWaiter*(reqId: U64)
 proc wakePidWaiters*(pid: int32)
+proc wakeTimerWaiters*(tick: U64)
 proc clearWait*(p: ptr Process)
 
 
@@ -431,6 +434,10 @@ proc sleepCurrentForPid*(pid: int32) =
   sleepCurrentFor(waitPid, U64(pid))
 
 
+proc sleepCurrentUntilTick*(tick: U64) =
+  sleepCurrentFor(waitTimer, tick)
+
+
 proc wakeInputWaiters*() =
   wakeWaiters(waitInput, 1, true)
 
@@ -455,6 +462,16 @@ proc wakeBlockWaiter*(reqId: U64) =
 
 proc wakePidWaiters*(pid: int32) =
   wakeWaiters(waitPid, U64(pid), true)
+
+
+proc wakeTimerWaiters*(tick: U64) =
+  var i = 0
+  while i < MaxProcs:
+    if procs[i].state == procSleeping and procs[i].wait.kind == waitTimer and
+        procs[i].wait.value <= tick:
+      clearWait(addr procs[i])
+      procs[i].state = procRunnable
+    inc i
 
 
 proc reapDetachedZombies() =

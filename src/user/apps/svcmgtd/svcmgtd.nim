@@ -3,7 +3,7 @@ import ../../lib/syscall
 
 const
   ProcessCap = 16
-  MonitorYieldCount = 32
+  MonitorSleepTicks = U64(10)
 
 type
   ServiceState = enum
@@ -125,13 +125,6 @@ proc monitorServices() =
     inc i
 
 
-proc yieldMonitorInterval() =
-  var i = 0
-  while i < MonitorYieldCount:
-    discard sysYield()
-    inc i
-
-
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   discard arg
 
@@ -145,4 +138,4 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
 
   while true:
     monitorServices()
-    yieldMonitorInterval()
+    discard sysSleep(MonitorSleepTicks)
