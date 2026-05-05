@@ -1,28 +1,43 @@
 import ../../lib/io
+import ../../lib/pathutils
 import ../../lib/strutils
 import ../../lib/syscall
 
 const
   LineMax = 80
+  ExecArgMax = 160
 
 var
   lineBuf: array[LineMax, char]
   cmdBuf: array[LineMax, char]
   argBuf: array[LineMax, char]
   pathBuf: array[LineMax, char]
+  execArgBuf: array[ExecArgMax, char]
+  cwdBuf: array[SysProcessCwdMax, char]
+
 
 proc cstr(buf: var array[LineMax, char]): cstring =
   cast[cstring](addr buf[0])
 
+
 proc printPrompt() =
-  write("Rk-C:$ ")
+  if sysGetCwd(addr cwdBuf[0], U64(SysProcessCwdMax)) < 0:
+    cwdBuf[0] = '/'
+    cwdBuf[1] = '\0'
+
+  write("Rk-C:")
+  write(cast[cstring](addr cwdBuf[0]))
+  write("$ ")
+
 
 proc printBanner() =
   write("\ntype 'help' for commands\n")
 
+
 proc printHelp() =
   write("commands:\n")
   write("  help                show this help\n")
+  write("  cd <path>           change current directory\n")
   write("  ls [-l] [path]      list directory\n")
   write("  cat <path>          print file\n")
   write("  mkdir <path>        create directory\n")
@@ -35,6 +50,7 @@ proc printHelp() =
   write("  exit                exit shell\n")
   write("  shutdown            shutdown kernel\n")
 
+
 proc clearArg() =
   var i = 0
   while i < LineMax:
@@ -42,6 +58,7 @@ proc clearArg() =
     argBuf[i] = '\0'
     pathBuf[i] = '\0'
     inc i
+
 
 proc readLine(): cstring =
   var len = 0
@@ -66,9 +83,11 @@ proc readLine(): cstring =
       inc len
       writeChar(ch)
 
+
 proc skipSpaces(s: cstring, pos: var int) =
   while s[pos] == ' ':
     inc pos
+
 
 proc parseCommand(line: cstring): bool =
   clearArg()
@@ -93,6 +112,7 @@ proc parseCommand(line: cstring): bool =
   argBuf[i] = '\0'
   true
 
+
 proc buildBinPath(cmd: cstring): cstring =
   pathBuf[0] = '/'
   pathBuf[1] = 'b'
@@ -106,6 +126,7 @@ proc buildBinPath(cmd: cstring): cstring =
   pathBuf[i + 5] = '\0'
   cstr(pathBuf)
 
+
 proc runApp(path: cstring, arg: cstring) =
   let pid = sysExec(path, arg)
   if pid < 0:
@@ -114,6 +135,92 @@ proc runApp(path: cstring, arg: cstring) =
     write("\n")
     return
   discard sysWait(pid)
+
+
+proc changeDirectory(path: cstring) =
+  if isEmpty(path):
+    write("usage: cd <path>\n")
+    return
+
+  let resolved = resolvePath(path)
+  if resolved == nil:
+    write("cd: path too long\n")
+    return
+
+  if sysSetCwd(resolved) != 0:
+    write("cd: failed\n")
+
+
+proc copyArgChar(pos: var U64, ch: char): bool =
+  if pos + 1 >= U64(ExecArgMax):
+    return false
+  execArgBuf[pos] = ch
+  inc pos
+  true
+
+
+proc copyArgCString(pos: var U64, s: cstring): bool =
+  var i = U64(0)
+  while s[i] != '\0':
+    if not copyArgChar(pos, s[i]):
+      return false
+    inc i
+  true
+
+
+proc finishExecArg(pos: U64): cstring =
+  execArgBuf[pos] = '\0'
+  cast[cstring](addr execArgBuf[0])
+
+
+proc resolveShellPath(path: cstring): cstring =
+  let resolved = resolvePath(path)
+  if resolved == nil:
+    write("path too long\n")
+  resolved
+
+
+proc pathCommandArg(arg: cstring): cstring =
+  if isEmpty(arg):
+    return arg
+  resolveShellPath(arg)
+
+
+proc resolveLsArg(arg: cstring): cstring =
+  var pos = 0
+  skipSpaces(arg, pos)
+  if arg[pos] == '\0':
+    return resolveShellPath("")
+
+  if arg[pos] == '-' and arg[pos + 1] == 'l' and
+      (arg[pos + 2] == '\0' or arg[pos + 2] == ' '):
+    pos += 2
+    skipSpaces(arg, pos)
+
+    let rawPath =
+      if arg[pos] == '\0': cstring("")
+      else: cast[cstring](unsafeAddr arg[pos])
+    let resolved = resolveShellPath(rawPath)
+    if resolved == nil:
+      return nil
+
+    var outPos = U64(0)
+    if not copyArgCString(outPos, "-l ") or not copyArgCString(outPos, resolved):
+      write("path too long\n")
+      return nil
+    return finishExecArg(outPos)
+
+  resolveShellPath(cast[cstring](unsafeAddr arg[pos]))
+
+
+proc prepareExecArg(cmd, arg: cstring): cstring =
+  if streq(cmd, "ls"):
+    return resolveLsArg(arg)
+  if streq(cmd, "cat") or streq(cmd, "mkdir") or streq(cmd, "rm") or
+      streq(cmd, "rmdir") or streq(cmd, "edit"):
+    return pathCommandArg(arg)
+  arg
+
 
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   discard arg
@@ -128,6 +235,9 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
     if streq(cstr(cmdBuf), "help"):
       printHelp()
 
+    elif streq(cstr(cmdBuf), "cd"):
+      changeDirectory(cstr(argBuf))
+
     elif streq(cstr(cmdBuf), "ticks"):
       writeUnsigned(sysTicks())
       write("\n")
@@ -139,7 +249,7 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
       sysShutdown()
     
     else:
-      var arg = cstr(argBuf)
-      if streq(cstr(cmdBuf), "ls") and argBuf[0] == '\0':
-        arg = "/"
-      runApp(buildBinPath(cstr(cmdBuf)), arg)
+      let execArg = prepareExecArg(cstr(cmdBuf), cstr(argBuf))
+      if execArg == nil:
+        continue
+      runApp(buildBinPath(cstr(cmdBuf)), execArg)

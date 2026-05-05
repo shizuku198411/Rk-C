@@ -2,6 +2,7 @@ import types
 
 const
   SysProcessNameMax* = 32
+  SysProcessCwdMax* = 64
 
   SysProcessUnused* = U32(0)
   SysProcessRunnable* = U32(1)

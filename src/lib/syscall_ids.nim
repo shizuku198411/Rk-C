@@ -16,3 +16,5 @@ const
   SysGetDateTime* = U64(16)
   SysReadFile* = U64(17)
   SysWriteFile* = U64(18)
+  SysGetCwd* = U64(19)
+  SysSetCwd* = U64(20)

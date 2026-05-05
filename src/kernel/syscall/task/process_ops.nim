@@ -1,6 +1,7 @@
 import ../../../lib/syscall_types
 import ../../../lib/types
 import ../../dev/console
+import ../../fs/fs
 import ../../task/exec
 import ../../task/process
 
@@ -12,6 +13,7 @@ proc processStateValue(state: ProcessState): U32 =
   of procSleeping: SysProcessSleeping
   of procZombie: SysProcessZombie
 
+
 proc copyProcessName(dst: var array[SysProcessNameMax, char], src: cstring) =
   var i = 0
   while i < SysProcessNameMax - 1:
@@ -20,6 +22,7 @@ proc copyProcessName(dst: var array[SysProcessNameMax, char], src: cstring) =
     dst[i] = src[i]
     inc i
   dst[i] = '\0'
+
 
 proc syscallPs*(outEntries: U64, maxEntries: U64): U64 =
   if outEntries == 0 or maxEntries == 0:
@@ -43,6 +46,7 @@ proc syscallPs*(outEntries: U64, maxEntries: U64): U64 =
 
   count
 
+
 proc syscallExit*(status: U64): U64 =
   if currentProc == nil:
     panic("exit without current process")
@@ -53,6 +57,7 @@ proc syscallExit*(status: U64): U64 =
   schedule()
   0
 
+
 proc findProcByPid(pid: int32): ptr Process =
   var i = 0
   while i < MaxProcs:
@@ -60,6 +65,7 @@ proc findProcByPid(pid: int32): ptr Process =
       return addr procs[i]
     inc i
   nil
+
 
 proc syscallWait*(pidVal: U64): U64 =
   let pid = int32(pidVal)
@@ -77,5 +83,50 @@ proc syscallWait*(pidVal: U64): U64 =
   discardProcess(target)
   status
 
+
 proc syscallExec*(path, arg: U64): U64 =
   U64(execUserApp(cast[cstring](path), cast[cstring](arg)))
+
+
+proc syscallGetCwd*(outBuf, capacity: U64): U64 =
+  if currentProc == nil:
+    panic("getcwd without current process")
+  if outBuf == 0 or capacity == 0:
+    return U64(-1'i64)
+
+  let dst = cast[ptr UncheckedArray[char]](outBuf)
+  var i = U64(0)
+  while i + 1 < capacity and i < U64(SysProcessCwdMax) and currentProc.cwd[i] != '\0':
+    dst[i] = currentProc.cwd[i]
+    inc i
+
+  dst[i] = '\0'
+  i
+
+proc setCurrentCwd(path: cstring): int =
+  var i = 0
+  while i < SysProcessCwdMax - 1 and path[i] != '\0':
+    currentProc.cwd[i] = path[i]
+    inc i
+
+  if path[i] != '\0':
+    return -1
+
+  currentProc.cwd[i] = '\0'
+  0
+
+proc syscallSetCwd*(pathVal: U64): U64 =
+  if currentProc == nil:
+    panic("setcwd without current process")
+  if pathVal == 0:
+    return U64(-1'i64)
+
+  let path = cast[cstring](pathVal)
+  if path[0] != '/':
+    return U64(-1'i64)
+  if not fsIsDir(path):
+    return U64(-1'i64)
+  if setCurrentCwd(path) != 0:
+    return U64(-1'i64)
+
+  0

@@ -53,6 +53,12 @@ proc handleSyscall*(frame: ptr TrapFrame) =
   of SysWriteFile:
     frame.a0 = syscallWriteFile(frame.a0, frame.a1, frame.a2)
 
+  of SysGetCwd:
+    frame.a0 = syscallGetCwd(frame.a0, frame.a1)
+
+  of SysSetCwd:
+    frame.a0 = syscallSetCwd(frame.a0)
+
   else:
     print("PANIC: unknown syscall ")
     printUnsigned(frame.a3)

@@ -170,6 +170,12 @@ proc tmpfsReadDirEntry*(path: cstring, entryIndex: U64, outEntry: ptr FsDirEntry
     inc i
   0
 
+proc tmpfsIsDir*(path: cstring): bool =
+  if not ready:
+    return false
+  let idx = resolvePath(path)
+  idx >= 0 and nodes[idx].typ == TmpfsTypeDir
+
 proc tmpfsReadFile*(path: cstring, dst: pointer, capacity: U64): int =
   if not ready or dst == nil:
     return -1

@@ -83,8 +83,7 @@ proc replaceUserImage(root: PageTable, path: cstring, base: VAddr, imagePages: v
     discard pfree(imagePa, UserImageMaxPages)
     return -1
 
-  let imageSize = U64(loaded)
-  imagePages = alignUp(imageSize, PageSize) div PageSize
+  imagePages = UserImageMaxPages
 
   if mapRangeReplace(root, base, imagePa, imagePages * PageSize, PteU or PteR or PteW or PteX) != 0:
     panic("failed to map user image")

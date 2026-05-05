@@ -1,4 +1,5 @@
 import ../../arch/riscv64/arch
+import ../../lib/syscall_types
 import ../../lib/types
 import ../dev/console
 import ../mm/memory
@@ -37,6 +38,7 @@ type
     pid*: int32
     parentPid*: int32
     exePath*: cstring
+    cwd*: array[SysProcessCwdMax, char]
     state*: ProcessState
     context*: Context
     entry*: KernelTask
@@ -74,6 +76,15 @@ proc sleepCurrentForPid*(pid: int32)
 proc wakeInputWaiters*()
 proc wakePidWaiters*(pid: int32)
 
+proc setRootCwd(p: ptr Process) =
+  p.cwd[0] = '/'
+  p.cwd[1] = '\0'
+
+proc copyCwd(dst: var array[SysProcessCwdMax, char], src: array[SysProcessCwdMax, char]) =
+  var i = 0
+  while i < SysProcessCwdMax:
+    dst[i] = src[i]
+    inc i
 
 proc findUnusedProc(): ptr Process =
   var i = 0
@@ -104,6 +115,7 @@ proc createKernelProcessInternal(entry: KernelTask, isIdle: bool): int32 =
   p.state = procRunnable
   p.entry = entry
   p.kernelStack = stack
+  setRootCwd(p)
   p.isUser = false
   p.userBase = 0
   p.userPc = 0
@@ -131,6 +143,7 @@ proc processInit*() =
     procs[i].pid = 0
     procs[i].parentPid = 0
     procs[i].exePath = "init_proc"
+    setRootCwd(addr procs[i])
     procs[i].state = procUnused
     procs[i].context = Context()
     procs[i].entry = nil
@@ -178,10 +191,12 @@ proc findProcessByPid*(pid: int32): ptr Process =
 proc inheritProcessMetadata(child, parent: ptr Process) =
   if parent == nil:
     child.parentPid = 0
+    setRootCwd(child)
     return
 
   child.parentPid = parent.pid
-  # Future per-process attributes such as cwd/rootfs should be copied here.
+  copyCwd(child.cwd, parent.cwd)
+  # Future per-process attributes such as rootfs should be copied here.
 
 proc allocUserProcessFromParent*(parent: ptr Process): ptr Process =
   let pid = createKernelProcessInternal(userProcessBootstrap, false)
@@ -224,6 +239,7 @@ proc discardProcess*(p: ptr Process) =
   p.pid = 0
   p.parentPid = 0
   p.exePath = "init_proc"
+  setRootCwd(p)
   p.state = procUnused
   p.context = Context()
   p.entry = nil

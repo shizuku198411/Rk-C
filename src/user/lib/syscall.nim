@@ -71,3 +71,9 @@ proc sysReadFile*(path: cstring, buf: pointer, capacity: U64): I32 =
 
 proc sysWriteFile*(path: cstring, buf: pointer, size: U64): I32 =
   I32(rawSyscall3(SysWriteFile, cast[U64](path), cast[U64](buf), size))
+
+proc sysGetCwd*(buf: pointer, capacity: U64): I32 =
+  I32(rawSyscall3(SysGetCwd, cast[U64](buf), capacity, 0))
+
+proc sysSetCwd*(path: cstring): I32 =
+  I32(rawSyscall3(SysSetCwd, cast[U64](path), 0, 0))

@@ -489,6 +489,26 @@ proc fsReadDirEntries*(path: cstring, outEntries: ptr FsDirEntry, maxEntries: U6
 
   int(count)
 
+proc fsIsDir*(path: cstring): bool =
+  if not fsReady or path == nil or path[0] != '/':
+    return false
+
+  let mountIdx = findMount(path)
+  if mountIdx >= 0 and mounts[mountIdx].backend == vfsTmpfs:
+    return tmpfsIsDir(mountLocalPath(path, mounts[mountIdx].pathLen))
+
+  if isBinRoot(path):
+    return true
+
+  if resolveAppfsPath(path) >= 0:
+    return false
+
+  let idx = resolvePath(path)
+  if idx < 0:
+    return false
+
+  superBlock.nodes[idx].typ == FsTypeDir or superBlock.nodes[idx].typ == FsTypeMount
+
 proc fsMkdir*(path: cstring): int =
   if not fsReady:
     return -1
