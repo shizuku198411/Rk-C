@@ -4,6 +4,7 @@ import ../../lib/syscall
 const
   PsMaxEntries = 16
 
+
 proc stateName(state: U32): cstring =
   if state == SysProcessRunnable:
     "runnable"
@@ -16,11 +17,13 @@ proc stateName(state: U32): cstring =
   else:
     "unused  "
 
+
 proc modeName(isUser: U32): cstring =
   if isUser != 0:
     "user"
   else:
     "kernel"
+
 
 proc printProcess(entry: ptr SysProcessInfo) =
   writeUnsigned(U64(entry.pid))
@@ -33,6 +36,7 @@ proc printProcess(entry: ptr SysProcessInfo) =
   write("\t")
   write(cast[cstring](addr entry.exePath[0]))
   write("\n")
+
 
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   discard arg

@@ -1,5 +1,6 @@
 import types
 
+
 proc strcmp*(s1: cstring, s2: cstring): cint {.exportc: "strcmp", cdecl.} =
   var i = 0
 
@@ -7,6 +8,7 @@ proc strcmp*(s1: cstring, s2: cstring): cint {.exportc: "strcmp", cdecl.} =
     inc i
 
   cint(ord(s1[i])) - cint(ord(s2[i]))
+
 
 proc strlen*(s: cstring): CSize {.exportc: "strlen", cdecl.} =
   var n = CSize(0)

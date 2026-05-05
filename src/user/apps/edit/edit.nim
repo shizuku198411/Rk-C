@@ -18,8 +18,10 @@ const
 
 var buffer: array[BufferMax, char]
 
+
 proc save(path: cstring, len: U64): bool =
   sysWriteFile(path, addr buffer[0], len) == 0
+
 
 proc load(path: cstring): U64 =
   let readLen = sysReadFile(path, addr buffer[0], U64(BufferMax))
@@ -27,8 +29,10 @@ proc load(path: cstring): U64 =
     return 0
   U64(readLen)
 
+
 proc esc(s: cstring) =
   write(s)
+
 
 proc gotoPos(row, col: U64) =
   esc("\x1b[")
@@ -37,11 +41,14 @@ proc gotoPos(row, col: U64) =
   writeUnsigned(col)
   write("H")
 
+
 proc clearLine() =
   esc("\x1b[2K")
 
+
 proc clearScreen() =
   esc("\x1b[2J\x1b[H")
+
 
 proc lineStartAt(pos: U64): U64 =
   var p = pos
@@ -49,11 +56,13 @@ proc lineStartAt(pos: U64): U64 =
     dec p
   p
 
+
 proc lineEndAt(start, len: U64): U64 =
   var p = start
   while p < len and buffer[p] != '\n':
     inc p
   p
+
 
 proc lineOf(pos: U64): U64 =
   var line = 0'u64
@@ -63,6 +72,7 @@ proc lineOf(pos: U64): U64 =
       inc line
     inc p
   line
+
 
 proc findLineStart(targetLine, len: U64): U64 =
   if targetLine == 0:
@@ -78,10 +88,12 @@ proc findLineStart(targetLine, len: U64): U64 =
     inc p
   len
 
+
 proc cursorColumn(cursor: U64): U64 =
   let start = lineStartAt(cursor)
   let col = cursor - start + 1
   if col > ScreenCols: ScreenCols else: col
+
 
 proc ensureCursorVisible(cursor: U64, topLine: var U64) =
   let line = lineOf(cursor)
@@ -90,12 +102,14 @@ proc ensureCursorVisible(cursor: U64, topLine: var U64) =
   elif line >= topLine + EditRows:
     topLine = line - EditRows + 1
 
+
 proc renderHeader() =
   gotoPos(HeaderRow, 1)
   esc("\x1b[47;30m")
   clearLine()
   write("Rk-C file editor")
   esc("\x1b[0m")
+
 
 proc renderHelp(path: cstring) =
   gotoPos(HelpRow, 1)
@@ -106,10 +120,12 @@ proc renderHelp(path: cstring) =
   write(" | save: C-x C-s | exit: C-x C-c")
   esc("\x1b[0m")
 
+
 proc renderStatus(status: cstring) =
   gotoPos(StatusRow, 1)
   clearLine()
   write(status)
+
 
 proc renderBuffer(len, cursor, topLine: U64, path, status: cstring) =
   renderHeader()
@@ -136,6 +152,7 @@ proc renderBuffer(len, cursor, topLine: U64, path, status: cstring) =
   let visibleLine = EditStartRow + lineOf(cursor) - topLine
   gotoPos(visibleLine, cursorColumn(cursor))
 
+
 proc insertChar(ch: char, len, cursor: var U64): cstring =
   if len >= U64(BufferMax):
     return "[warn] Buffer full"
@@ -150,6 +167,7 @@ proc insertChar(ch: char, len, cursor: var U64): cstring =
   inc len
   ""
 
+
 proc backspace(len, cursor: var U64) =
   if cursor == 0:
     return
@@ -162,13 +180,16 @@ proc backspace(len, cursor: var U64) =
   dec cursor
   dec len
 
+
 proc moveLeft(cursor: var U64) =
   if cursor > 0:
     dec cursor
 
+
 proc moveRight(cursor: var U64, len: U64) =
   if cursor < len:
     inc cursor
+
 
 proc moveUp(cursor: var U64) =
   let currentStart = lineStartAt(cursor)
@@ -184,6 +205,7 @@ proc moveUp(cursor: var U64) =
     cursor = previousStart + desiredCol
   else:
     cursor = previousEnd
+
 
 proc moveDown(cursor: var U64, len: U64) =
   let currentStart = lineStartAt(cursor)
@@ -201,6 +223,7 @@ proc moveDown(cursor: var U64, len: U64) =
   else:
     cursor = nextEnd
 
+
 proc handleEscape(cursor: var U64, len: U64) =
   let marker = readChar()
   if marker != '[':
@@ -215,6 +238,7 @@ proc handleEscape(cursor: var U64, len: U64) =
     moveRight(cursor, len)
   elif code == 'D':
     moveLeft(cursor)
+
 
 proc editorLoop(path: cstring, len: var U64) =
   var cursor = len
@@ -264,6 +288,7 @@ proc editorLoop(path: cstring, len: var U64) =
 
     ensureCursorVisible(cursor, topLine)
     renderBuffer(len, cursor, topLine, path, status)
+
 
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   if isEmpty(arg):

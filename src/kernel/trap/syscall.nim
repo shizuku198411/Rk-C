@@ -6,6 +6,7 @@ import ../syscall/system/system_ops
 import ../syscall/task/process_ops
 import ../trap/trap_types
 
+
 proc handleSyscall*(frame: ptr TrapFrame) =
   case frame.a3
   of SysWrite:

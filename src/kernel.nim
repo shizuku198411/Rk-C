@@ -11,6 +11,7 @@ discard sizeof(trap_types.TrapFrame)
 discard cast[pointer](trap.trapHandler)
 discard cast[pointer](string.strlen)
 
+
 proc kernelBanner() =
   putChar('\n')
   println("╔═══════════════════════════════════╗")
@@ -23,6 +24,7 @@ proc kernelBanner() =
   println("╠═══════════════════════════════════╣")
   println("║  version: 0.1.0                   ║")
   println("╚═══════════════════════════════════╝")
+
 
 proc kernel_main*(hartid: U64, dtb: pointer) {.exportc, cdecl.} =
   kernelBootstrap(hartid, dtb)

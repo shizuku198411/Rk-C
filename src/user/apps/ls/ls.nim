@@ -4,16 +4,20 @@ import ../../lib/syscall
 const
   LsMaxEntries = 32
 
+
 proc skipSpaces(s: cstring, pos: var U64) =
   while s != nil and s[pos] == ' ':
     inc pos
+
 
 proc tokenIsLongOption(s: cstring, pos: U64): bool =
   s != nil and s[pos] == '-' and s[pos + 1] == 'l' and
     (s[pos + 2] == '\0' or s[pos + 2] == ' ')
 
+
 proc restCString(s: cstring, pos: U64): cstring =
   cast[cstring](unsafeAddr s[pos])
+
 
 proc parseArgs(arg: cstring, longFormat: var bool): cstring =
   longFormat = false
@@ -34,6 +38,7 @@ proc parseArgs(arg: cstring, longFormat: var bool): cstring =
 
   restCString(arg, pos)
 
+
 proc printLongEntry(entry: ptr DirEntry) =
   write(cast[cstring](addr entry.name[0]))
 
@@ -45,10 +50,12 @@ proc printLongEntry(entry: ptr DirEntry) =
   writeUnsigned(U64(entry.size))
   write(" bytes\n")
 
+
 proc printName(entry: ptr DirEntry) =
   write(cast[cstring](addr entry.name[0]))
   if entry.typ == DirEntryTypeDir or entry.typ == DirEntryTypeMount:
     write("/")
+
 
 proc printCompact(entries: ptr UncheckedArray[DirEntry], count: int) =
   var i = 0
@@ -66,6 +73,7 @@ proc printCompact(entries: ptr UncheckedArray[DirEntry], count: int) =
 
   if col != 0:
     write("\n")
+
 
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   var longFormat: bool

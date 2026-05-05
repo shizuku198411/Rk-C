@@ -63,13 +63,16 @@ var
   appfsEntryCount: U32
   appfsReady: bool
 
+
 proc fsWriteFile*(path: cstring, data: pointer, size: U64): int
+
 
 proc cstrlen(s: cstring): int =
   var n = 0
   while s[n] != '\0':
     inc n
   n
+
 
 proc pathMatchesMount(path: cstring, mountPath: cstring, mountLen: int): bool =
   if path == nil:
@@ -81,10 +84,12 @@ proc pathMatchesMount(path: cstring, mountPath: cstring, mountLen: int): bool =
     inc i
   path[mountLen] == '\0' or path[mountLen] == '/'
 
+
 proc mountLocalPath(path: cstring, mountLen: int): cstring =
   if path[mountLen] == '\0':
     return "/"
   cast[cstring](unsafeAddr path[mountLen])
+
 
 proc vfsMount(path: cstring, backend: VfsBackend) =
   if mountCount >= VfsMaxMounts:
@@ -94,6 +99,7 @@ proc vfsMount(path: cstring, backend: VfsBackend) =
   mounts[mountCount].pathLen = cstrlen(path)
   mounts[mountCount].backend = backend
   inc mountCount
+
 
 proc findMount(path: cstring): int =
   var best = -1
@@ -105,6 +111,7 @@ proc findMount(path: cstring): int =
     inc i
   best
 
+
 proc pathEq(a, b: cstring): bool =
   if a == nil or b == nil:
     return false
@@ -115,8 +122,10 @@ proc pathEq(a, b: cstring): bool =
     inc i
   false
 
+
 proc isBinRoot(path: cstring): bool =
   pathEq(path, "/bin") or pathEq(path, "/bin/")
+
 
 proc appfsReadBytes(absOff: U64, outBuf: pointer, n: U64): int =
   if outBuf == nil and n > 0:
@@ -142,6 +151,7 @@ proc appfsReadBytes(absOff: U64, outBuf: pointer, n: U64): int =
     done += chunk
   0
 
+
 proc appfsNameEq(entry: AppfsEntry, name: cstring): bool =
   var i = 0
   while i < FsNameMax:
@@ -151,6 +161,7 @@ proc appfsNameEq(entry: AppfsEntry, name: cstring): bool =
       return true
     inc i
   name[FsNameMax] == '\0'
+
 
 proc resolveAppfsPath(path: cstring): int =
   if path == nil or not appfsReady:
@@ -176,6 +187,7 @@ proc resolveAppfsPath(path: cstring): int =
     inc i
   -1
 
+
 proc appfsLoad(): int =
   var hdr: AppfsHeader
   let base = AppfsStartBlock * BlockSize
@@ -193,11 +205,13 @@ proc appfsLoad(): int =
   appfsReady = true
   0
 
+
 proc clearBlock() =
   var i = U64(0)
   while i < BlockSize:
     blockBuf[i] = 0
     inc i
+
 
 proc copyName(dst: var array[FsNameMax, char], src: cstring) =
   var i = 0
@@ -207,6 +221,7 @@ proc copyName(dst: var array[FsNameMax, char], src: cstring) =
   while i < FsNameMax:
     dst[i] = '\0'
     inc i
+
 
 proc nameEq(node: FsNode, name: cstring): bool =
   var i = 0
@@ -218,6 +233,7 @@ proc nameEq(node: FsNode, name: cstring): bool =
     inc i
   name[FsNameMax] == '\0'
 
+
 proc findChild(parent: int, name: cstring): int =
   var i = 0
   while i < FsMaxNodes:
@@ -228,6 +244,7 @@ proc findChild(parent: int, name: cstring): int =
     inc i
   -1
 
+
 proc hasChildren(idx: int): bool =
   var i = 0
   while i < FsMaxNodes:
@@ -235,6 +252,7 @@ proc hasChildren(idx: int): bool =
       return true
     inc i
   false
+
 
 proc writeSuper(): int =
   let src = cast[ptr UncheckedArray[U8]](addr superBlock)
@@ -252,6 +270,7 @@ proc writeSuper(): int =
     inc blk
   0
 
+
 proc readSuper(): int =
   let dst = cast[ptr UncheckedArray[U8]](addr superBlock)
   var copied = U64(0)
@@ -266,6 +285,7 @@ proc readSuper(): int =
       inc copied
     inc blk
   0
+
 
 proc allocNode(parent: int, name: cstring, typ: U32): int =
   let existing = findChild(parent, name)
@@ -286,6 +306,7 @@ proc allocNode(parent: int, name: cstring, typ: U32): int =
     inc i
   -1
 
+
 proc readComponent(path: cstring, pos: var int, name: var array[FsNameMax, char]): bool =
   while path[pos] == '/':
     inc pos
@@ -303,6 +324,7 @@ proc readComponent(path: cstring, pos: var int, name: var array[FsNameMax, char]
     inc i
   true
 
+
 proc resolvePath(path: cstring): int =
   if path == nil or path[0] == '\0':
     return -1
@@ -318,6 +340,7 @@ proc resolvePath(path: cstring): int =
       return -1
     current = next
   current
+
 
 proc resolveParent(path: cstring, leaf: var array[FsNameMax, char]): int =
   if path == nil or path[0] == '\0':
@@ -335,6 +358,7 @@ proc resolveParent(path: cstring, leaf: var array[FsNameMax, char]): int =
       return -1
     current = next
   -1
+
 
 proc writeFileBytes(node: FsNode, data: pointer, size: U64): int =
   if data == nil and size > 0:
@@ -358,6 +382,7 @@ proc writeFileBytes(node: FsNode, data: pointer, size: U64): int =
     inc blk
   0
 
+
 proc formatFs() =
   superBlock = FsSuper()
   superBlock.magic = FsMagic
@@ -373,11 +398,13 @@ proc formatFs() =
   if writeSuper() < 0:
     panic("fs format failed")
 
+
 proc ensureRootDir(name: cstring, typ: U32) =
   let before = superBlock.count
   discard allocNode(0, name, typ)
   if superBlock.count != before:
     discard writeSuper()
+
 
 proc fsInit*() =
   blockdevInit()
@@ -406,6 +433,7 @@ proc fsInit*() =
   printBootMsg("mounted tmpfs on /tmp\n")
   fsReady = true
 
+
 proc fillNodeEntry(idx: int, outEntry: ptr FsDirEntry) =
   outEntry.typ = superBlock.nodes[idx].typ
   outEntry.size = superBlock.nodes[idx].size
@@ -415,6 +443,7 @@ proc fillNodeEntry(idx: int, outEntry: ptr FsDirEntry) =
     outEntry.name[i] = superBlock.nodes[idx].name[i]
     inc i
 
+
 proc fillAppfsEntry(idx: int, outEntry: ptr FsDirEntry) =
   outEntry.typ = FsDirEntryTypeFile
   outEntry.size = appfsEntries[idx].size
@@ -423,6 +452,7 @@ proc fillAppfsEntry(idx: int, outEntry: ptr FsDirEntry) =
   while i < FsDirEntryNameMax:
     outEntry.name[i] = appfsEntries[idx].name[i]
     inc i
+
 
 proc fsReadDirEntry*(path: cstring, entryIndex: U64, outEntry: ptr FsDirEntry): int =
   if not fsReady:
@@ -471,6 +501,7 @@ proc fsReadDirEntry*(path: cstring, entryIndex: U64, outEntry: ptr FsDirEntry): 
     inc i
   0
 
+
 proc fsReadDirEntries*(path: cstring, outEntries: ptr FsDirEntry, maxEntries: U64): int =
   if outEntries == nil or maxEntries == 0:
     return -1
@@ -488,6 +519,7 @@ proc fsReadDirEntries*(path: cstring, outEntries: ptr FsDirEntry, maxEntries: U6
     inc count
 
   int(count)
+
 
 proc fsIsDir*(path: cstring): bool =
   if not fsReady or path == nil or path[0] != '/':
@@ -509,6 +541,7 @@ proc fsIsDir*(path: cstring): bool =
 
   superBlock.nodes[idx].typ == FsTypeDir or superBlock.nodes[idx].typ == FsTypeMount
 
+
 proc fsMkdir*(path: cstring): int =
   if not fsReady:
     return -1
@@ -528,11 +561,13 @@ proc fsMkdir*(path: cstring): int =
     return -1
   writeSuper()
 
+
 proc fsWriteText*(path: cstring, data: cstring): int =
   var size = U64(0)
   while data[size] != '\0' and size < FsFileBlocks * BlockSize:
     inc size
   fsWriteFile(path, cast[pointer](data), size)
+
 
 proc fsWriteFile*(path: cstring, data: pointer, size: U64): int =
   if not fsReady:
@@ -563,6 +598,7 @@ proc fsWriteFile*(path: cstring, data: pointer, size: U64): int =
     return -1
   writeSuper()
 
+
 proc fsUnlink*(path: cstring): int =
   if not fsReady:
     return -1
@@ -582,6 +618,7 @@ proc fsUnlink*(path: cstring): int =
     dec superBlock.count
   writeSuper()
 
+
 proc fsRmdir*(path: cstring): int =
   if not fsReady:
     return -1
@@ -600,6 +637,7 @@ proc fsRmdir*(path: cstring): int =
   if superBlock.count > 0:
     dec superBlock.count
   writeSuper()
+
 
 proc fsReadFile*(path: cstring, dst: pointer, capacity: U64): int =
   if not fsReady or dst == nil:

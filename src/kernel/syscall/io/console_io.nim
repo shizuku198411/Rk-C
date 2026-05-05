@@ -2,6 +2,7 @@ import ../../../lib/types
 import ../../dev/console
 import ../../task/process
 
+
 proc syscallWrite*(buf: U64, len: U64): U64 =
   let p = cast[ptr UncheckedArray[char]](buf)
   var i = U64(0)
@@ -9,6 +10,7 @@ proc syscallWrite*(buf: U64, len: U64): U64 =
     putChar(p[i])
     inc i
   len
+
 
 proc syscallRead*(buf: U64, len: U64): U64 =
   if len == 0:

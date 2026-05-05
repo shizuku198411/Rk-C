@@ -96,11 +96,14 @@ var
   reqStatus: U8
   initialized: bool
 
+
 proc mmioRead(off: U64): U32 =
   volatileLoad(cast[ptr U32](mmioBase + off))
 
+
 proc mmioWrite(off: U64, val: U32) =
   volatileStore(cast[ptr U32](mmioBase + off), val)
+
 
 proc findBlk(): bool =
   var i = U64(0)
@@ -114,6 +117,7 @@ proc findBlk(): bool =
       return true
     inc i
   false
+
 
 proc setupVqLayout() =
   if vqMem == NilPAddr:
@@ -133,6 +137,7 @@ proc setupVqLayout() =
     inc i
   vqLastUsedIdx = 0
 
+
 proc setupQueue(): bool =
   mmioWrite(RegQueueSel, 0)
   let qmax = mmioRead(RegQueueNumMax)
@@ -149,6 +154,7 @@ proc setupQueue(): bool =
   mmioWrite(RegQueueUsedHigh, U32(cast[U64](vqUsed) shr 32))
   mmioWrite(RegQueueReady, 1)
   true
+
 
 proc configureDevice(): bool =
   mmioWrite(RegStatus, 0)
@@ -187,11 +193,13 @@ proc configureDevice(): bool =
   mmioWrite(RegStatus, status)
   true
 
+
 proc readCapacity(): bool =
   let lo = U64(mmioRead(RegConfig + 0))
   let hi = U64(mmioRead(RegConfig + 4))
   capacityBlocks = (hi shl 32) or lo
   capacityBlocks != 0
+
 
 proc doIo(typ: U32, blockIndex: U64, buf: pointer): int =
   reqHdr.typ = typ
@@ -254,6 +262,7 @@ proc doIo(typ: U32, blockIndex: U64, buf: pointer): int =
     return -1
   0
 
+
 proc blockdevInit*() =
   if not findBlk():
     panic("virtio-blk not found")
@@ -271,12 +280,14 @@ proc blockdevInit*() =
   printUnsigned(capacityBlocks)
   putChar('\n')
 
+
 proc blockRead*(blockIndex: U64, outBlock: pointer): int =
   if not initialized or outBlock == nil:
     return -1
   if blockIndex >= BlockCount or blockIndex >= capacityBlocks:
     return -1
   doIo(VirtioBlkIn, blockIndex, outBlock)
+
 
 proc blockWrite*(blockIndex: U64, inBlock: pointer): int =
   if not initialized or inBlock == nil:

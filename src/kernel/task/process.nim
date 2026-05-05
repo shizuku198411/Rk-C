@@ -76,15 +76,18 @@ proc sleepCurrentForPid*(pid: int32)
 proc wakeInputWaiters*()
 proc wakePidWaiters*(pid: int32)
 
+
 proc setRootCwd(p: ptr Process) =
   p.cwd[0] = '/'
   p.cwd[1] = '\0'
+
 
 proc copyCwd(dst: var array[SysProcessCwdMax, char], src: array[SysProcessCwdMax, char]) =
   var i = 0
   while i < SysProcessCwdMax:
     dst[i] = src[i]
     inc i
+
 
 proc findUnusedProc(): ptr Process =
   var i = 0
@@ -94,11 +97,13 @@ proc findUnusedProc(): ptr Process =
     inc i
   nil
 
+
 proc idleTask() {.cdecl.} =
   while true:
     maybeYieldOnResched()
     arch.writeSstatus(arch.readSstatus() or SstatusSie)
     arch.wfi()
+
 
 proc createKernelProcessInternal(entry: KernelTask, isIdle: bool): int32 =
   let p = findUnusedProc()
@@ -137,6 +142,7 @@ proc createKernelProcessInternal(entry: KernelTask, isIdle: bool): int32 =
 
   p.pid
 
+
 proc processInit*() =
   var i = 0
   while i < MaxProcs:
@@ -170,8 +176,10 @@ proc processInit*() =
   if createKernelProcessInternal(idleTask, true) < 0:
     panic("failed to create idle task")
 
+
 proc createKernelProcess*(entry: KernelTask): int32 =
   createKernelProcessInternal(entry, false)
+
 
 proc userProcessBootstrap() {.cdecl, noreturn.} =
   if currentProc == nil or not currentProc.isUser:
@@ -180,6 +188,7 @@ proc userProcessBootstrap() {.cdecl, noreturn.} =
   let kernelSp = currentProc.kernelStack + KernelStackPages * PageSize
   arch.enterUser(currentProc.userPc, currentProc.userSp, kernelSp, currentProc.userArg0, currentProc.userArg1)
 
+
 proc findProcessByPid*(pid: int32): ptr Process =
   var i = 0
   while i < MaxProcs:
@@ -187,6 +196,7 @@ proc findProcessByPid*(pid: int32): ptr Process =
       return addr procs[i]
     inc i
   nil
+
 
 proc inheritProcessMetadata(child, parent: ptr Process) =
   if parent == nil:
@@ -197,6 +207,7 @@ proc inheritProcessMetadata(child, parent: ptr Process) =
   child.parentPid = parent.pid
   copyCwd(child.cwd, parent.cwd)
   # Future per-process attributes such as rootfs should be copied here.
+
 
 proc allocUserProcessFromParent*(parent: ptr Process): ptr Process =
   let pid = createKernelProcessInternal(userProcessBootstrap, false)
@@ -211,6 +222,7 @@ proc allocUserProcessFromParent*(parent: ptr Process): ptr Process =
   p.isUser = true
   inheritProcessMetadata(p, parent)
   p
+
 
 proc configureUserProcess*(p: ptr Process, path: cstring, userBase, userPc, userStackTop, userSp: VAddr,
                            imagePages, stackPages: U64, arg0: U64 = 0, arg1: U64 = 0) =
@@ -228,6 +240,7 @@ proc configureUserProcess*(p: ptr Process, path: cstring, userBase, userPc, user
   p.waitingForPid = 0
   p.exitStatus = 0
   p.state = procRunnable
+
 
 proc discardProcess*(p: ptr Process) =
   if p == nil:
@@ -257,6 +270,7 @@ proc discardProcess*(p: ptr Process) =
   p.waitingForPid = 0
   p.exitStatus = 0
 
+
 proc createUserProcess*(path: cstring, userBase, userPc, userStackTop, userSp: VAddr,
                         imagePages, stackPages: U64, arg0: U64 = 0, arg1: U64 = 0): int32 =
   let p = allocUserProcessFromParent(nil)
@@ -266,6 +280,7 @@ proc createUserProcess*(path: cstring, userBase, userPc, userStackTop, userSp: V
   configureUserProcess(p, path, userBase, userPc, userStackTop, userSp, imagePages, stackPages, arg0, arg1)
   p.pid
 
+
 proc hasRunnableProcess*(): bool =
   var i = 0
   while i < MaxProcs:
@@ -274,8 +289,10 @@ proc hasRunnableProcess*(): bool =
     inc i
   false
 
+
 proc requestResched*() =
   needResched = true
+
 
 proc printProcessState*(state: ProcessState) =
   case state
@@ -290,6 +307,7 @@ proc printProcessState*(state: ProcessState) =
   of procZombie:
     print("zombie  ")
 
+
 proc sleepCurrentForInput*() =
   if currentProc == nil:
     return
@@ -297,6 +315,7 @@ proc sleepCurrentForInput*() =
   currentProc.waitingForInput = true
   currentProc.state = procSleeping
   schedule()
+
 
 proc sleepCurrentForPid*(pid: int32) =
   if currentProc == nil:
@@ -306,6 +325,7 @@ proc sleepCurrentForPid*(pid: int32) =
   currentProc.state = procSleeping
   schedule()
 
+
 proc wakeInputWaiters*() =
   var i = 0
   while i < MaxProcs:
@@ -313,6 +333,7 @@ proc wakeInputWaiters*() =
       procs[i].waitingForInput = false
       procs[i].state = procRunnable
     inc i
+
 
 proc wakePidWaiters*(pid: int32) =
   var i = 0
@@ -322,12 +343,14 @@ proc wakePidWaiters*(pid: int32) =
       procs[i].state = procRunnable
     inc i
 
+
 proc maybeYieldOnResched*() =
   if not needResched:
     return
 
   needResched = false
   yieldCpu()
+
 
 proc processBootstrap*() =
   if currentProc == nil or currentProc.entry == nil:
@@ -337,6 +360,7 @@ proc processBootstrap*() =
   currentProc.state = procZombie
   schedule()
   panic("zombie process resumed")
+
 
 proc schedule*() =
   let prev = currentProc
@@ -382,6 +406,7 @@ proc schedule*() =
     contextSwitch(addr dummy, addr next.context)
   else:
     contextSwitch(addr prev.context, addr next.context)
+
 
 proc yieldCpu*() =
   if currentProc == nil and not hasRunnableProcess():

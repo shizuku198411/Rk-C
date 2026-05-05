@@ -1,15 +1,18 @@
 import ../../lib/io
 import ../../lib/syscall
 
+
 proc write2(value: U32) =
   writeChar(char(ord('0') + int((value div 10) mod 10)))
   writeChar(char(ord('0') + int(value mod 10)))
+
 
 proc write4(value: U32) =
   writeChar(char(ord('0') + int((value div 1000) mod 10)))
   writeChar(char(ord('0') + int((value div 100) mod 10)))
   writeChar(char(ord('0') + int((value div 10) mod 10)))
   writeChar(char(ord('0') + int(value mod 10)))
+
 
 proc printDateTime(dt: ptr SysDateTime) =
   write4(dt.year)
@@ -24,6 +27,7 @@ proc printDateTime(dt: ptr SysDateTime) =
   write(":")
   write2(dt.second)
   write("\n")
+
 
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   discard arg

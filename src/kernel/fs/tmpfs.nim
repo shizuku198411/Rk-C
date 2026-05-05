@@ -23,8 +23,10 @@ var
   nodes: array[TmpfsMaxNodes, TmpfsNode]
   ready: bool
 
+
 proc tmpfsWriteText*(path: cstring, data: cstring): int
 proc tmpfsWriteBytes*(path: cstring, data: pointer, size: U64): int
+
 
 proc hasChildren(idx: int): bool =
   var i = 0
@@ -34,6 +36,7 @@ proc hasChildren(idx: int): bool =
     inc i
   false
 
+
 proc copyName(dst: var array[TmpfsNameMax, char], src: cstring) =
   var i = 0
   while i < TmpfsNameMax - 1 and src[i] != '\0':
@@ -42,6 +45,7 @@ proc copyName(dst: var array[TmpfsNameMax, char], src: cstring) =
   while i < TmpfsNameMax:
     dst[i] = '\0'
     inc i
+
 
 proc nameEq(node: TmpfsNode, name: cstring): bool =
   var i = 0
@@ -53,6 +57,7 @@ proc nameEq(node: TmpfsNode, name: cstring): bool =
     inc i
   name[TmpfsNameMax] == '\0'
 
+
 proc findChild(parent: int, name: cstring): int =
   var i = 0
   while i < TmpfsMaxNodes:
@@ -60,6 +65,7 @@ proc findChild(parent: int, name: cstring): int =
       return i
     inc i
   -1
+
 
 proc allocNode(parent: int, name: cstring, typ: U32): int =
   let existing = findChild(parent, name)
@@ -78,6 +84,7 @@ proc allocNode(parent: int, name: cstring, typ: U32): int =
     inc i
   -1
 
+
 proc readComponent(path: cstring, pos: var int, name: var array[TmpfsNameMax, char]): bool =
   while path[pos] == '/':
     inc pos
@@ -95,6 +102,7 @@ proc readComponent(path: cstring, pos: var int, name: var array[TmpfsNameMax, ch
     inc i
   true
 
+
 proc resolvePath(path: cstring): int =
   if path == nil or path[0] == '\0':
     return -1
@@ -110,6 +118,7 @@ proc resolvePath(path: cstring): int =
       return -1
     current = next
   current
+
 
 proc resolveParent(path: cstring, leaf: var array[TmpfsNameMax, char]): int =
   if path == nil or path[0] == '\0':
@@ -128,6 +137,7 @@ proc resolveParent(path: cstring, leaf: var array[TmpfsNameMax, char]): int =
     current = next
   -1
 
+
 proc tmpfsInit*() =
   nodes = default(array[TmpfsMaxNodes, TmpfsNode])
   nodes[0].used = 1
@@ -135,6 +145,7 @@ proc tmpfsInit*() =
   nodes[0].parent = 0
   copyName(nodes[0].name, "/")
   ready = true
+
 
 proc fillDirEntry(idx: int, outEntry: ptr FsDirEntry) =
   outEntry.typ = nodes[idx].typ
@@ -144,6 +155,7 @@ proc fillDirEntry(idx: int, outEntry: ptr FsDirEntry) =
   while i < FsDirEntryNameMax:
     outEntry.name[i] = nodes[idx].name[i]
     inc i
+
 
 proc tmpfsReadDirEntry*(path: cstring, entryIndex: U64, outEntry: ptr FsDirEntry): int =
   if not ready or outEntry == nil:
@@ -170,11 +182,13 @@ proc tmpfsReadDirEntry*(path: cstring, entryIndex: U64, outEntry: ptr FsDirEntry
     inc i
   0
 
+
 proc tmpfsIsDir*(path: cstring): bool =
   if not ready:
     return false
   let idx = resolvePath(path)
   idx >= 0 and nodes[idx].typ == TmpfsTypeDir
+
 
 proc tmpfsReadFile*(path: cstring, dst: pointer, capacity: U64): int =
   if not ready or dst == nil:
@@ -194,6 +208,7 @@ proc tmpfsReadFile*(path: cstring, dst: pointer, capacity: U64): int =
     inc i
   int(size)
 
+
 proc tmpfsMkdir*(path: cstring): int =
   if not ready:
     return -1
@@ -207,6 +222,7 @@ proc tmpfsMkdir*(path: cstring): int =
     return -1
   0
 
+
 proc tmpfsUnlink*(path: cstring): int =
   if not ready:
     return -1
@@ -216,6 +232,7 @@ proc tmpfsUnlink*(path: cstring): int =
 
   nodes[idx] = TmpfsNode()
   0
+
 
 proc tmpfsRmdir*(path: cstring): int =
   if not ready:
@@ -227,11 +244,13 @@ proc tmpfsRmdir*(path: cstring): int =
   nodes[idx] = TmpfsNode()
   0
 
+
 proc tmpfsWriteText*(path: cstring, data: cstring): int =
   var size = U64(0)
   while data[size] != '\0' and size < U64(TmpfsFileMax):
     inc size
   tmpfsWriteBytes(path, cast[pointer](data), size)
+
 
 proc tmpfsWriteBytes*(path: cstring, data: pointer, size: U64): int =
   if data == nil and size > 0:

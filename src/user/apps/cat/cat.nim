@@ -7,6 +7,7 @@ const
 
 var buffer: array[CatBufferSize, char]
 
+
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   if isEmpty(arg):
     write("usage: cat <path>\n")

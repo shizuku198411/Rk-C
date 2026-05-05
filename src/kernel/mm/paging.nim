@@ -26,11 +26,13 @@ func pteIsLeaf(pte: Pte): bool {.inline.} = (pte and (PteR or PteW or PteX)) != 
 func pteToPa(pte: Pte): PAddr {.inline.} = (pte shr 10) shl PageShift
 func paToPte(pa: PAddr): Pte {.inline.} = (pa shr PageShift) shl 10
 
+
 proc allocPageTable*(): PageTable =
   let pa = palloc(1)
   if pa == NilPAddr:
     return nil
   cast[PageTable](pa)
+
 
 proc walkPageTable*(root: PageTable, va: VAddr, create: bool): ptr Pte =
   let indexes = [sv39Vpn0(va), sv39Vpn1(va), sv39Vpn2(va)]
@@ -58,6 +60,7 @@ proc walkPageTable*(root: PageTable, va: VAddr, create: bool): ptr Pte =
 
   addr table[indexes[0]]
 
+
 proc mapPage*(root: PageTable, va: VAddr, pa: PAddr, flags: U64): int =
   if not isAligned(va, PageSize) or not isAligned(pa, PageSize):
     return -1
@@ -72,6 +75,7 @@ proc mapPage*(root: PageTable, va: VAddr, pa: PAddr, flags: U64): int =
   entry[] = paToPte(pa) or flags or PteV or PteA or PteD
   0
 
+
 proc mapPageReplace*(root: PageTable, va: VAddr, pa: PAddr, flags: U64): int =
   if not isAligned(va, PageSize) or not isAligned(pa, PageSize):
     return -1
@@ -82,6 +86,7 @@ proc mapPageReplace*(root: PageTable, va: VAddr, pa: PAddr, flags: U64): int =
 
   entry[] = paToPte(pa) or flags or PteV or PteA or PteD
   0
+
 
 proc mapRange*(root: PageTable, va: VAddr, pa: PAddr, size: Size, flags: U64): int =
   if size == 0:
@@ -96,6 +101,7 @@ proc mapRange*(root: PageTable, va: VAddr, pa: PAddr, size: Size, flags: U64): i
 
   0
 
+
 proc mapRangeReplace*(root: PageTable, va: VAddr, pa: PAddr, size: Size, flags: U64): int =
   if size == 0:
     return 0
@@ -109,6 +115,7 @@ proc mapRangeReplace*(root: PageTable, va: VAddr, pa: PAddr, size: Size, flags: 
 
   0
 
+
 proc mappedPagePa*(root: PageTable, va: VAddr): PAddr =
   let entry = walkPageTable(root, alignDown(va, PageSize), false)
   if entry == nil or not pteIsValid(entry[]) or not pteIsLeaf(entry[]):
@@ -116,8 +123,10 @@ proc mappedPagePa*(root: PageTable, va: VAddr): PAddr =
 
   pteToPa(entry[])
 
+
 proc makeSatp*(rootPa: PAddr): U64 =
   SatpModeSv39 or (rootPa shr PageShift)
+
 
 proc flushTlb*() =
   arch.flushTlb()

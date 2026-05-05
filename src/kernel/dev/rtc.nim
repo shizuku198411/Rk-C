@@ -8,10 +8,12 @@ const
 
   NsecPerSec = U64(1_000_000_000)
 
+
 proc rtcRead32(off: U32): U32 =
   let mmioAddr = GoldfishRtcBase + U64(off)
   var value {.volatile.}: U32 = cast[ptr U32](mmioAddr)[]
   value
+
 
 proc rtcNowNS(): U64 =
   var
@@ -33,11 +35,13 @@ proc rtcNowNS(): U64 =
 proc isLeapYear(year: U32): bool =
   (year mod 4 == 0 and year mod 100 != 0) or (year mod 400 == 0)
 
+
 proc daysInYear(year: U32): U32 =
   if isLeapYear(year):
     366
   else:
     365
+
 
 proc daysInMonth(year: U32, month: U32): U32 =
   case month
@@ -58,6 +62,7 @@ proc daysInMonth(year: U32, month: U32): U32 =
   of 11: 30
   of 12: 31
   else: 0
+
 
 proc unixSecondsToDateTime(secInput: U64): SysDateTime =
   var sec = secInput
@@ -85,14 +90,17 @@ proc unixSecondsToDateTime(secInput: U64): SysDateTime =
   result.month = U32(month)
   result.day = U32(days) + 1
 
+
 proc nowDateTime*(): SysDateTime =
   unixSecondsToDateTime(rtcNowNS() div NsecPerSec)
+
 
 proc put2(buf: var array[32, char], pos: var U32, value: U32) =
   buf[pos] = char(ord('0') + ((value div 10) mod 10))
   inc pos
   buf[pos] = char(ord('0') + (value mod 10))
   inc pos
+
 
 proc put4(buf: var array[32, char], pos: var U32, value: U32) =
   buf[pos] = char(ord('0') + ((value div 1000) mod 10))
@@ -103,6 +111,7 @@ proc put4(buf: var array[32, char], pos: var U32, value: U32) =
   inc pos
   buf[pos] = char(ord('0') + (value mod 10))
   inc pos
+
 
 proc rtcNsToCString*(ns: U64): cstring =
   var buf {.global.}: array[32, char]
@@ -136,6 +145,7 @@ proc rtcNsToCString*(ns: U64): cstring =
   
   buf[pos] = '\0'
   cast[cstring](addr buf[0])
+
 
 proc nowCString*(): cstring =
   let ns = rtcNowNS()

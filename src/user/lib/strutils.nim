@@ -1,5 +1,6 @@
 import ../../lib/types
 
+
 proc cstrlen*(s: cstring): U64 =
   if s == nil:
     return 0
@@ -7,6 +8,7 @@ proc cstrlen*(s: cstring): U64 =
   while s[n] != '\0':
     inc n
   n
+
 
 proc streq*(a, b: cstring): bool =
   if a == nil or b == nil:
@@ -18,8 +20,10 @@ proc streq*(a, b: cstring): bool =
     inc i
   false
 
+
 proc startsWith2*(s: cstring, a, b: char): bool =
   s != nil and s[0] == a and s[1] == b
+
 
 proc isEmpty*(s: cstring): bool =
   s == nil or s[0] == '\0'

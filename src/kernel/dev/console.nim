@@ -8,6 +8,7 @@ const
   UartLsrDataReady = U8(1 shl 0)
   InputBufCap = U64(128)
 
+
 proc sbiPutchar(ch: char) {.importc: "sbi_putchar", cdecl.}
 proc sbiGetchar(): clong {.importc: "sbi_getchar", cdecl.}
 
@@ -16,14 +17,18 @@ var
   inputHead: U64
   inputTail: U64
 
+
 proc inputNext(index: U64): U64 =
   (index + 1'u64) mod InputBufCap
+
 
 proc inputEmpty*(): bool =
   inputHead == inputTail
 
+
 proc inputFull(): bool =
   inputNext(inputTail) == inputHead
+
 
 proc pushInput(ch: char): bool =
   if inputFull():
@@ -33,6 +38,7 @@ proc pushInput(ch: char): bool =
   inputTail = inputNext(inputTail)
   true
 
+
 proc popInput*(): int =
   if inputEmpty():
     return -1
@@ -40,6 +46,7 @@ proc popInput*(): int =
   let ch = inputBuf[inputHead]
   inputHead = inputNext(inputHead)
   int(ord(ch))
+
 
 proc pollInput*(): bool =
   let uart = cast[ptr UncheckedArray[U8]](Uart0Base)
@@ -53,8 +60,10 @@ proc pollInput*(): bool =
 
   pushed
 
+
 proc putChar*(ch: char) =
   sbiPutchar(ch)
+
 
 proc tryGetChar*(): int =
   let buffered = popInput()
@@ -68,12 +77,14 @@ proc tryGetChar*(): int =
 
   int(sbiGetchar())
 
+
 proc getCharBlocking*(): char =
   while true:
     let ch = tryGetChar()
     if ch >= 0:
       return char(ch and 0xff)
     arch.wfi()
+
 
 proc print*(s: cstring) =
   if s == nil:
@@ -85,13 +96,16 @@ proc print*(s: cstring) =
     putChar(s[i])
     inc i
 
+
 proc println*(s: cstring) =
   print(s)
   putChar('\n')
 
+
 proc printBootMsg*(s: cstring) =
   print("[boot] ")
   print(s)
+
 
 proc printUnsigned*(value: U64) =
   var digits: array[20, char]
@@ -111,12 +125,14 @@ proc printUnsigned*(value: U64) =
     dec i
     putChar(digits[i])
 
+
 proc printSigned*(value: int64) =
   if value < 0:
     putChar('-')
     printUnsigned(U64(-value))
   else:
     printUnsigned(U64(value))
+
 
 proc printHex*(value: U64) =
   const table = "0123456789abcdef"
@@ -137,15 +153,18 @@ proc printHex*(value: U64) =
     dec i
     putChar(digits[i])
 
+
 proc printPtr*(value: U64) =
   print("0x")
   printHex(value)
+
 
 proc printBool*(value: bool) =
   if value:
     print("true")
   else:
     print("false")
+
 
 proc readLine*(buf: ptr UncheckedArray[char], cap: U64): U64 =
   if cap == 0:
@@ -173,6 +192,7 @@ proc readLine*(buf: ptr UncheckedArray[char], cap: U64): U64 =
       buf[len] = ch
       inc len
       putChar(ch)
+
 
 proc panic*(msg: cstring) {.noreturn.} =
   print("PANIC: ")

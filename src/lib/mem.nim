@@ -1,5 +1,6 @@
 import types
 
+
 proc fillMem*(buf: pointer, value: U8, n: Size): pointer =
   let p = cast[ptr UncheckedArray[U8]](buf)
   var i = U64(0)
@@ -7,6 +8,7 @@ proc fillMem*(buf: pointer, value: U8, n: Size): pointer =
     p[i] = value
     inc i
   buf
+
 
 proc copyMem*(dest: pointer, src: pointer, n: Size): pointer =
   let d = cast[ptr UncheckedArray[U8]](dest)
@@ -16,6 +18,7 @@ proc copyMem*(dest: pointer, src: pointer, n: Size): pointer =
     d[i] = s[i]
     inc i
   dest
+
 
 proc moveMem*(dest: pointer, src: pointer, n: Size): pointer =
   let d = cast[ptr UncheckedArray[U8]](dest)
@@ -37,6 +40,7 @@ proc moveMem*(dest: pointer, src: pointer, n: Size): pointer =
 
   dest
 
+
 proc compareMem*(s1: pointer, s2: pointer, n: Size): cint =
   let a = cast[ptr UncheckedArray[U8]](s1)
   let b = cast[ptr UncheckedArray[U8]](s2)
@@ -47,20 +51,26 @@ proc compareMem*(s1: pointer, s2: pointer, n: Size): cint =
     inc i
   0
 
+
 proc memset*(s: pointer, c: cint, n: CSize): pointer {.exportc: "memset", cdecl.} =
   fillMem(s, U8(c and 0xff), Size(n))
+
 
 proc memcpy*(dest: pointer, src: pointer, n: CSize): pointer {.exportc: "memcpy", cdecl.} =
   copyMem(dest, src, Size(n))
 
+
 proc memmove*(dest: pointer, src: pointer, n: CSize): pointer {.exportc: "memmove", cdecl.} =
   moveMem(dest, src, Size(n))
+
 
 proc memcmp*(s1: pointer, s2: pointer, n: CSize): cint {.exportc: "memcmp", cdecl.} =
   compareMem(s1, s2, Size(n))
 
+
 proc zeroMem*(buf: pointer, n: Size) =
   discard fillMem(buf, 0'u8, n)
+
 
 proc isZeroed*(buf: pointer, n: Size): bool =
   let p = cast[ptr UncheckedArray[U8]](buf)

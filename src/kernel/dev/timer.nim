@@ -6,9 +6,11 @@ const
 
 var timerTickCount* {.volatile.}: U64
 
+
 proc setNextTimer*() =
   let now = arch.rdtime()
   arch.writeStimecmp(now + TimerInterval)
+
 
 proc countUpTimerTick*() =
   inc timerTickCount

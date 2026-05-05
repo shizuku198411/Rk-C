@@ -6,6 +6,7 @@ const
 
 var resolvedPath: array[PathMax, char]
 
+
 proc copyCString(dst: var array[PathMax, char], pos: var U64, src: cstring): bool =
   var i = U64(0)
   while src[i] != '\0':
@@ -16,9 +17,11 @@ proc copyCString(dst: var array[PathMax, char], pos: var U64, src: cstring): boo
     inc i
   true
 
+
 proc terminate(dst: var array[PathMax, char], pos: U64) =
   if pos < U64(PathMax):
     dst[pos] = '\0'
+
 
 proc resolvePath*(path: cstring): cstring =
   if isEmpty(path):

@@ -5,6 +5,7 @@ import ../../fs/fs
 import ../../task/exec
 import ../../task/process
 
+
 proc processStateValue(state: ProcessState): U32 =
   case state
   of procUnused: SysProcessUnused
@@ -103,6 +104,7 @@ proc syscallGetCwd*(outBuf, capacity: U64): U64 =
   dst[i] = '\0'
   i
 
+
 proc setCurrentCwd(path: cstring): int =
   var i = 0
   while i < SysProcessCwdMax - 1 and path[i] != '\0':
@@ -114,6 +116,7 @@ proc setCurrentCwd(path: cstring): int =
 
   currentProc.cwd[i] = '\0'
   0
+
 
 proc syscallSetCwd*(pathVal: U64): U64 =
   if currentProc == nil:

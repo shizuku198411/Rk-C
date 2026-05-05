@@ -27,6 +27,7 @@ func calcBitmapBytes(pageCount: U64): U64 =
 func calcBitmapPageCount(pageCount: U64): U64 =
   alignUp(calcBitmapBytes(pageCount), PageSize) div PageSize
 
+
 proc initMemoryAllocator*(start, last: PAddr): MemoryInfo =
   let freeStart = alignUp(start, PageSize)
   let freeEnd = alignDown(last, PageSize)
@@ -67,20 +68,25 @@ proc initMemoryAllocator*(start, last: PAddr): MemoryInfo =
     managedPageCount: managedPageCount,
   )
 
+
 proc memoryInit*(): MemoryInfo =
   initMemoryAllocator(
     cast[PAddr](addr freeRamStartSym),
     cast[PAddr](addr freeRamEndSym),
   )
 
+
 proc bitmapCheck(idx: U64): bool =
   ((bitmap[idx div 8] shr (idx mod 8)) and 1'u8) != 0
+
 
 proc bitmapSet(idx: U64) =
   bitmap[idx div 8] = bitmap[idx div 8] or U8(1'u8 shl (idx mod 8))
 
+
 proc bitmapClear(idx: U64) =
   bitmap[idx div 8] = bitmap[idx div 8] and not U8(1'u8 shl (idx mod 8))
+
 
 proc palloc*(n: U64): PAddr =
   if not memoryInitialized:
@@ -111,6 +117,7 @@ proc palloc*(n: U64): PAddr =
     inc i
 
   NilPAddr
+
 
 proc pfree*(paddr: PAddr, n: U64): int =
   if not memoryInitialized:

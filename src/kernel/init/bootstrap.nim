@@ -28,6 +28,7 @@ var
   freeRamEndSym {.importc: "__free_ram_end".}: char
   kernelRootPageTable: PageTable
 
+
 proc clearBss() =
   let start = cast[U64](addr bssStartSym)
   let last = cast[U64](addr bssEndSym)
@@ -37,12 +38,15 @@ proc clearBss() =
   if not isZeroed(cast[pointer](start), size):
     panic("failed to bss zero clear")
 
+
 proc setTrapVector() =
   arch.writeStvec(cast[U64](arch.trapEntry))
+
 
 proc enableTimerInterrupt() =
   arch.writeSie(arch.readSie() or SieStie)
   arch.writeSstatus(arch.readSstatus() or SstatusSie or SstatusSum)
+
 
 proc enableSv39(memInfo: MemoryInfo) =
   kernelRootPageTable = allocPageTable()
@@ -70,6 +74,7 @@ proc enableSv39(memInfo: MemoryInfo) =
   paging.flushTlb()
 
   discard memInfo
+
 
 proc addressInfo(hartid: U64, dtb: pointer, memInfo: MemoryInfo) =
   let bssSize = cast[U64](addr bssEndSym) - cast[U64](addr bssStartSym)
@@ -130,6 +135,7 @@ proc addressInfo(hartid: U64, dtb: pointer, memInfo: MemoryInfo) =
   printPtr(cast[U64](kernelRootPageTable))
   putChar('\n')
 
+
 proc kernelBootstrap*(hartid: U64, dtb: pointer) =
   putChar('\n')
   printBootMsg("starting kernel bootstrap\n")
@@ -171,6 +177,7 @@ proc kernelBootstrap*(hartid: U64, dtb: pointer) =
   printBootMsg("  end time: ")
   print(nowCString())
   putChar('\n')
+
 
 proc getKernelRootPageTable*(): PageTable =
   kernelRootPageTable

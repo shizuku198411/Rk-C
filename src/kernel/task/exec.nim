@@ -17,6 +17,7 @@ const
   UserStackPages = U64(1)
   UserArgMax = U64(128)
 
+
 proc copyArg(dst: PAddr, src: cstring, maxLen: U64) =
   let d = cast[ptr UncheckedArray[char]](dst)
   var i = U64(0)
@@ -26,8 +27,10 @@ proc copyArg(dst: PAddr, src: cstring, maxLen: U64) =
       inc i
   d[i] = '\0'
 
+
 proc copyPage(dstPa, srcPa: PAddr) =
   discard copyMem(cast[pointer](dstPa), cast[pointer](srcPa), PageSize)
+
 
 proc cloneMappedRange(root: PageTable, srcBase, dstBase: VAddr, pages: U64, flags: U64): int =
   if pages == 0:
@@ -54,6 +57,7 @@ proc cloneMappedRange(root: PageTable, srcBase, dstBase: VAddr, pages: U64, flag
 
   0
 
+
 proc cloneParentUserMemory(root: PageTable, parent: ptr Process, childBase, childStackTop: VAddr): int =
   if parent == nil or not parent.isUser:
     return 0
@@ -73,6 +77,7 @@ proc cloneParentUserMemory(root: PageTable, parent: ptr Process, childBase, chil
   flushTlb()
   0
 
+
 proc replaceUserImage(root: PageTable, path: cstring, base: VAddr, imagePages: var U64): int =
   let imagePa = palloc(UserImageMaxPages)
   if imagePa == NilPAddr:
@@ -90,6 +95,7 @@ proc replaceUserImage(root: PageTable, path: cstring, base: VAddr, imagePages: v
 
   0
 
+
 proc replaceUserStack(root: PageTable, stackTop: VAddr, arg: cstring, userSp, argVa: var VAddr): int =
   let stackPa = palloc(UserStackPages)
   if stackPa == NilPAddr:
@@ -103,6 +109,7 @@ proc replaceUserStack(root: PageTable, stackTop: VAddr, arg: cstring, userSp, ar
   userSp = argVa
   copyArg(argPa, arg, UserArgMax)
   0
+
 
 proc installExecImage(p: ptr Process, path: cstring, base, stackTop: VAddr, arg: cstring): int =
   let root = getKernelRootPageTable()
@@ -122,6 +129,7 @@ proc installExecImage(p: ptr Process, path: cstring, base, stackTop: VAddr, arg:
   configureUserProcess(p, path, base, base, stackTop, userSp, imagePages, UserStackPages, argVa, 0)
   0
 
+
 proc loadUserProcess(path: cstring, base, stackTop: VAddr, arg: cstring): int32 =
   let p = allocUserProcessFromParent(nil)
   if p == nil:
@@ -133,8 +141,10 @@ proc loadUserProcess(path: cstring, base, stackTop: VAddr, arg: cstring): int32 
 
   p.pid
 
+
 proc createShellUserProcess*(): int32 =
   loadUserProcess("/bin/shell", ShellBase, ShellStackTop, nil)
+
 
 proc execUserApp*(path: cstring, arg: cstring): int32 =
   let parent = currentProc

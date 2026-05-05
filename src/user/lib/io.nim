@@ -1,17 +1,21 @@
 import strutils
 import syscall
 
+
 proc write*(s: cstring) =
   discard sysWrite(cast[pointer](s), cstrlen(s))
+
 
 proc writeChar*(ch: char) =
   var c = ch
   discard sysWrite(addr c, 1)
 
+
 proc readChar*(): char =
   var c: char
   discard sysRead(addr c, 1)
   c
+
 
 proc writeUnsigned*(value: U64) =
   var buf: array[32, char]
