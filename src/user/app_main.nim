@@ -24,5 +24,9 @@ elif defined(userApp_date):
   import apps/date/date
 elif defined(userApp_edit):
   import apps/edit/edit
+elif defined(userApp_ipc):
+  import apps/ipc/ipc
+elif defined(userApp_kill):
+  import apps/kill/kill
 else:
   {.error: "missing user app define".}

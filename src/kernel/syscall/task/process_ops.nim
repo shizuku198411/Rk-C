@@ -94,7 +94,7 @@ proc syscallWait*(pidVal: U64): U64 =
   status
 
 
-proc syscallExec*(path, arg: U64): U64 =
+proc syscallExec*(path, arg, detachedVal: U64): U64 =
   if copyUserCString(addr pathBuf[0], path, UserCStringMax) < 0:
     return U64(-1'i64)
 
@@ -106,7 +106,7 @@ proc syscallExec*(path, arg: U64): U64 =
         return U64(-1'i64)
       cast[cstring](addr argBuf[0])
 
-  U64(execUserApp(cast[cstring](addr pathBuf[0]), copiedArg))
+  U64(execUserApp(cast[cstring](addr pathBuf[0]), copiedArg, detachedVal != 0))
 
 
 proc syscallGetCwd*(outBuf, capacity: U64): U64 =

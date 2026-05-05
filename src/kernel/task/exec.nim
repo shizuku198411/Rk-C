@@ -185,11 +185,13 @@ proc createShellUserProcess*(): int32 =
   loadUserProcess("/bin/shell", ShellBase, ShellStackTop, nil)
 
 
-proc execUserApp*(path: cstring, arg: cstring): int32 =
+proc execUserApp*(path: cstring, arg: cstring, detached: bool = false): int32 =
   let parent = currentProc
   let child = allocUserProcessFromParent(parent)
   if child == nil:
     return -1
+
+  child.detached = detached
 
   let root = createKernelMappedPageTable()
   if root == nil:

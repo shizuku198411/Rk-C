@@ -58,8 +58,14 @@ proc sysMkdir*(path: cstring): I32 =
   I32(rawSyscall3(SysMkdir, cast[U64](path), 0, 0))
 
 
-proc sysExec*(path: cstring, arg: cstring): I32 =
-  I32(rawSyscall3(SysExec, cast[U64](path), cast[U64](arg), 0))
+proc sysExec*(path: cstring, arg: cstring, detached: bool = false): I32 =
+  let detachedVal =
+    if detached:
+      U64(1)
+    else:
+      U64(0)
+
+  I32(rawSyscall3(SysExec, cast[U64](path), cast[U64](arg), detachedVal))
 
 
 proc sysWait*(pid: I32): U64 =
@@ -100,3 +106,15 @@ proc sysSetCwd*(path: cstring): I32 =
 
 proc sysGetBitMap*(info: ptr SysBitmapInfo): I32 =
   I32(rawSyscall3(SysGetBitMap, cast[U64](info), 0, 0))
+
+
+proc sysIpcSend*(pid: I32, msg: cstring): I32 =
+  I32(rawSyscall3(SysIpcSend, U64(pid), cast[U64](msg), 0))
+
+
+proc sysIpcReceive*(msg: ptr SysIpcMessage): I32 =
+  I32(rawSyscall3(SysIpcReceive, cast[U64](msg), 0, 0))
+
+
+proc sysKill*(pid: I32): I32 =
+  I32(rawSyscall3(SysKill, U64(pid), 0, 0))

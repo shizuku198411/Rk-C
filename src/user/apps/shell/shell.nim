@@ -46,8 +46,12 @@ proc printHelp() =
   write("  edit <path>         edit file\n")
   write("  ps                  show process slots\n")
   write("  date                show current time\n")
+  write("  ipc send <pid> <message>\n")
+  write("  ipc receive         wait for IPC message\n")
+  write("  kill <pid>          terminate process\n")
   write("  ticks               show timer ticks\n")
   write("  bitmap              show physical page bitmap usage\n")
+  write("  <command> &         run command in background\n")
   write("  exit                exit shell\n")
   write("  shutdown            shutdown kernel\n")
 
@@ -128,13 +132,20 @@ proc buildBinPath(cmd: cstring): cstring =
   cstr(pathBuf)
 
 
-proc runApp(path: cstring, arg: cstring) =
-  let pid = sysExec(path, arg)
+proc runApp(path: cstring, arg: cstring, background: bool) =
+  let pid = sysExec(path, arg, background)
   if pid < 0:
     write("command not found: ")
     write(path)
     write("\n")
     return
+
+  if background:
+    write("[bg] pid ")
+    writeUnsigned(U64(pid))
+    write("\n")
+    return
+
   discard sysWait(pid)
 
 
@@ -241,6 +252,27 @@ proc prepareExecArg(cmd, arg: cstring): cstring =
   arg
 
 
+proc stripBackgroundMarker(): bool =
+  var len = 0
+  while argBuf[len] != '\0':
+    inc len
+
+  while len > 0 and argBuf[len - 1] == ' ':
+    dec len
+    argBuf[len] = '\0'
+
+  if len == 0 or argBuf[len - 1] != '&':
+    return false
+
+  dec len
+  argBuf[len] = '\0'
+  while len > 0 and argBuf[len - 1] == ' ':
+    dec len
+    argBuf[len] = '\0'
+
+  true
+
+
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   discard arg
   printBanner()
@@ -250,6 +282,8 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
     let cmd = readLine()
     if not parseCommand(cmd):
       continue
+
+    let background = stripBackgroundMarker()
 
     if streq(cstr(cmdBuf), "help"):
       printHelp()
@@ -269,9 +303,9 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
 
     elif streq(cstr(cmdBuf), "shutdown"):
       sysShutdown()
-    
+
     else:
       let execArg = prepareExecArg(cstr(cmdBuf), cstr(argBuf))
       if execArg == nil:
         continue
-      runApp(buildBinPath(cstr(cmdBuf)), execArg)
+      runApp(buildBinPath(cstr(cmdBuf)), execArg, background)

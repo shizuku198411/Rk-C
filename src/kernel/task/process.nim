@@ -56,8 +56,14 @@ type
     userArg0*: U64
     userArg1*: U64
     waitingForInput*: bool
+    waitingForIpc*: bool
     waitingForPid*: int32
+    detached*: bool
     exitStatus*: U64
+    ipcQueue*: array[SysIpcQueueCap, SysIpcMessage]
+    ipcHead*: int
+    ipcTail*: int
+    ipcCount*: int
 
 
 var
@@ -76,8 +82,10 @@ proc yieldCpu*()
 proc maybeYieldOnResched*()
 proc printProcessState*(state: ProcessState)
 proc sleepCurrentForInput*()
+proc sleepCurrentForIpc*()
 proc sleepCurrentForPid*(pid: int32)
 proc wakeInputWaiters*()
+proc wakeIpcWaiter*(pid: int32)
 proc wakePidWaiters*(pid: int32)
 
 
@@ -109,6 +117,17 @@ proc copyCwd(dst: var array[SysProcessCwdMax, char], src: array[SysProcessCwdMax
   var i = 0
   while i < SysProcessCwdMax:
     dst[i] = src[i]
+    inc i
+
+
+proc clearIpcQueue(p: ptr Process) =
+  p.ipcHead = 0
+  p.ipcTail = 0
+  p.ipcCount = 0
+
+  var i = 0
+  while i < SysIpcQueueCap:
+    p.ipcQueue[i] = SysIpcMessage()
     inc i
 
 
@@ -156,8 +175,11 @@ proc createKernelProcessInternal(entry: KernelTask, isIdle: bool): int32 =
   p.userArg0 = 0
   p.userArg1 = 0
   p.waitingForInput = false
+  p.waitingForIpc = false
   p.waitingForPid = 0
+  p.detached = false
   p.exitStatus = 0
+  clearIpcQueue(p)
   p.context = Context()
   p.context.sp = stack + KernelStackPages * PageSize
   p.context.ra = cast[U64](processBootstrap)
@@ -190,8 +212,11 @@ proc processInit*() =
     procs[i].userArg0 = 0
     procs[i].userArg1 = 0
     procs[i].waitingForInput = false
+    procs[i].waitingForIpc = false
     procs[i].waitingForPid = 0
+    procs[i].detached = false
     procs[i].exitStatus = 0
+    clearIpcQueue(addr procs[i])
     inc i
 
   currentProc = nil
@@ -266,6 +291,7 @@ proc configureUserProcess*(p: ptr Process, root: PageTable, path: cstring,
   p.userArg0 = arg0
   p.userArg1 = arg1
   p.waitingForInput = false
+  p.waitingForIpc = false
   p.waitingForPid = 0
   p.exitStatus = 0
   p.state = procRunnable
@@ -315,8 +341,11 @@ proc discardProcess*(p: ptr Process) =
   p.userArg0 = 0
   p.userArg1 = 0
   p.waitingForInput = false
+  p.waitingForIpc = false
   p.waitingForPid = 0
+  p.detached = false
   p.exitStatus = 0
+  clearIpcQueue(p)
 
 
 proc createUserProcess*(path: cstring, userBase, userPc, userStackTop, userSp: VAddr,
@@ -366,6 +395,15 @@ proc sleepCurrentForInput*() =
   schedule()
 
 
+proc sleepCurrentForIpc*() =
+  if currentProc == nil:
+    return
+
+  currentProc.waitingForIpc = true
+  currentProc.state = procSleeping
+  schedule()
+
+
 proc sleepCurrentForPid*(pid: int32) =
   if currentProc == nil:
     return
@@ -384,12 +422,31 @@ proc wakeInputWaiters*() =
     inc i
 
 
+proc wakeIpcWaiter*(pid: int32) =
+  var i = 0
+  while i < MaxProcs:
+    if procs[i].state == procSleeping and procs[i].pid == pid and procs[i].waitingForIpc:
+      procs[i].waitingForIpc = false
+      procs[i].state = procRunnable
+      return
+    inc i
+
+
 proc wakePidWaiters*(pid: int32) =
   var i = 0
   while i < MaxProcs:
     if procs[i].state == procSleeping and procs[i].waitingForPid == pid:
       procs[i].waitingForPid = 0
       procs[i].state = procRunnable
+    inc i
+
+
+proc reapDetachedZombies() =
+  var i = 0
+  while i < MaxProcs:
+    let p = addr procs[i]
+    if p != currentProc and p.state == procZombie and p.detached:
+      discardProcess(p)
     inc i
 
 
@@ -415,6 +472,8 @@ proc schedule*() =
   let prev = currentProc
   var start = 0
   var next: ptr Process = nil
+
+  reapDetachedZombies()
 
   if currentProc != nil:
     let currentIndex = (cast[U64](currentProc) - cast[U64](addr procs[0])) div U64(sizeof(Process))

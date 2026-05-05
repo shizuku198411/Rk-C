@@ -3,6 +3,8 @@ import types
 const
   SysProcessNameMax* = 32
   SysProcessCwdMax* = 64
+  SysIpcMessageMax* = 128
+  SysIpcQueueCap* = 4
 
   SysProcessUnused* = U32(0)
   SysProcessRunnable* = U32(1)
@@ -30,3 +32,8 @@ type
     total*: U64
     used*: U64
     free*: U64
+
+  SysIpcMessage* {.packed.} = object
+    senderPid*: I32
+    len*: U32
+    data*: array[SysIpcMessageMax, char]

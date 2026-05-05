@@ -19,3 +19,6 @@ const
   SysGetCwd* = U64(19)
   SysSetCwd* = U64(20)
   SysGetBitMap* = U64(21)
+  SysIpcSend* = U64(22)
+  SysIpcReceive* = U64(23)
+  SysKill* = U64(24)

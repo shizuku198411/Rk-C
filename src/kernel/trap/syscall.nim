@@ -2,6 +2,7 @@ import ../../lib/syscall_ids
 import ../dev/console
 import ../syscall/fs/file_ops
 import ../syscall/io/console_io
+import ../syscall/ipc/ipc_ops
 import ../syscall/mm/memory_ops
 import ../syscall/system/system_ops
 import ../syscall/task/process_ops
@@ -32,7 +33,7 @@ proc handleSyscall*(frame: ptr TrapFrame) =
     frame.a0 = syscallMkdir(frame.a0)
 
   of SysExec:
-    frame.a0 = syscallExec(frame.a0, frame.a1)
+    frame.a0 = syscallExec(frame.a0, frame.a1, frame.a2)
 
   of SysWait:
     frame.a0 = syscallWait(frame.a0)
@@ -63,6 +64,15 @@ proc handleSyscall*(frame: ptr TrapFrame) =
 
   of SysGetBitMap:
     frame.a0 = syscallGetBitMap(frame.a0)
+
+  of SysIpcSend:
+    frame.a0 = syscallIpcSend(frame.a0, frame.a1)
+
+  of SysIpcReceive:
+    frame.a0 = syscallIpcReceive(frame.a0)
+
+  of SysKill:
+    frame.a0 = syscallKill(frame.a0)
 
   else:
     print("PANIC: unknown syscall ")
