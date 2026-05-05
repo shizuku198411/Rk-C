@@ -1,6 +1,5 @@
 import ../../../lib/types
-import ../../fs/dirent
-import ../../fs/fs
+import ../../syscall/fs/fs_service_ops
 import ../../mm/usercopy
 
 const
@@ -10,7 +9,6 @@ const
 
 var
   pathBuf: array[SysPathMax, char]
-  dirEntries: array[SysDirEntryMax, FsDirEntry]
   fileBuf: array[SysFileIoMax, U8]
 
 
@@ -39,15 +37,7 @@ proc syscallLs*(pathVal, entriesVal, maxEntries: U64): U64 =
       SysDirEntryMax
     else:
       maxEntries
-  let count = fsReadDirEntries(path, addr dirEntries[0], countMax)
-  if count < 0:
-    return U64(-1'i64)
-
-  let bytes = U64(count) * U64(sizeof(FsDirEntry))
-  if copyToUser(entriesVal, addr dirEntries[0], bytes) != 0:
-    return U64(-1'i64)
-
-  U64(count)
+  serviceLs(path, entriesVal, countMax)
 
 
 proc syscallMkdir*(path: U64): U64 =
@@ -55,7 +45,7 @@ proc syscallMkdir*(path: U64): U64 =
   if copiedPath == nil:
     return U64(-1'i64)
 
-  U64(fsMkdir(copiedPath))
+  serviceMkdir(copiedPath)
 
 
 proc syscallUnlink*(path: U64): U64 =
@@ -63,7 +53,7 @@ proc syscallUnlink*(path: U64): U64 =
   if copiedPath == nil:
     return U64(-1'i64)
 
-  U64(fsUnlink(copiedPath))
+  serviceUnlink(copiedPath)
 
 
 proc syscallRmdir*(path: U64): U64 =
@@ -71,7 +61,7 @@ proc syscallRmdir*(path: U64): U64 =
   if copiedPath == nil:
     return U64(-1'i64)
 
-  U64(fsRmdir(copiedPath))
+  serviceRmdir(copiedPath)
 
 
 proc syscallReadFile*(path, buf, capacity: U64): U64 =
@@ -82,13 +72,7 @@ proc syscallReadFile*(path, buf, capacity: U64): U64 =
   if copiedPath == nil:
     return U64(-1'i64)
 
-  let readLen = fsReadFile(copiedPath, addr fileBuf[0], capacity)
-  if readLen < 0:
-    return U64(-1'i64)
-  if copyToUser(buf, addr fileBuf[0], U64(readLen)) != 0:
-    return U64(-1'i64)
-
-  U64(readLen)
+  serviceReadFile(copiedPath, buf, capacity)
 
 
 proc syscallWriteFile*(path, buf, size: U64): U64 =
@@ -101,4 +85,4 @@ proc syscallWriteFile*(path, buf, size: U64): U64 =
   if copyFromUser(addr fileBuf[0], buf, size) != 0:
     return U64(-1'i64)
 
-  U64(fsWriteFile(copiedPath, addr fileBuf[0], size))
+  serviceWriteFile(copiedPath, addr fileBuf[0], size)

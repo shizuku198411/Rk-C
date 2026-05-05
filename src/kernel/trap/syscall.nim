@@ -1,6 +1,7 @@
 import ../../lib/syscall_ids
 import ../dev/console
 import ../syscall/fs/file_ops
+import ../syscall/fs/fs_service_ops
 import ../syscall/io/console_io
 import ../syscall/ipc/ipc_ops
 import ../syscall/mm/memory_ops
@@ -73,6 +74,33 @@ proc handleSyscall*(frame: ptr TrapFrame) =
 
   of SysKill:
     frame.a0 = syscallKill(frame.a0)
+
+  of SysFsServiceRegister:
+    frame.a0 = syscallFsServiceRegister()
+
+  of SysFsServiceReceive:
+    frame.a0 = syscallFsServiceReceive(frame.a0)
+
+  of SysFsServiceReply:
+    frame.a0 = syscallFsServiceReply(frame.a0)
+
+  of SysRawLs:
+    frame.a0 = syscallRawLs(frame.a0, frame.a1, frame.a2)
+
+  of SysRawMkdir:
+    frame.a0 = syscallRawMkdir(frame.a0)
+
+  of SysRawUnlink:
+    frame.a0 = syscallRawUnlink(frame.a0)
+
+  of SysRawRmdir:
+    frame.a0 = syscallRawRmdir(frame.a0)
+
+  of SysRawReadFile:
+    frame.a0 = syscallRawReadFile(frame.a0, frame.a1, frame.a2)
+
+  of SysRawWriteFile:
+    frame.a0 = syscallRawWriteFile(frame.a0, frame.a1, frame.a2)
 
   else:
     print("PANIC: unknown syscall ")

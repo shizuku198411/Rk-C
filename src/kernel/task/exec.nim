@@ -185,6 +185,10 @@ proc createShellUserProcess*(): int32 =
   loadUserProcess("/bin/shell", ShellBase, ShellStackTop, nil)
 
 
+proc createFsServerUserProcess*(): int32 =
+  loadUserProcess("/bin/fsd", AppBase, AppStackTop, nil)
+
+
 proc execUserApp*(path: cstring, arg: cstring, detached: bool = false): int32 =
   let parent = currentProc
   let child = allocUserProcessFromParent(parent)

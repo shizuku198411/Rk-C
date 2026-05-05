@@ -118,3 +118,39 @@ proc sysIpcReceive*(msg: ptr SysIpcMessage): I32 =
 
 proc sysKill*(pid: I32): I32 =
   I32(rawSyscall3(SysKill, U64(pid), 0, 0))
+
+
+proc sysFsServiceRegister*(): I32 =
+  I32(rawSyscall3(SysFsServiceRegister, 0, 0, 0))
+
+
+proc sysFsServiceReceive*(req: ptr SysFsRequest): I32 =
+  I32(rawSyscall3(SysFsServiceReceive, cast[U64](req), 0, 0))
+
+
+proc sysFsServiceReply*(resp: ptr SysFsResponse): I32 =
+  I32(rawSyscall3(SysFsServiceReply, cast[U64](resp), 0, 0))
+
+
+proc sysRawLs*(path: cstring, entries: pointer, maxEntries: U64): I32 =
+  I32(rawSyscall3(SysRawLs, cast[U64](path), cast[U64](entries), maxEntries))
+
+
+proc sysRawMkdir*(path: cstring): I32 =
+  I32(rawSyscall3(SysRawMkdir, cast[U64](path), 0, 0))
+
+
+proc sysRawUnlink*(path: cstring): I32 =
+  I32(rawSyscall3(SysRawUnlink, cast[U64](path), 0, 0))
+
+
+proc sysRawRmdir*(path: cstring): I32 =
+  I32(rawSyscall3(SysRawRmdir, cast[U64](path), 0, 0))
+
+
+proc sysRawReadFile*(path: cstring, buf: pointer, capacity: U64): I32 =
+  I32(rawSyscall3(SysRawReadFile, cast[U64](path), cast[U64](buf), capacity))
+
+
+proc sysRawWriteFile*(path: cstring, buf: pointer, size: U64): I32 =
+  I32(rawSyscall3(SysRawWriteFile, cast[U64](path), cast[U64](buf), size))

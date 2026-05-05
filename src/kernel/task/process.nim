@@ -57,6 +57,7 @@ type
     userArg1*: U64
     waitingForInput*: bool
     waitingForIpc*: bool
+    waitingForFsReq*: U64
     waitingForPid*: int32
     detached*: bool
     exitStatus*: U64
@@ -83,9 +84,11 @@ proc maybeYieldOnResched*()
 proc printProcessState*(state: ProcessState)
 proc sleepCurrentForInput*()
 proc sleepCurrentForIpc*()
+proc sleepCurrentForFsReq*(reqId: U64)
 proc sleepCurrentForPid*(pid: int32)
 proc wakeInputWaiters*()
 proc wakeIpcWaiter*(pid: int32)
+proc wakeFsWaiter*(reqId: U64)
 proc wakePidWaiters*(pid: int32)
 
 
@@ -176,6 +179,7 @@ proc createKernelProcessInternal(entry: KernelTask, isIdle: bool): int32 =
   p.userArg1 = 0
   p.waitingForInput = false
   p.waitingForIpc = false
+  p.waitingForFsReq = 0
   p.waitingForPid = 0
   p.detached = false
   p.exitStatus = 0
@@ -213,6 +217,7 @@ proc processInit*() =
     procs[i].userArg1 = 0
     procs[i].waitingForInput = false
     procs[i].waitingForIpc = false
+    procs[i].waitingForFsReq = 0
     procs[i].waitingForPid = 0
     procs[i].detached = false
     procs[i].exitStatus = 0
@@ -292,6 +297,7 @@ proc configureUserProcess*(p: ptr Process, root: PageTable, path: cstring,
   p.userArg1 = arg1
   p.waitingForInput = false
   p.waitingForIpc = false
+  p.waitingForFsReq = 0
   p.waitingForPid = 0
   p.exitStatus = 0
   p.state = procRunnable
@@ -342,6 +348,7 @@ proc discardProcess*(p: ptr Process) =
   p.userArg1 = 0
   p.waitingForInput = false
   p.waitingForIpc = false
+  p.waitingForFsReq = 0
   p.waitingForPid = 0
   p.detached = false
   p.exitStatus = 0
@@ -404,6 +411,15 @@ proc sleepCurrentForIpc*() =
   schedule()
 
 
+proc sleepCurrentForFsReq*(reqId: U64) =
+  if currentProc == nil:
+    return
+
+  currentProc.waitingForFsReq = reqId
+  currentProc.state = procSleeping
+  schedule()
+
+
 proc sleepCurrentForPid*(pid: int32) =
   if currentProc == nil:
     return
@@ -427,6 +443,16 @@ proc wakeIpcWaiter*(pid: int32) =
   while i < MaxProcs:
     if procs[i].state == procSleeping and procs[i].pid == pid and procs[i].waitingForIpc:
       procs[i].waitingForIpc = false
+      procs[i].state = procRunnable
+      return
+    inc i
+
+
+proc wakeFsWaiter*(reqId: U64) =
+  var i = 0
+  while i < MaxProcs:
+    if procs[i].state == procSleeping and procs[i].waitingForFsReq == reqId:
+      procs[i].waitingForFsReq = 0
       procs[i].state = procRunnable
       return
     inc i
