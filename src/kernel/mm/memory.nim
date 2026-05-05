@@ -9,6 +9,11 @@ type
     bitmapPageCount*: U64
     managedPageCount*: U64
 
+  BitmapInfo* = object
+    total*: U64
+    used*: U64
+    free*: U64
+
 var
   freeRamStartSym {.importc: "__free_ram_start".}: char
   freeRamEndSym {.importc: "__free_ram_end".}: char
@@ -147,3 +152,21 @@ proc pfree*(paddr: PAddr, n: U64): int =
     inc i
 
   0
+
+
+proc bitmapInfo*(): BitmapInfo =
+  if not memoryInitialized:
+    panic("memory allocator is not initialized")
+
+  var used = U64(0)
+  var i = U64(0)
+  while i < managedPageCount:
+    if bitmapCheck(i):
+      inc used
+    inc i
+
+  BitmapInfo(
+    total: managedPageCount,
+    used: used,
+    free: managedPageCount - used,
+  )

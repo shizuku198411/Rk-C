@@ -47,6 +47,7 @@ proc printHelp() =
   write("  ps                  show process slots\n")
   write("  date                show current time\n")
   write("  ticks               show timer ticks\n")
+  write("  bitmap              show physical page bitmap usage\n")
   write("  exit                exit shell\n")
   write("  shutdown            shutdown kernel\n")
 
@@ -151,6 +152,24 @@ proc changeDirectory(path: cstring) =
     write("cd: failed\n")
 
 
+proc printBitmapInfo() =
+  var info: SysBitmapInfo
+  if sysGetBitMap(addr info) != 0:
+    write("bitmap: failed\n")
+    return
+
+  write("bitmap:\n")
+  write("  total: ")
+  writeUnsigned(info.total)
+  write(" pages\n")
+  write("  used : ")
+  writeUnsigned(info.used)
+  write(" pages\n")
+  write("  free : ")
+  writeUnsigned(info.free)
+  write(" pages\n")
+
+
 proc copyArgChar(pos: var U64, ch: char): bool =
   if pos + 1 >= U64(ExecArgMax):
     return false
@@ -241,6 +260,9 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
     elif streq(cstr(cmdBuf), "ticks"):
       writeUnsigned(sysTicks())
       write("\n")
+
+    elif streq(cstr(cmdBuf), "bitmap"):
+      printBitmapInfo()
 
     elif streq(cstr(cmdBuf), "exit"):
       sysExit(0)

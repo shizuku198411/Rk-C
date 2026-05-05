@@ -18,3 +18,4 @@ const
   SysWriteFile* = U64(18)
   SysGetCwd* = U64(19)
   SysSetCwd* = U64(20)
+  SysGetBitMap* = U64(21)

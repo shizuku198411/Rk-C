@@ -3,6 +3,7 @@ import ../../lib/syscall_types
 import ../../lib/types
 import ../dev/console
 import ../mm/memory
+import ../mm/paging
 
 const
   MaxProcs* = 16
@@ -38,11 +39,13 @@ type
     pid*: int32
     parentPid*: int32
     exePath*: cstring
+    exePathBuf*: array[SysProcessNameMax, char]
     cwd*: array[SysProcessCwdMax, char]
     state*: ProcessState
     context*: Context
     entry*: KernelTask
     kernelStack*: PAddr
+    rootPageTable*: PageTable
     isUser*: bool
     userBase*: VAddr
     userPc*: VAddr
@@ -63,6 +66,7 @@ var
   nextPid = int32(1)
   needResched {.volatile.}: bool
   idleProc: ptr Process
+  kernelPageTable: PageTable
 
 
 proc contextSwitch(prev: ptr Context, next: ptr Context) {.importc: "context_switch", cdecl.}
@@ -77,9 +81,28 @@ proc wakeInputWaiters*()
 proc wakePidWaiters*(pid: int32)
 
 
+proc setKernelPageTable*(root: PageTable) =
+  kernelPageTable = root
+
+
 proc setRootCwd(p: ptr Process) =
   p.cwd[0] = '/'
   p.cwd[1] = '\0'
+
+
+proc setExePath(p: ptr Process, path: cstring) =
+  var i = 0
+  while i < SysProcessNameMax - 1:
+    if path == nil or path[i] == '\0':
+      break
+    p.exePathBuf[i] = path[i]
+    inc i
+
+  while i < SysProcessNameMax:
+    p.exePathBuf[i] = '\0'
+    inc i
+
+  p.exePath = cast[cstring](addr p.exePathBuf[0])
 
 
 proc copyCwd(dst: var array[SysProcessCwdMax, char], src: array[SysProcessCwdMax, char]) =
@@ -117,9 +140,11 @@ proc createKernelProcessInternal(entry: KernelTask, isIdle: bool): int32 =
   p.pid = nextPid
   inc nextPid
   p.parentPid = 0
+  setExePath(p, "init_proc")
   p.state = procRunnable
   p.entry = entry
   p.kernelStack = stack
+  p.rootPageTable = nil
   setRootCwd(p)
   p.isUser = false
   p.userBase = 0
@@ -148,12 +173,13 @@ proc processInit*() =
   while i < MaxProcs:
     procs[i].pid = 0
     procs[i].parentPid = 0
-    procs[i].exePath = "init_proc"
+    setExePath(addr procs[i], "init_proc")
     setRootCwd(addr procs[i])
     procs[i].state = procUnused
     procs[i].context = Context()
     procs[i].entry = nil
     procs[i].kernelStack = NilPAddr
+    procs[i].rootPageTable = nil
     procs[i].isUser = false
     procs[i].userBase = 0
     procs[i].userPc = 0
@@ -172,6 +198,7 @@ proc processInit*() =
   nextPid = 1
   needResched = false
   idleProc = nil
+  kernelPageTable = nil
 
   if createKernelProcessInternal(idleTask, true) < 0:
     panic("failed to create idle task")
@@ -224,9 +251,11 @@ proc allocUserProcessFromParent*(parent: ptr Process): ptr Process =
   p
 
 
-proc configureUserProcess*(p: ptr Process, path: cstring, userBase, userPc, userStackTop, userSp: VAddr,
+proc configureUserProcess*(p: ptr Process, root: PageTable, path: cstring,
+                           userBase, userPc, userStackTop, userSp: VAddr,
                            imagePages, stackPages: U64, arg0: U64 = 0, arg1: U64 = 0) =
-  p.exePath = path
+  setExePath(p, path)
+  p.rootPageTable = root
   p.isUser = true
   p.userBase = userBase
   p.userPc = userPc
@@ -242,21 +271,40 @@ proc configureUserProcess*(p: ptr Process, path: cstring, userBase, userPc, user
   p.state = procRunnable
 
 
+proc releaseUserAddressSpace(p: ptr Process) =
+  if p.rootPageTable == nil or p.rootPageTable == kernelPageTable:
+    return
+
+  discard unmapRangeFree(p.rootPageTable, p.userBase, p.userImagePages)
+  if p.userStackTop != 0 and p.userStackPages != 0:
+    discard unmapRangeFree(
+      p.rootPageTable,
+      p.userStackTop - p.userStackPages * PageSize,
+      p.userStackPages,
+    )
+
+  freePageTablePages(p.rootPageTable)
+  p.rootPageTable = nil
+
+
 proc discardProcess*(p: ptr Process) =
   if p == nil:
     return
+
+  releaseUserAddressSpace(p)
 
   if p.kernelStack != NilPAddr:
     discard pfree(p.kernelStack, KernelStackPages)
 
   p.pid = 0
   p.parentPid = 0
-  p.exePath = "init_proc"
+  setExePath(p, "init_proc")
   setRootCwd(p)
   p.state = procUnused
   p.context = Context()
   p.entry = nil
   p.kernelStack = NilPAddr
+  p.rootPageTable = nil
   p.isUser = false
   p.userBase = 0
   p.userPc = 0
@@ -277,7 +325,8 @@ proc createUserProcess*(path: cstring, userBase, userPc, userStackTop, userSp: V
   if p == nil:
     return -1
 
-  configureUserProcess(p, path, userBase, userPc, userStackTop, userSp, imagePages, stackPages, arg0, arg1)
+  configureUserProcess(p, kernelPageTable, path, userBase, userPc, userStackTop, userSp,
+                       imagePages, stackPages, arg0, arg1)
   p.pid
 
 
@@ -396,6 +445,16 @@ proc schedule*() =
 
   next.state = procRunning
   currentProc = next
+  let nextRoot =
+    if next.rootPageTable != nil:
+      next.rootPageTable
+    else:
+      kernelPageTable
+
+  if nextRoot != nil:
+    arch.writeSatp(makeSatp(cast[PAddr](nextRoot)))
+    paging.flushTlb()
+
   arch.writeSscratch(next.kernelStack + KernelStackPages * PageSize)
 
   if prev == next:

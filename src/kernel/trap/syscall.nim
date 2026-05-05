@@ -2,6 +2,7 @@ import ../../lib/syscall_ids
 import ../dev/console
 import ../syscall/fs/file_ops
 import ../syscall/io/console_io
+import ../syscall/mm/memory_ops
 import ../syscall/system/system_ops
 import ../syscall/task/process_ops
 import ../trap/trap_types
@@ -59,6 +60,9 @@ proc handleSyscall*(frame: ptr TrapFrame) =
 
   of SysSetCwd:
     frame.a0 = syscallSetCwd(frame.a0)
+
+  of SysGetBitMap:
+    frame.a0 = syscallGetBitMap(frame.a0)
 
   else:
     print("PANIC: unknown syscall ")

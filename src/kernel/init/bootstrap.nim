@@ -48,26 +48,38 @@ proc enableTimerInterrupt() =
   arch.writeSstatus(arch.readSstatus() or SstatusSie or SstatusSum)
 
 
-proc enableSv39(memInfo: MemoryInfo) =
-  kernelRootPageTable = allocPageTable()
-  if kernelRootPageTable == nil:
-    panic("failed to allocate kernel root page table")
-
+proc mapKernelRanges(root: PageTable) =
   let kernelMapStart = cast[VAddr](addr kernelBaseSym) and not (PageSize - 1'u64)
   let kernelMapSize = alignUp(cast[U64](addr freeRamEndSym) - kernelMapStart, PageSize)
 
-  if mapRange(kernelRootPageTable, kernelMapStart, kernelMapStart, kernelMapSize, PteR or PteW or PteX) != 0:
+  if mapRange(root, kernelMapStart, kernelMapStart, kernelMapSize, PteR or PteW or PteX) != 0:
     panic("failed to map kernel identity range")
 
-  if mapRange(kernelRootPageTable, QemuUart0Base, QemuUart0Base, QemuMmioSize, PteR or PteW) != 0:
+  if mapRange(root, QemuUart0Base, QemuUart0Base, QemuMmioSize, PteR or PteW) != 0:
     panic("failed to map qemu mmio")
 
-  if mapRange(kernelRootPageTable, QemuPlicBase, QemuPlicBase, QemuPlicSize, PteR or PteW) != 0:
+  if mapRange(root, QemuPlicBase, QemuPlicBase, QemuPlicSize, PteR or PteW) != 0:
     panic("failed to map plic mmio")
-  
-  if mapRange(kernelRootPageTable, QemuRtcBase, QemuRtcBase, QemuRtcSize, PteR or PteW) != 0:
-    panic("faile to map rtc mmio")
 
+  if mapRange(root, QemuRtcBase, QemuRtcBase, QemuRtcSize, PteR or PteW) != 0:
+    panic("failed to map rtc mmio")
+
+
+proc createKernelMappedPageTable*(): PageTable =
+  let root = allocPageTable()
+  if root == nil:
+    return nil
+
+  mapKernelRanges(root)
+  root
+
+
+proc enableSv39(memInfo: MemoryInfo) =
+  kernelRootPageTable = createKernelMappedPageTable()
+  if kernelRootPageTable == nil:
+    panic("failed to allocate kernel root page table")
+
+  setKernelPageTable(kernelRootPageTable)
   let satp = makeSatp(cast[PAddr](kernelRootPageTable))
   paging.flushTlb()
   arch.writeSatp(satp)

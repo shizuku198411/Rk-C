@@ -88,6 +88,21 @@ proc mapPageReplace*(root: PageTable, va: VAddr, pa: PAddr, flags: U64): int =
   0
 
 
+proc mapPageReplaceFree*(root: PageTable, va: VAddr, pa: PAddr, flags: U64): int =
+  if not isAligned(va, PageSize) or not isAligned(pa, PageSize):
+    return -1
+
+  let entry = walkPageTable(root, va, true)
+  if entry == nil:
+    return -1
+
+  if pteIsValid(entry[]) and pteIsLeaf(entry[]):
+    discard pfree(pteToPa(entry[]), 1)
+
+  entry[] = paToPte(pa) or flags or PteV or PteA or PteD
+  0
+
+
 proc mapRange*(root: PageTable, va: VAddr, pa: PAddr, size: Size, flags: U64): int =
   if size == 0:
     return 0
@@ -116,12 +131,58 @@ proc mapRangeReplace*(root: PageTable, va: VAddr, pa: PAddr, size: Size, flags: 
   0
 
 
+proc mapRangeReplaceFree*(root: PageTable, va: VAddr, pa: PAddr, size: Size, flags: U64): int =
+  if size == 0:
+    return 0
+
+  let alignedSize = alignUp(size, PageSize)
+  var off = U64(0)
+  while off < alignedSize:
+    if mapPageReplaceFree(root, va + off, pa + off, flags) != 0:
+      return -1
+    off += PageSize
+
+  0
+
+
 proc mappedPagePa*(root: PageTable, va: VAddr): PAddr =
   let entry = walkPageTable(root, alignDown(va, PageSize), false)
   if entry == nil or not pteIsValid(entry[]) or not pteIsLeaf(entry[]):
     return NilPAddr
 
   pteToPa(entry[])
+
+
+proc unmapRangeFree*(root: PageTable, va: VAddr, pages: U64): int =
+  if root == nil:
+    return -1
+  if va == 0 or pages == 0:
+    return 0
+
+  var page = U64(0)
+  while page < pages:
+    let entry = walkPageTable(root, va + page * PageSize, false)
+    if entry != nil and pteIsValid(entry[]) and pteIsLeaf(entry[]):
+      discard pfree(pteToPa(entry[]), 1)
+      entry[] = 0
+    inc page
+
+  flushTlb()
+  0
+
+
+proc freePageTablePages*(root: PageTable) =
+  if root == nil:
+    return
+
+  var i = 0
+  while i < 512:
+    let entry = root[i]
+    if pteIsValid(entry) and not pteIsLeaf(entry):
+      freePageTablePages(cast[PageTable](pteToPa(entry)))
+    inc i
+
+  discard pfree(cast[PAddr](root), 1)
 
 
 proc makeSatp*(rootPa: PAddr): U64 =

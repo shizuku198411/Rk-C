@@ -96,3 +96,7 @@ proc sysGetCwd*(buf: pointer, capacity: U64): I32 =
 
 proc sysSetCwd*(path: cstring): I32 =
   I32(rawSyscall3(SysSetCwd, cast[U64](path), 0, 0))
+
+
+proc sysGetBitMap*(info: ptr SysBitmapInfo): I32 =
+  I32(rawSyscall3(SysGetBitMap, cast[U64](info), 0, 0))

@@ -25,3 +25,8 @@ type
     hour*: U32
     minute*: U32
     second*: U32
+
+  SysBitmapInfo* {.packed.} = object
+    total*: U64
+    used*: U64
+    free*: U64
