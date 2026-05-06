@@ -266,7 +266,7 @@ proc processInit*() =
   idleProc = nil
   kernelPageTable = nil
 
-  if createKernelProcessInternal(idleTask, true, "idle_task") < 0:
+  if createKernelProcessInternal(idleTask, true, "init") < 0:
     panic("failed to create idle task")
 
 
