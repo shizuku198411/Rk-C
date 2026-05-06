@@ -31,7 +31,7 @@ type
     value*: U64
 
   IpcState* {.bycopy.} = object
-    queue*: array[SysIpcQueueCap, SysIpcMessage]
+    queue*: array[SysIpcQueueCap, SysIpcPacket]
     head*: int
     tail*: int
     count*: int
@@ -152,7 +152,7 @@ proc clearIpcQueue(p: ptr Process) =
 
   var i = 0
   while i < SysIpcQueueCap:
-    p.ipc.queue[i] = SysIpcMessage()
+    p.ipc.queue[i] = SysIpcPacket()
     inc i
 
 

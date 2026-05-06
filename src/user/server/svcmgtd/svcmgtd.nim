@@ -22,7 +22,7 @@ type
 var
   services: array[2, ServiceEntry]
   processes: array[ProcessCap, SysProcessInfo]
-  controlMsg: SysIpcMessage
+  controlPacket: SysIpcPacket
 
 
 proc initServices() =
@@ -127,31 +127,14 @@ proc findServiceByName(name: cstring): ptr ServiceEntry =
   nil
 
 
-proc skipSpaces(s: cstring, pos: var int) =
-  while s[pos] == ' ':
-    inc pos
-
-
-proc startsWithWord(s, word: cstring): bool =
-  var i = 0
-  while word[i] != '\0':
-    if s[i] != word[i]:
-      return false
-    inc i
-
-  s[i] == '\0' or s[i] == ' '
-
-
-proc handleRestartCommand(cmd: cstring) =
-  var pos = 7
-  skipSpaces(cmd, pos)
-  if cmd[pos] == '\0':
+proc handleRestartCommand(name: cstring) =
+  if name == nil or name[0] == '\0':
     return
 
-  let service = findServiceByName(cast[cstring](unsafeAddr cmd[pos]))
+  let service = findServiceByName(name)
   if service == nil:
     write("[svcmgtd] unknown service ")
-    write(cast[cstring](unsafeAddr cmd[pos]))
+    write(name)
     write("\n")
     return
 
@@ -161,14 +144,14 @@ proc handleRestartCommand(cmd: cstring) =
   restartService(service)
 
 
-proc handleControlCommand(cmd: cstring) =
-  if startsWithWord(cmd, "restart"):
-    handleRestartCommand(cmd)
+proc handleControlPacket(packet: ptr SysIpcPacket) =
+  if packet.op == SysIpcOpSvcRestart:
+    handleRestartCommand(cast[cstring](addr packet.data[0]))
 
 
 proc pollControlMessages() =
-  while sysIpcTryReceive(addr controlMsg) == 0:
-    handleControlCommand(cast[cstring](addr controlMsg.data[0]))
+  while sysIpcTryReceivePacket(addr controlPacket) == 0:
+    handleControlPacket(addr controlPacket)
 
 
 proc monitorServices() =

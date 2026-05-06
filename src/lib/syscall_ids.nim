@@ -44,3 +44,6 @@ const
   SysGetPid* = U64(44)
   SysServiceList* = U64(45)
   SysIpcTryReceive* = U64(46)
+  SysIpcSendPacket* = U64(47)
+  SysIpcReceivePacket* = U64(48)
+  SysIpcTryReceivePacket* = U64(49)

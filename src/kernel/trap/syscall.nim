@@ -83,6 +83,15 @@ proc handleSyscall*(frame: ptr TrapFrame) =
   of SysIpcTryReceive:
     frame.a0 = syscallIpcTryReceive(frame.a0)
 
+  of SysIpcSendPacket:
+    frame.a0 = syscallIpcSendPacket(frame.a0, frame.a1)
+
+  of SysIpcReceivePacket:
+    frame.a0 = syscallIpcReceivePacket(frame.a0)
+
+  of SysIpcTryReceivePacket:
+    frame.a0 = syscallIpcTryReceivePacket(frame.a0)
+
   of SysKill:
     frame.a0 = syscallKill(frame.a0)
 

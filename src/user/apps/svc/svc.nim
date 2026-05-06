@@ -5,7 +5,9 @@ import ../../lib/syscall
 const
   ServiceCap = 8
 
-var services: array[ServiceCap, SysServiceInfo]
+var
+  services: array[ServiceCap, SysServiceInfo]
+  restartPacket: SysIpcPacket
 
 
 proc startsWithWord(s, word: cstring): bool =
@@ -83,7 +85,18 @@ proc restartService(arg: cstring) =
     write("svc: manager unavailable\n")
     sysExit(1)
 
-  if sysIpcSend(pid, arg) != 0:
+  restartPacket = SysIpcPacket()
+  restartPacket.op = SysIpcOpSvcRestart
+
+  var i = U32(0)
+  while i + 1 < U32(SysIpcMessageMax) and arg[pos + int(i)] != '\0':
+    restartPacket.data[int(i)] = arg[pos + int(i)]
+    inc i
+
+  restartPacket.data[int(i)] = '\0'
+  restartPacket.len = i
+
+  if sysIpcSendPacket(pid, addr restartPacket) != 0:
     write("svc: restart request failed\n")
     sysExit(1)
 

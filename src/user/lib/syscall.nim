@@ -120,6 +120,18 @@ proc sysIpcTryReceive*(msg: ptr SysIpcMessage): I32 =
   I32(rawSyscall3(SysIpcTryReceive, cast[U64](msg), 0, 0))
 
 
+proc sysIpcSendPacket*(pid: I32, packet: ptr SysIpcPacket): I32 =
+  I32(rawSyscall3(SysIpcSendPacket, U64(pid), cast[U64](packet), 0))
+
+
+proc sysIpcReceivePacket*(packet: ptr SysIpcPacket): I32 =
+  I32(rawSyscall3(SysIpcReceivePacket, cast[U64](packet), 0, 0))
+
+
+proc sysIpcTryReceivePacket*(packet: ptr SysIpcPacket): I32 =
+  I32(rawSyscall3(SysIpcTryReceivePacket, cast[U64](packet), 0, 0))
+
+
 proc sysKill*(pid: I32): I32 =
   I32(rawSyscall3(SysKill, U64(pid), 0, 0))
 

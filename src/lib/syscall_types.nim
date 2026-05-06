@@ -17,6 +17,8 @@ const
   SysFsOpWriteFile* = U32(6)
   SysBlockOpRead* = U32(1)
   SysBlockOpWrite* = U32(2)
+  SysIpcOpText* = U32(0)
+  SysIpcOpSvcRestart* = U32(1)
   SysServiceKindBlock* = U32(0)
   SysServiceKindFs* = U32(1)
   SysServiceKindManager* = U32(2)
@@ -51,6 +53,14 @@ type
 
   SysIpcMessage* {.packed.} = object
     senderPid*: I32
+    len*: U32
+    data*: array[SysIpcMessageMax, char]
+
+  SysIpcPacket* {.packed.} = object
+    senderPid*: I32
+    op*: U32
+    arg0*: U64
+    arg1*: U64
     len*: U32
     data*: array[SysIpcMessageMax, char]
 
