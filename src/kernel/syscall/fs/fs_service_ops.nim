@@ -5,6 +5,7 @@ import ../../fs/dirent
 import ../../fs/fs
 import ../../mm/usercopy
 import ../../service/registry
+import ../ipc/request_reply
 import ../../task/process
 
 const
@@ -13,13 +14,12 @@ const
 
 type
   PendingFsRequest = object
-    used: bool
-    completed: bool
+    ipc: IpcPending
     request: SysFsRequest
     response: SysFsResponse
 
 var
-  nextReqId = U64(1)
+  requestDomain: IpcRequestDomain
   pending: array[FsPendingMax, PendingFsRequest]
   rawEntries: array[FsRawDirEntryMax, FsDirEntry]
   rawFileBuf: array[SysFsDataMax, U8]
@@ -49,25 +49,11 @@ proc copyPath(dst: var array[SysFsPathMax, char], src: cstring) =
 
 
 proc allocPending(): ptr PendingFsRequest =
-  var i = 0
-  while i < FsPendingMax:
-    if not pending[i].used:
-      pending[i] = PendingFsRequest()
-      pending[i].used = true
-      return addr pending[i]
-    inc i
-
-  nil
+  allocIpcPending(pending)
 
 
 proc findPending(id: U64): ptr PendingFsRequest =
-  var i = 0
-  while i < FsPendingMax:
-    if pending[i].used and pending[i].request.id == id:
-      return addr pending[i]
-    inc i
-
-  nil
+  findIpcPending(pending, id)
 
 
 proc queueFsRequest(op: U32, path: cstring, data: pointer, size, capacity: U64): ptr PendingFsRequest =
@@ -80,8 +66,7 @@ proc queueFsRequest(op: U32, path: cstring, data: pointer, size, capacity: U64):
   if p == nil:
     return nil
 
-  p.request.id = nextReqId
-  inc nextReqId
+  p.request.id = assignIpcRequestId(requestDomain, addr p.ipc)
   p.request.op = op
   p.request.size = size
   p.request.capacity = capacity
@@ -95,21 +80,14 @@ proc queueFsRequest(op: U32, path: cstring, data: pointer, size, capacity: U64):
 
 
 proc waitFsResponse(p: ptr PendingFsRequest): ptr SysFsResponse =
-  while p.used and not p.completed:
-    if not fsServerAvailable():
-      return nil
-
-    sleepCurrentForFsReq(p.request.id)
-
-  if not p.used:
+  if not waitIpcReply(addr p.ipc, serviceFs, waitFsReq):
     return nil
 
   addr p.response
 
 
 proc finishPending(p: ptr PendingFsRequest) =
-  if p != nil:
-    p[] = PendingFsRequest()
+  finishIpcPending(p)
 
 
 proc rawLsKernel(path: cstring, outEntries: ptr FsDirEntry, maxEntries: U64): int =
@@ -137,7 +115,7 @@ proc syscallFsServiceReceive*(outReq: U64): U64 =
   while true:
     var i = 0
     while i < FsPendingMax:
-      if pending[i].used and not pending[i].completed:
+      if pending[i].ipc.used and not pending[i].ipc.completed:
         if copyToUser(outReq, addr pending[i].request, U64(sizeof(SysFsRequest))) != 0:
           return U64(-1'i64)
 
@@ -160,7 +138,7 @@ proc syscallFsServiceReply*(respVal: U64): U64 =
     return U64(-1'i64)
 
   p.response = resp
-  p.completed = true
+  p.ipc.completed = true
   wakeFsWaiter(resp.id)
   0
 

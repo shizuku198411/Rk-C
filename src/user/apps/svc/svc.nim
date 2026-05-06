@@ -1,4 +1,6 @@
 import ../../lib/io
+import ../../lib/ipc_request
+import ../../lib/service_client
 import ../../lib/strutils
 import ../../lib/syscall
 
@@ -72,17 +74,7 @@ proc listServices() =
 
 
 proc managerPid(): I32 =
-  let count = sysServiceList(addr services[0], U64(ServiceCap))
-  if count < 0:
-    return -1
-
-  var i = I32(0)
-  while i < count:
-    if services[i].kind == SysServiceKindManager and services[i].available != 0:
-      return services[i].pid
-    inc i
-
-  -1
+  servicePidByKind(SysServiceKindManager)
 
 
 proc restartService(arg: cstring) =
@@ -108,7 +100,7 @@ proc restartService(arg: cstring) =
   restartPacket.data[int(i)] = '\0'
   restartPacket.len = i
 
-  if sysIpcSendPacket(pid, addr restartPacket) != 0:
+  if sendIpcRequest(pid, addr restartPacket) != 0:
     write("svc: restart request failed\n")
     sysExit(1)
 

@@ -1,4 +1,6 @@
 import ../../lib/io
+import ../../lib/ipc_request
+import ../../lib/service_client
 import ../../lib/syscall
 
 const
@@ -6,7 +8,6 @@ const
 
 var
   entries: array[PsMaxEntries, SysProcessInfo]
-  services: array[8, SysServiceInfo]
   requestPacket: SysIpcPacket
   responsePacket: SysIpcPacket
 
@@ -60,17 +61,7 @@ proc sortProcesByPid(entries: var array[PsMaxEntries, SysProcessInfo], count: I3
 
 
 proc processManagerPid(): I32 =
-  let count = sysServiceList(addr services[0], U64(len(services)))
-  if count < 0:
-    return -1
-
-  var i = I32(0)
-  while i < count:
-    if services[i].kind == SysServiceKindProcess and services[i].available != 0:
-      return services[i].pid
-    inc i
-
-  -1
+  servicePidByKind(SysServiceKindProcess)
 
 
 proc copyPacketToProcess(entry: ptr SysProcessInfo, packet: ptr SysIpcPacket) =
@@ -89,22 +80,16 @@ proc requestProcessList(maxEntries: I32): I32 =
   requestPacket = SysIpcPacket()
   requestPacket.op = SysIpcOpProcListRequest
   requestPacket.arg0 = U64(maxEntries)
-  if sysIpcSendPacket(pid, addr requestPacket) != 0:
-    return -1
-
-  if sysIpcReceivePacket(addr responsePacket) != 0:
-    return -1
-  if responsePacket.op != SysIpcOpProcListResponse:
-    return -1
-  if I32(responsePacket.arg0) < 0:
+  if requestIpcReply(pid, addr requestPacket, addr responsePacket, SysIpcOpProcListResponse) != 0:
     return -1
 
   let count = I32(responsePacket.arg0)
+  if count < 0:
+    return -1
+
   var i = I32(0)
   while i < count and i < maxEntries:
-    if sysIpcReceivePacket(addr responsePacket) != 0:
-      return -1
-    if responsePacket.op != SysIpcOpProcListEntry:
+    if receiveIpcReply(pid, addr responsePacket, SysIpcOpProcListEntry) != 0:
       return -1
     if I32(responsePacket.arg0) < 0 or I32(responsePacket.arg0) >= maxEntries:
       return -1

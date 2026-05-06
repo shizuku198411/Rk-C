@@ -1,9 +1,10 @@
 import ../../lib/io
+import ../../lib/ipc_request
+import ../../lib/service_client
 import ../../lib/strutils
 import ../../lib/syscall
 
 var
-  services: array[8, SysServiceInfo]
   requestPacket: SysIpcPacket
   responsePacket: SysIpcPacket
 
@@ -25,17 +26,7 @@ proc parsePid(arg: cstring): I32 =
 
 
 proc processManagerPid(): I32 =
-  let count = sysServiceList(addr services[0], U64(len(services)))
-  if count < 0:
-    return -1
-
-  var i = I32(0)
-  while i < count:
-    if services[i].kind == SysServiceKindProcess and services[i].available != 0:
-      return services[i].pid
-    inc i
-
-  -1
+  servicePidByKind(SysServiceKindProcess)
 
 
 proc requestKill(targetPid: I32): I32 =
@@ -46,12 +37,7 @@ proc requestKill(targetPid: I32): I32 =
   requestPacket = SysIpcPacket()
   requestPacket.op = SysIpcOpProcKillRequest
   requestPacket.arg0 = U64(targetPid)
-  if sysIpcSendPacket(pid, addr requestPacket) != 0:
-    return -1
-
-  if sysIpcReceivePacket(addr responsePacket) != 0:
-    return -1
-  if responsePacket.op != SysIpcOpProcKillResponse:
+  if requestIpcReply(pid, addr requestPacket, addr responsePacket, SysIpcOpProcKillResponse) != 0:
     return -1
 
   I32(responsePacket.arg0)

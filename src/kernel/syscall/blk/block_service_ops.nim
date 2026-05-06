@@ -4,6 +4,7 @@ import ../../../lib/types
 import ../../fs/blockdev
 import ../../mm/usercopy
 import ../../service/registry
+import ../ipc/request_reply
 import ../../task/process
 
 const
@@ -12,13 +13,12 @@ const
 
 type
   PendingBlockRequest = object
-    used: bool
-    completed: bool
+    ipc: IpcPending
     request: SysBlockRequest
     response: SysBlockResponse
 
 var
-  nextReqId = U64(1)
+  requestDomain: IpcRequestDomain
   pending: array[BlockPendingMax, PendingBlockRequest]
   rawBlockBuf: array[SysBlockDataSize, U8]
 
@@ -40,25 +40,11 @@ proc canFallbackToRawBlock(): bool =
 
 
 proc allocPending(): ptr PendingBlockRequest =
-  var i = 0
-  while i < BlockPendingMax:
-    if not pending[i].used:
-      pending[i] = PendingBlockRequest()
-      pending[i].used = true
-      return addr pending[i]
-    inc i
-
-  nil
+  allocIpcPending(pending)
 
 
 proc findPending(id: U64): ptr PendingBlockRequest =
-  var i = 0
-  while i < BlockPendingMax:
-    if pending[i].used and pending[i].request.id == id:
-      return addr pending[i]
-    inc i
-
-  nil
+  findIpcPending(pending, id)
 
 
 proc queueBlockRequest(op: U32, blockIndex: U64, data: pointer): ptr PendingBlockRequest =
@@ -69,8 +55,7 @@ proc queueBlockRequest(op: U32, blockIndex: U64, data: pointer): ptr PendingBloc
   if p == nil:
     return nil
 
-  p.request.id = nextReqId
-  inc nextReqId
+  p.request.id = assignIpcRequestId(requestDomain, addr p.ipc)
   p.request.op = op
   p.request.blockIndex = blockIndex
 
@@ -82,21 +67,14 @@ proc queueBlockRequest(op: U32, blockIndex: U64, data: pointer): ptr PendingBloc
 
 
 proc waitBlockResponse(p: ptr PendingBlockRequest): ptr SysBlockResponse =
-  while p.used and not p.completed:
-    if not blockServerAvailable():
-      return nil
-
-    sleepCurrentForBlockReq(p.request.id)
-
-  if not p.used:
+  if not waitIpcReply(addr p.ipc, serviceBlock, waitBlockReq):
     return nil
 
   addr p.response
 
 
 proc finishPending(p: ptr PendingBlockRequest) =
-  if p != nil:
-    p[] = PendingBlockRequest()
+  finishIpcPending(p)
 
 
 proc serviceBlockRead*(blockIndex: U64, outBlock: pointer): int =
@@ -159,7 +137,7 @@ proc syscallBlockServiceReceive*(outReq: U64): U64 =
   while true:
     var i = 0
     while i < BlockPendingMax:
-      if pending[i].used and not pending[i].completed:
+      if pending[i].ipc.used and not pending[i].ipc.completed:
         if copyToUser(outReq, addr pending[i].request, U64(sizeof(SysBlockRequest))) != 0:
           return U64(-1'i64)
 
@@ -182,7 +160,7 @@ proc syscallBlockServiceReply*(respVal: U64): U64 =
     return U64(-1'i64)
 
   p.response = resp
-  p.completed = true
+  p.ipc.completed = true
   wakeBlockWaiter(resp.id)
   0
 
