@@ -82,14 +82,14 @@ proc reapService(entry: ptr ServiceEntry) =
 proc startService(entry: ptr ServiceEntry) =
   let pid = sysExec(entry.path, nil, false)
   if pid < 0:
-    write("svcmgtd: failed to start ")
+    write("[svcmgtd] failed to start ")
     write(entry.name)
     write("\n")
     entry.state = srvStopped
     return
 
   if sysServiceRegister(entry.kind, pid) != 0:
-    write("svcmgtd: failed to register ")
+    write("[svcmgtd] failed to register ")
     write(entry.name)
     write("\n")
     discard sysKill(pid)
@@ -100,7 +100,7 @@ proc startService(entry: ptr ServiceEntry) =
 
   entry.pid = pid
   entry.state = srvRunning
-  write("svcmgtd: started ")
+  write("[svcmgtd] service started ")
   write(entry.name)
   write(" pid=")
   writeUnsigned(U64(pid))
@@ -118,7 +118,7 @@ proc monitorServices() =
   var i = 0
   while i < len(services):
     if not serviceAlive(addr services[i]):
-      write("svcmgtd: restarting ")
+      write("[svcmgtd] service restarting ")
       write(services[i].name)
       write("\n")
       restartService(addr services[i])
@@ -128,8 +128,15 @@ proc monitorServices() =
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   discard arg
 
+  var pid: int32
+  if sysGetPid(addr pid) != 0:
+    write("[svcmgtd] svcmgtd start failed\n")
+  write("[svcmgtd] service management server started pid=")
+  writeUnsigned(U64(pid))
+  write("\n")
+
   if sysServiceManagerRegister() != 0:
-    write("svcmgtd: register failed\n")
+    write("[svcmgtd] service register failed\n")
     sysExit(1)
 
   initServices()

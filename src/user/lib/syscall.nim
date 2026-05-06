@@ -194,3 +194,7 @@ proc sysYield*(): I32 =
 
 proc sysSleep*(ticks: U64): I32 =
   I32(rawSyscall3(SysSleep, ticks, 0, 0))
+
+
+proc sysGetPid*(pid: ptr int32): I32 =
+  I32(rawSyscall3(SysGetPid, cast[U64](pid), 0, 0))
