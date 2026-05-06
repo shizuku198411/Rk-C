@@ -135,7 +135,7 @@ proc handleSyscall*(frame: ptr TrapFrame) =
     frame.a0 = syscallServiceUnregister(frame.a0)
   
   of SysGetPid:
-    frame.a0 = syscallGetPid(frame.a0)
+    frame.a0 = syscallGetPid()
 
   else:
     print("PANIC: unknown syscall ")

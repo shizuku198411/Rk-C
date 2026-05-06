@@ -163,12 +163,8 @@ proc syscallSetCwd*(pathVal: U64): U64 =
   0
 
 
-proc syscallGetPid*(outBuf: U64): U64 =
+proc syscallGetPid*(): U64 =
   if currentProc == nil:
     panic("getpid without current process")
   
-  let pid = currentProc.pid
-  if copyToUser(outBuf, addr pid, U64(sizeof(pid))) != 0:
-    return U64(-1'i64)
-
-  0
+  U64(currentProc.pid)

@@ -128,9 +128,7 @@ proc monitorServices() =
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   discard arg
 
-  var pid: int32
-  if sysGetPid(addr pid) != 0:
-    write("[svcmgtd] svcmgtd start failed\n")
+  var pid = sysGetPid()
   write("[svcmgtd] service management server started pid=")
   writeUnsigned(U64(pid))
   write("\n")
