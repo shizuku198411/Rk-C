@@ -5,6 +5,7 @@ type
     serviceManager = 0
     serviceBlock
     serviceFs
+    serviceProcess
     serviceMax
 
   ServiceEntry = object

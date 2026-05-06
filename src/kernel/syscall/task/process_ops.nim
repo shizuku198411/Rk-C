@@ -3,6 +3,7 @@ import ../../../lib/types
 import ../../dev/console
 import ../../fs/fs
 import ../../mm/usercopy
+import ../../service/registry
 import ../../task/exec
 import ../../task/process
 
@@ -31,7 +32,13 @@ proc copyProcessName(dst: var array[SysProcessNameMax, char], src: cstring) =
   dst[i] = '\0'
 
 
+proc currentCanUseRawProcessOps(): bool =
+  currentIsService(serviceManager) or currentIsService(serviceProcess)
+
+
 proc syscallPs*(outEntries: U64, maxEntries: U64): U64 =
+  if not currentCanUseRawProcessOps():
+    return U64(-1'i64)
   if outEntries == 0 or maxEntries == 0:
     return U64(-1'i64)
 

@@ -4,7 +4,7 @@ const
   SysProcessNameMax* = 32
   SysProcessCwdMax* = 64
   SysIpcMessageMax* = 128
-  SysIpcQueueCap* = 4
+  SysIpcQueueCap* = 16
   SysFsPathMax* = 128
   SysFsDataMax* = 4096
   SysBlockDataSize* = 512
@@ -19,9 +19,15 @@ const
   SysBlockOpWrite* = U32(2)
   SysIpcOpText* = U32(0)
   SysIpcOpSvcRestart* = U32(1)
+  SysIpcOpProcListRequest* = U32(2)
+  SysIpcOpProcListResponse* = U32(3)
+  SysIpcOpProcListEntry* = U32(4)
+  SysIpcOpProcKillRequest* = U32(5)
+  SysIpcOpProcKillResponse* = U32(6)
   SysServiceKindBlock* = U32(0)
   SysServiceKindFs* = U32(1)
   SysServiceKindManager* = U32(2)
+  SysServiceKindProcess* = U32(3)
   SysServiceNameMax* = U32(16)
 
   SysProcessUnused* = U32(0)

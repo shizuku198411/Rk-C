@@ -4,6 +4,12 @@ import ../../lib/syscall
 const
   PsMaxEntries = 16
 
+var
+  entries: array[PsMaxEntries, SysProcessInfo]
+  services: array[8, SysServiceInfo]
+  requestPacket: SysIpcPacket
+  responsePacket: SysIpcPacket
+
 
 proc stateName(state: U32): cstring =
   if state == SysProcessRunnable:
@@ -53,11 +59,66 @@ proc sortProcesByPid(entries: var array[PsMaxEntries, SysProcessInfo], count: I3
     inc i
 
 
+proc processManagerPid(): I32 =
+  let count = sysServiceList(addr services[0], U64(len(services)))
+  if count < 0:
+    return -1
+
+  var i = I32(0)
+  while i < count:
+    if services[i].kind == SysServiceKindProcess and services[i].available != 0:
+      return services[i].pid
+    inc i
+
+  -1
+
+
+proc copyPacketToProcess(entry: ptr SysProcessInfo, packet: ptr SysIpcPacket) =
+  let dst = cast[ptr UncheckedArray[char]](entry)
+  var i = 0
+  while i < sizeof(SysProcessInfo):
+    dst[i] = packet.data[i]
+    inc i
+
+
+proc requestProcessList(maxEntries: I32): I32 =
+  let pid = processManagerPid()
+  if pid <= 0:
+    return -1
+
+  requestPacket = SysIpcPacket()
+  requestPacket.op = SysIpcOpProcListRequest
+  requestPacket.arg0 = U64(maxEntries)
+  if sysIpcSendPacket(pid, addr requestPacket) != 0:
+    return -1
+
+  if sysIpcReceivePacket(addr responsePacket) != 0:
+    return -1
+  if responsePacket.op != SysIpcOpProcListResponse:
+    return -1
+  if I32(responsePacket.arg0) < 0:
+    return -1
+
+  let count = I32(responsePacket.arg0)
+  var i = I32(0)
+  while i < count and i < maxEntries:
+    if sysIpcReceivePacket(addr responsePacket) != 0:
+      return -1
+    if responsePacket.op != SysIpcOpProcListEntry:
+      return -1
+    if I32(responsePacket.arg0) < 0 or I32(responsePacket.arg0) >= maxEntries:
+      return -1
+
+    copyPacketToProcess(addr entries[I32(responsePacket.arg0)], addr responsePacket)
+    inc i
+
+  count
+
+
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   discard arg
 
-  var entries: array[PsMaxEntries, SysProcessInfo]
-  let count = sysPs(addr entries[0], U64(PsMaxEntries))
+  let count = requestProcessList(PsMaxEntries)
   if count < 0:
     write("ps: failed\n")
     sysExit(1)

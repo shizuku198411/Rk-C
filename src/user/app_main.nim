@@ -32,6 +32,8 @@ elif defined(userApp_svc):
   import apps/svc/svc
 elif defined(userApp_svcmgtd):
   import server/svcmgtd/svcmgtd
+elif defined(userApp_procmgtd):
+  import server/procmgtd/procmgtd
 elif defined(userApp_fsd):
   import server/fsd/fsd
 elif defined(userApp_blockd):
