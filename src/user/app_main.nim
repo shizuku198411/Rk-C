@@ -29,10 +29,10 @@ elif defined(userApp_ipc):
 elif defined(userApp_kill):
   import apps/kill/kill
 elif defined(userApp_svcmgtd):
-  import apps/svcmgtd/svcmgtd
+  import server/svcmgtd/svcmgtd
 elif defined(userApp_fsd):
-  import apps/fsd/fsd
+  import server/fsd/fsd
 elif defined(userApp_blockd):
-  import apps/blockd/blockd
+  import server/blockd/blockd
 else:
   {.error: "missing user app define".}

@@ -35,8 +35,11 @@ KERNEL_MAP := $(MAP_DIR)/kernel.map
 DISK_IMG := $(BIN_DIR)/disk.img
 USER_SHELL_ELF := $(BIN_DIR)/shell.elf
 USER_SHELL_BIN := $(BIN_DIR)/shell.bin
-USER_APP_NAMES := ls cat mkdir ps rm rmdir date edit ipc kill svcmgtd fsd blockd
+USER_APP_NAMES := ls cat mkdir ps rm rmdir date edit ipc kill
+USER_SERVER_NAMES := svcmgtd fsd blockd
+USER_PACK_NAMES := $(USER_APP_NAMES) $(USER_SERVER_NAMES)
 USER_APP_BINS := $(foreach app,$(USER_APP_NAMES),$(BIN_DIR)/$(app).bin)
+USER_SERVER_BINS := $(foreach server,$(USER_SERVER_NAMES),$(BIN_DIR)/$(server).bin)
 USER_SYSCALL_OBJ := $(OBJ_DIR)/user/lib/syscall.o
 USER_ENTRY_OBJ := $(OBJ_DIR)/user/lib/entry.o
 USER_LIB_SRCS := $(shell find $(SRC_DIR)/user/lib -type f -name '*.nim' | sort)
@@ -147,8 +150,8 @@ $(USER_SHELL_ELF): $(SRC_DIR)/user/app_main.nim $(SRC_DIR)/user/apps/shell/shell
 $(USER_SHELL_BIN): $(USER_SHELL_ELF) | $(BIN_DIR)
 	$(OBJCOPY) -O binary $< $@
 
-appfs: $(DISK_IMG) $(USER_SHELL_BIN) $(USER_APP_BINS)
-	python3 scripts/pack_appfs.py --disk $(DISK_IMG) --bin-dir $(BIN_DIR) --apps shell $(USER_APP_NAMES)
+appfs: $(DISK_IMG) $(USER_SHELL_BIN) $(USER_APP_BINS) $(USER_SERVER_BINS)
+	python3 scripts/pack_appfs.py --disk $(DISK_IMG) --bin-dir $(BIN_DIR) --apps shell $(USER_PACK_NAMES)
 
 define USER_APP_template
 $(BIN_DIR)/$(1).elf: $(SRC_DIR)/user/app_main.nim $(SRC_DIR)/user/apps/$(1)/$(1).nim $(SRC_DIR)/user/panicoverride.nim $$(USER_LIB_SRCS) $(USER_SYSCALL_OBJ) $(USER_ENTRY_OBJ) $(USER_APP_LINKER_SCRIPT) | $(BIN_DIR)
@@ -159,6 +162,16 @@ $(BIN_DIR)/$(1).bin: $(BIN_DIR)/$(1).elf | $(BIN_DIR)
 endef
 
 $(foreach app,$(USER_APP_NAMES),$(eval $(call USER_APP_template,$(app))))
+
+define USER_SERVER_template
+$(BIN_DIR)/$(1).elf: $(SRC_DIR)/user/app_main.nim $(SRC_DIR)/user/server/$(1)/$(1).nim $(SRC_DIR)/user/panicoverride.nim $$(USER_LIB_SRCS) $(USER_SYSCALL_OBJ) $(USER_ENTRY_OBJ) $(USER_APP_LINKER_SCRIPT) | $(BIN_DIR)
+	$$(NIM) c $$(USER_NIMFLAGS) -d:userApp_$(1) --nimcache:$$(USER_NIMCACHE_DIR)/$(1) --passL:"$$(USER_ENTRY_OBJ)" --passL:"$$(USER_SYSCALL_OBJ)" --passL:"-Wl,-T,$$(USER_APP_LINKER_SCRIPT)" -o:$$@ $$<
+
+$(BIN_DIR)/$(1).bin: $(BIN_DIR)/$(1).elf | $(BIN_DIR)
+	$$(OBJCOPY) -O binary $$< $$@
+endef
+
+$(foreach server,$(USER_SERVER_NAMES),$(eval $(call USER_SERVER_template,$(server))))
 
 $(OBJ_DIR) $(BIN_DIR) $(MAP_DIR) $(NIMCACHE_DIR):
 	mkdir -p $@
