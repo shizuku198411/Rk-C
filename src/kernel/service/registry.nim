@@ -45,16 +45,22 @@ proc serviceAvailable*(kind: ServiceKind): bool =
 
 
 proc isServicePid*(pid: int32): bool =
-  var kind = serviceBlock
+  var kind = low(ServiceKind)
+
   while kind < serviceMax:
     if services[kind].registered and services[kind].pid == pid:
       return true
-    kind = succ(kind)
+    kind = ServiceKind(ord(kind) + 1)
 
   false
 
 
 proc requiredServicesReady*(): bool =
-  serviceAvailable(serviceManager) and
-  serviceAvailable(serviceBlock) and
-  serviceAvailable(serviceFs)
+  var kind = low(ServiceKind)
+
+  while kind < serviceMax:
+    if not serviceAvailable(kind):
+      return false
+    kind = ServiceKind(ord(kind) + 1)
+  
+  true
