@@ -31,29 +31,33 @@ proc printPrompt() =
 
 
 proc printBanner() =
-  write("\ntype 'help' for commands\n")
+  let pid = sysGetPid()
+  write("\n[shell] Rk-C shell started pid=")
+  writeUnsigned(U64(pid))
+  write("\n")
+  write("[shell] type 'help' for commands\n")
 
 
 proc printHelp() =
   write("commands:\n")
-  write("  help                show this help\n")
-  write("  cd <path>           change current directory\n")
-  write("  ls [-l] [path]      list directory\n")
-  write("  cat <path>          print file\n")
-  write("  mkdir <path>        create directory\n")
-  write("  rm <path>           remove file\n")
-  write("  rmdir <path>        remove empty directory\n")
-  write("  edit <path>         edit file\n")
-  write("  ps                  show process slots\n")
-  write("  date                show current time\n")
-  write("  ipc send <pid> <message>\n")
-  write("  ipc receive         wait for IPC message\n")
-  write("  kill <pid>          terminate process\n")
-  write("  ticks               show timer ticks\n")
-  write("  bitmap              show physical page bitmap usage\n")
-  write("  <command> &         run command in background\n")
-  write("  exit                exit shell\n")
-  write("  shutdown            shutdown kernel\n")
+  write("  help                       show this help\n")
+  write("  cd <path>                  change current directory\n")
+  write("  ls [-l] [path]             list directory\n")
+  write("  cat <path>                 print file\n")
+  write("  mkdir <path>               create directory\n")
+  write("  rm <path>                  remove file\n")
+  write("  rmdir <path>               remove empty directory\n")
+  write("  edit <path>                edit file\n")
+  write("  ps                         show process slots\n")
+  write("  date                       show current time\n")
+  write("  ipc send <pid> <message>   send for IPC message\n")
+  write("  ipc receive                wait for IPC message\n")
+  write("  kill <pid>                 terminate process\n")
+  write("  ticks                      show timer ticks\n")
+  write("  bitmap                     show physical page bitmap usage\n")
+  write("  <command> &                run command in background\n")
+  write("  exit                       exit shell\n")
+  write("  shutdown                   shutdown kernel\n")
 
 
 proc clearArg() =

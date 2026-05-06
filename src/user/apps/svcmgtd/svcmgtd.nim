@@ -128,7 +128,7 @@ proc monitorServices() =
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   discard arg
 
-  var pid = sysGetPid()
+  let pid = sysGetPid()
   write("[svcmgtd] service management server started pid=")
   writeUnsigned(U64(pid))
   write("\n")
