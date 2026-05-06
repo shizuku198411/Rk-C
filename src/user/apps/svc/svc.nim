@@ -4,6 +4,7 @@ import ../../lib/syscall
 
 const
   ServiceCap = 8
+  ServiceNameWidth = 12
 
 var
   services: array[ServiceCap, SysServiceInfo]
@@ -38,18 +39,29 @@ proc printAvailable(value: U32) =
     write("no")
 
 
+proc printPaddedName(name: cstring) =
+  var i = 0
+  while i < ServiceNameWidth and name[i] != '\0':
+    writeChar(name[i])
+    inc i
+
+  while i < ServiceNameWidth:
+    write(" ")
+    inc i
+
+
 proc listServices() =
   let count = sysServiceList(addr services[0], U64(ServiceCap))
   if count < 0:
     write("svc: list failed\n")
     sysExit(1)
 
-  write("service\tpid\tregistered\tavailable\n")
+  printPaddedName("service")
+  write("pid\tregistered\tavailable\n")
 
   var i = I32(0)
   while i < count:
-    write(cast[cstring](addr services[i].name[0]))
-    write("\t")
+    printPaddedName(cast[cstring](addr services[i].name[0]))
     writeUnsigned(U64(services[i].pid))
     write("\t")
     printAvailable(services[i].registered)
