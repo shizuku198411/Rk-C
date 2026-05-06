@@ -6,6 +6,8 @@ import ../../lib/syscall
 const
   LineMax = 80
   ExecArgMax = 160
+  PromptOrange = "\x1b[38;5;208m"
+  PromptReset = "\x1b[0m"
 
 var
   lineBuf: array[LineMax, char]
@@ -25,8 +27,13 @@ proc printPrompt() =
     cwdBuf[0] = '/'
     cwdBuf[1] = '\0'
 
-  write("Rk-C:")
+  write(PromptOrange)
+  write("Rk-C")
+  write(PromptReset)
+  write(":")
+  write(PromptOrange)
   write(cast[cstring](addr cwdBuf[0]))
+  write(PromptReset)
   write("$ ")
 
 
