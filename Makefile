@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-NIM := /home/pyxgun/nim-2.2.10/bin/nim
+NIM := ~/nim-2.2.10/bin/nim
 CC := clang
 OBJDUMP := llvm-objdump
 OBJCOPY := llvm-objcopy
