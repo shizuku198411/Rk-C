@@ -1,4 +1,5 @@
 import ../../lib/io
+import ../../lib/strutils
 import ../../lib/syscall
 
 const
@@ -21,6 +22,7 @@ type
 var
   services: array[2, ServiceEntry]
   processes: array[ProcessCap, SysProcessInfo]
+  controlMsg: SysIpcMessage
 
 
 proc initServices() =
@@ -68,15 +70,17 @@ proc unregisterService(entry: ptr ServiceEntry) =
   entry.state = srvStopped
 
 
-proc reapService(entry: ptr ServiceEntry) =
+proc stopService(entry: ptr ServiceEntry) =
+  unregisterService(entry)
   if entry.pid <= 0:
     return
 
-  var state = U32(0)
-  if processState(entry.pid, state) and state == SysProcessZombie:
-    discard sysWait(entry.pid)
+  if serviceAlive(entry):
+    discard sysKill(entry.pid)
 
+  discard sysWait(entry.pid)
   entry.pid = -1
+  entry.state = srvStopped
 
 
 proc startService(entry: ptr ServiceEntry) =
@@ -108,10 +112,63 @@ proc startService(entry: ptr ServiceEntry) =
 
 
 proc restartService(entry: ptr ServiceEntry) =
-  unregisterService(entry)
-  reapService(entry)
+  stopService(entry)
   inc entry.restarts
   startService(entry)
+
+
+proc findServiceByName(name: cstring): ptr ServiceEntry =
+  var i = 0
+  while i < len(services):
+    if streq(services[i].name, name):
+      return addr services[i]
+    inc i
+
+  nil
+
+
+proc skipSpaces(s: cstring, pos: var int) =
+  while s[pos] == ' ':
+    inc pos
+
+
+proc startsWithWord(s, word: cstring): bool =
+  var i = 0
+  while word[i] != '\0':
+    if s[i] != word[i]:
+      return false
+    inc i
+
+  s[i] == '\0' or s[i] == ' '
+
+
+proc handleRestartCommand(cmd: cstring) =
+  var pos = 7
+  skipSpaces(cmd, pos)
+  if cmd[pos] == '\0':
+    return
+
+  let service = findServiceByName(cast[cstring](unsafeAddr cmd[pos]))
+  if service == nil:
+    write("[svcmgtd] unknown service ")
+    write(cast[cstring](unsafeAddr cmd[pos]))
+    write("\n")
+    return
+
+  write("[svcmgtd] requested restart ")
+  write(service.name)
+  write("\n")
+  restartService(service)
+
+
+proc handleControlCommand(cmd: cstring) =
+  if startsWithWord(cmd, "restart"):
+    handleRestartCommand(cmd)
+
+
+proc pollControlMessages() =
+  while sysIpcTryReceive(addr controlMsg) == 0:
+    handleControlCommand(cast[cstring](addr controlMsg.data[0]))
 
 
 proc monitorServices() =
@@ -142,5 +199,6 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   startService(addr services[1])
 
   while true:
+    pollControlMessages()
     monitorServices()
     discard sysSleep(MonitorSleepTicks)

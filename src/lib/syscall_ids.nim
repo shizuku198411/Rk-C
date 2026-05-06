@@ -42,3 +42,5 @@ const
   SysYield* = U64(42)
   SysSleep* = U64(43)
   SysGetPid* = U64(44)
+  SysServiceList* = U64(45)
+  SysIpcTryReceive* = U64(46)

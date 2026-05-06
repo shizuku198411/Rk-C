@@ -20,6 +20,7 @@ const
   SysServiceKindBlock* = U32(0)
   SysServiceKindFs* = U32(1)
   SysServiceKindManager* = U32(2)
+  SysServiceNameMax* = U32(16)
 
   SysProcessUnused* = U32(0)
   SysProcessRunnable* = U32(1)
@@ -77,3 +78,10 @@ type
     id*: U64
     result*: I32
     data*: array[SysBlockDataSize, U8]
+  
+  SysServiceInfo* {.packed.} = object
+    kind*: U32
+    pid*: I32
+    registered*: U32
+    available*: U32
+    name*: array[SysServiceNameMax, char]

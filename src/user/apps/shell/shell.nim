@@ -53,6 +53,8 @@ proc printHelp() =
   write("  ipc send <pid> <message>   send for IPC message\n")
   write("  ipc receive                wait for IPC message\n")
   write("  kill <pid>                 terminate process\n")
+  write("  svc list                   show services\n")
+  write("  svc restart <name>         restart service\n")
   write("  ticks                      show timer ticks\n")
   write("  bitmap                     show physical page bitmap usage\n")
   write("  <command> &                run command in background\n")

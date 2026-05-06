@@ -76,6 +76,20 @@ proc syscallIpcReceive*(outMsg: U64): U64 =
   0
 
 
+proc syscallIpcTryReceive*(outMsg: U64): U64 =
+  if currentProc == nil or outMsg == 0:
+    return U64(-1'i64)
+
+  var msg = SysIpcMessage()
+  if dequeueIpc(currentProc, addr msg) != 0:
+    return U64(1)
+
+  if copyToUser(outMsg, addr msg, U64(sizeof(SysIpcMessage))) != 0:
+    return U64(-1'i64)
+
+  0
+
+
 proc syscallKill*(pidVal: U64): U64 =
   let pid = int32(pidVal)
   if pid <= 1:

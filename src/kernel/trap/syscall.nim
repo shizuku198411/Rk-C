@@ -80,6 +80,9 @@ proc handleSyscall*(frame: ptr TrapFrame) =
   of SysIpcReceive:
     frame.a0 = syscallIpcReceive(frame.a0)
 
+  of SysIpcTryReceive:
+    frame.a0 = syscallIpcTryReceive(frame.a0)
+
   of SysKill:
     frame.a0 = syscallKill(frame.a0)
 
@@ -133,6 +136,9 @@ proc handleSyscall*(frame: ptr TrapFrame) =
 
   of SysServiceUnregister:
     frame.a0 = syscallServiceUnregister(frame.a0)
+
+  of SysServiceList:
+    frame.a0 = syscallServiceList(frame.a0, frame.a1)
   
   of SysGetPid:
     frame.a0 = syscallGetPid()

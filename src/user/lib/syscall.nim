@@ -116,6 +116,10 @@ proc sysIpcReceive*(msg: ptr SysIpcMessage): I32 =
   I32(rawSyscall3(SysIpcReceive, cast[U64](msg), 0, 0))
 
 
+proc sysIpcTryReceive*(msg: ptr SysIpcMessage): I32 =
+  I32(rawSyscall3(SysIpcTryReceive, cast[U64](msg), 0, 0))
+
+
 proc sysKill*(pid: I32): I32 =
   I32(rawSyscall3(SysKill, U64(pid), 0, 0))
 
@@ -186,6 +190,10 @@ proc sysServiceRegister*(kind: U32, pid: I32): I32 =
 
 proc sysServiceUnregister*(kind: U32): I32 =
   I32(rawSyscall3(SysServiceUnregister, U64(kind), 0, 0))
+
+
+proc sysServiceList*(entries: ptr SysServiceInfo, maxEntries: U64): I32 =
+  I32(rawSyscall3(SysServiceList, cast[U64](entries), maxEntries, 0))
 
 
 proc sysYield*(): I32 =
