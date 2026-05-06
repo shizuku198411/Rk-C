@@ -38,6 +38,21 @@ proc printProcess(entry: ptr SysProcessInfo) =
   write("\n")
 
 
+proc sortProcesByPid(entries: var array[PsMaxEntries, SysProcessInfo], count: I32) =
+  var i = 1
+
+  while i < count:
+    let key = entries[i]
+    var j = i
+    
+    while j > 0 and entries[j - 1].pid > key.pid:
+      entries[j] = entries[j - 1]
+      dec j
+    
+    entries[j] = key
+    inc i
+
+
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   discard arg
 
@@ -46,6 +61,8 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   if count < 0:
     write("ps: failed\n")
     sysExit(1)
+
+  sortProcesByPid(entries, count)
 
   write("pid\tppid\tstate\t\tmode\texe\n")
   var i = 0
