@@ -98,6 +98,7 @@ proc schedule*()
 proc yieldCpu*()
 proc maybeYieldOnResched*()
 proc printProcessState*(state: ProcessState)
+proc createKernelProcessNamed*(entry: KernelTask, name: cstring): int32
 proc sleepCurrentForInput*()
 proc sleepCurrentForIpc*()
 proc sleepCurrentForFsReq*(reqId: U64)
@@ -207,7 +208,7 @@ proc idleTask() {.cdecl.} =
     arch.wfi()
 
 
-proc createKernelProcessInternal(entry: KernelTask, isIdle: bool): int32 =
+proc createKernelProcessInternal(entry: KernelTask, isIdle: bool, name: cstring): int32 =
   let p = findUnusedProc()
   if p == nil or entry == nil:
     return -1
@@ -219,7 +220,7 @@ proc createKernelProcessInternal(entry: KernelTask, isIdle: bool): int32 =
   p.pid = nextPid
   inc nextPid
   p.parentPid = 0
-  setExePath(p, "init_proc")
+  setExePath(p, name)
   p.state = procRunnable
   p.entry = entry
   p.kernelStack = stack
@@ -265,12 +266,16 @@ proc processInit*() =
   idleProc = nil
   kernelPageTable = nil
 
-  if createKernelProcessInternal(idleTask, true) < 0:
+  if createKernelProcessInternal(idleTask, true, "idle_task") < 0:
     panic("failed to create idle task")
 
 
+proc createKernelProcessNamed*(entry: KernelTask, name: cstring): int32 =
+  createKernelProcessInternal(entry, false, name)
+
+
 proc createKernelProcess*(entry: KernelTask): int32 =
-  createKernelProcessInternal(entry, false)
+  createKernelProcessNamed(entry, "kernel_task")
 
 
 proc userProcessBootstrap() {.cdecl, noreturn.} =
@@ -302,7 +307,7 @@ proc inheritProcessMetadata(child, parent: ptr Process) =
 
 
 proc allocUserProcessFromParent*(parent: ptr Process): ptr Process =
-  let pid = createKernelProcessInternal(userProcessBootstrap, false)
+  let pid = createKernelProcessInternal(userProcessBootstrap, false, "user_proc")
   if pid < 0:
     return nil
 

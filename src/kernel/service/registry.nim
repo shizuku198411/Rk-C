@@ -2,9 +2,9 @@ import ../task/process
 
 type
   ServiceKind* = enum
-    serviceBlock = 0
+    serviceManager = 0
+    serviceBlock
     serviceFs
-    serviceManager
     serviceMax
 
   ServiceEntry = object
@@ -52,3 +52,9 @@ proc isServicePid*(pid: int32): bool =
     kind = succ(kind)
 
   false
+
+
+proc requiredServicesReady*(): bool =
+  serviceAvailable(serviceManager) and
+  serviceAvailable(serviceBlock) and
+  serviceAvailable(serviceFs)
