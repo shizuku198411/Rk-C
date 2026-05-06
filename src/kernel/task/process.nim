@@ -246,7 +246,7 @@ proc processInit*() =
   while i < MaxProcs:
     procs[i].pid = 0
     procs[i].parentPid = 0
-    setExePath(addr procs[i], "init_proc")
+    setExePath(addr procs[i], "init")
     setRootCwd(addr procs[i])
     procs[i].state = procUnused
     procs[i].context = Context()
