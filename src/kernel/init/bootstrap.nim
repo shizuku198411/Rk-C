@@ -195,7 +195,7 @@ proc kernelBootstrap*(hartid: U64, dtb: pointer) =
   enableSv39(memInfo)
   println("OK")
 
-  printBootMsg("initialize file system:")
+  printBootMsg("initialize file system:\n")
   fsInit()
 
   addressInfo(hartid, dtb, memInfo)

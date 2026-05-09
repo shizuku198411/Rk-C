@@ -276,7 +276,7 @@ proc blockdevInit*() =
     panic("virtio-blk capacity failed")
 
   initialized = true
-  printBootMsg("  virtio-blk OK blocks=")
+  printBootMsg("  virtio-blk OK blocks = ")
   printUnsigned(capacityBlocks)
   putChar('\n')
 
