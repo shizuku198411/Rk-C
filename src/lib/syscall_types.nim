@@ -8,6 +8,8 @@ const
   SysFsPathMax* = 128
   SysFsDataMax* = 4096
   SysBlockDataSize* = 512
+  SysNetMacLen* = 6
+  SysNetPacketMax* = 1514
 
   SysFsOpLs* = U32(1)
   SysFsOpMkdir* = U32(2)
@@ -24,10 +26,13 @@ const
   SysIpcOpProcListEntry* = U32(4)
   SysIpcOpProcKillRequest* = U32(5)
   SysIpcOpProcKillResponse* = U32(6)
+  SysIpcOpNetPingRequest* = U32(7)
+  SysIpcOpNetPingResponse* = U32(8)
   SysServiceKindBlock* = U32(0)
   SysServiceKindFs* = U32(1)
   SysServiceKindManager* = U32(2)
   SysServiceKindProcess* = U32(3)
+  SysServiceKindNet* = U32(4)
   SysServiceNameMax* = U32(16)
 
   SysProcessUnused* = U32(0)
@@ -56,6 +61,14 @@ type
     total*: U64
     used*: U64
     free*: U64
+
+  SysNetDeviceInfo* {.packed.} = object
+    found*: U32
+    initialized*: U32
+    mmioBase*: U64
+    deviceId*: U32
+    vendorId*: U32
+    mac*: array[SysNetMacLen, U8]
 
   SysIpcMessage* {.packed.} = object
     senderPid*: I32

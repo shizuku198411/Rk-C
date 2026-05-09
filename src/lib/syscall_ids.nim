@@ -47,3 +47,8 @@ const
   SysIpcSendPacket* = U64(47)
   SysIpcReceivePacket* = U64(48)
   SysIpcTryReceivePacket* = U64(49)
+  SysRawNetInfo* = U64(50)
+  SysRawNetInit* = U64(51)
+  SysRawNetMac* = U64(52)
+  SysRawNetRecv* = U64(53)
+  SysRawNetSend* = U64(54)

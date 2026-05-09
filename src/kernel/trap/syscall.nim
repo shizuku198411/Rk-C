@@ -6,6 +6,7 @@ import ../syscall/fs/fs_service_ops
 import ../syscall/io/console_io
 import ../syscall/ipc/ipc_ops
 import ../syscall/mm/memory_ops
+import ../syscall/net/net_ops
 import ../syscall/service/service_ops
 import ../syscall/system/system_ops
 import ../syscall/task/process_ops
@@ -91,6 +92,21 @@ proc handleSyscall*(frame: ptr TrapFrame) =
 
   of SysIpcTryReceivePacket:
     frame.a0 = syscallIpcTryReceivePacket(frame.a0)
+
+  of SysRawNetInfo:
+    frame.a0 = syscallRawNetInfo(frame.a0)
+
+  of SysRawNetInit:
+    frame.a0 = syscallRawNetInit()
+
+  of SysRawNetMac:
+    frame.a0 = syscallRawNetMac(frame.a0)
+
+  of SysRawNetRecv:
+    frame.a0 = syscallRawNetRecv(frame.a0, frame.a1)
+
+  of SysRawNetSend:
+    frame.a0 = syscallRawNetSend(frame.a0, frame.a1)
 
   of SysKill:
     frame.a0 = syscallKill(frame.a0)

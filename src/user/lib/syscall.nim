@@ -4,6 +4,8 @@ import ../../lib/syscall_types
 export syscall_types
 
 type
+  U8* = uint8
+  U16* = uint16
   U32* = uint32
   U64* = uint64
   I32* = int32
@@ -218,3 +220,23 @@ proc sysSleep*(ticks: U64): I32 =
 
 proc sysGetPid*(): I32 =
   I32(rawSyscall3(SysGetPid, 0, 0, 0))
+
+
+proc sysRawNetInfo*(info: ptr SysNetDeviceInfo): I32 =
+  I32(rawSyscall3(SysRawNetInfo, cast[U64](info), 0, 0))
+
+
+proc sysRawNetInit*(): I32 =
+  I32(rawSyscall3(SysRawNetInit, 0, 0, 0))
+
+
+proc sysRawNetMac*(mac: pointer): I32 =
+  I32(rawSyscall3(SysRawNetMac, cast[U64](mac), 0, 0))
+
+
+proc sysRawNetRecv*(buf: pointer, capacity: U64): I32 =
+  I32(rawSyscall3(SysRawNetRecv, cast[U64](buf), capacity, 0))
+
+
+proc sysRawNetSend*(buf: pointer, size: U64): I32 =
+  I32(rawSyscall3(SysRawNetSend, cast[U64](buf), size, 0))

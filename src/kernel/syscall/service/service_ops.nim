@@ -25,6 +25,10 @@ proc serviceKindFromValue(value: U64, kind: var ServiceKind): bool =
     kind = serviceProcess
     return true
 
+  if value == U64(SysServiceKindNet):
+    kind = serviceNet
+    return true
+
   false
 
 
@@ -54,6 +58,8 @@ proc serviceKindValue(kind: ServiceKind): U32 =
     SysServiceKindFs
   of serviceProcess:
     SysServiceKindProcess
+  of serviceNet:
+    SysServiceKindNet
   of serviceMax:
     U32(0xffffffff'u32)
 
@@ -68,6 +74,8 @@ proc serviceKindName(kind: ServiceKind): cstring =
     "fsd"
   of serviceProcess:
     "procmgtd"
+  of serviceNet:
+    "netd"
   of serviceMax:
     "unknown"
 

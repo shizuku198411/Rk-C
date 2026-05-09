@@ -20,7 +20,7 @@ type
     restarts: U64
 
 var
-  services: array[3, ServiceEntry]
+  services: array[4, ServiceEntry]
   processes: array[ProcessCap, SysProcessInfo]
   controlPacket: SysIpcPacket
 
@@ -43,6 +43,12 @@ proc initServices() =
   services[2].path = "/bin/fsd"
   services[2].pid = -1
   services[2].state = srvStopped
+
+  services[3].kind = SysServiceKindNet
+  services[3].name = "netd"
+  services[3].path = "/bin/netd"
+  services[3].pid = -1
+  services[3].state = srvStopped
 
 
 proc processState(pid: I32, state: var U32): bool =
@@ -187,6 +193,7 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   startService(addr services[0])
   startService(addr services[1])
   startService(addr services[2])
+  startService(addr services[3])
 
   while true:
     pollControlMessages()

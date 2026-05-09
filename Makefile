@@ -35,8 +35,8 @@ KERNEL_MAP := $(MAP_DIR)/kernel.map
 DISK_IMG := $(BIN_DIR)/disk.img
 USER_SHELL_ELF := $(BIN_DIR)/shell.elf
 USER_SHELL_BIN := $(BIN_DIR)/shell.bin
-USER_APP_NAMES := ls cat mkdir ps rm rmdir date edit ipc kill svc
-USER_SERVER_NAMES := svcmgtd procmgtd fsd blockd
+USER_APP_NAMES := ls cat mkdir ps rm rmdir date edit ipc kill svc ping
+USER_SERVER_NAMES := svcmgtd procmgtd fsd blockd netd
 USER_PACK_NAMES := $(USER_APP_NAMES) $(USER_SERVER_NAMES)
 USER_APP_BINS := $(foreach app,$(USER_APP_NAMES),$(BIN_DIR)/$(app).bin)
 USER_SERVER_BINS := $(foreach server,$(USER_SERVER_NAMES),$(BIN_DIR)/$(server).bin)
@@ -116,6 +116,8 @@ QEMU_ARGS := \
 	-bios $(OPENSBI_FW) \
 	-drive file=$(DISK_IMG),format=raw,if=none,id=hd0 \
 	-device virtio-blk-device,drive=hd0,bus=virtio-mmio-bus.0 \
+	-netdev user,id=net0,hostfwd=tcp::10080-:80 \
+	-device virtio-net-device,netdev=net0,bus=virtio-mmio-bus.1 \
 	-kernel $(KERNEL_ELF)
 
 QEMU_DEBUG_ARGS := \

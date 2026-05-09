@@ -30,6 +30,8 @@ elif defined(userApp_kill):
   import apps/kill/kill
 elif defined(userApp_svc):
   import apps/svc/svc
+elif defined(userApp_ping):
+  import apps/ping/ping
 elif defined(userApp_svcmgtd):
   import server/svcmgtd/svcmgtd
 elif defined(userApp_procmgtd):
@@ -38,5 +40,7 @@ elif defined(userApp_fsd):
   import server/fsd/fsd
 elif defined(userApp_blockd):
   import server/blockd/blockd
+elif defined(userApp_netd):
+  import server/netd/netd
 else:
   {.error: "missing user app define".}

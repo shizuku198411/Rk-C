@@ -6,6 +6,7 @@ type
     serviceBlock
     serviceFs
     serviceProcess
+    serviceNet
     serviceMax
 
   ServiceEntry = object
