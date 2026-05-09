@@ -413,24 +413,24 @@ proc fsInit*() =
     panic("fs super read failed")
 
   if superBlock.magic != FsMagic:
-    printBootMsg("formatting disk\n")
+    printBootMsg("  formatting disk\n")
     formatFs()
   else:
-    printBootMsg("disk fs mounted\n")
+    printBootMsg("  disk fs mounted\n")
 
   ensureRootDir("tmp", FsTypeMount)
   ensureRootDir("bin", FsTypeDir)
 
   if appfsLoad() < 0:
     panic("appfs load failed")
-  printBootMsg("mounted /bin entries = ")
+  printBootMsg("  mounted /bin entries = ")
   printUnsigned(U64(appfsEntryCount))
   putChar('\n')
 
   mountCount = 0
   tmpfsInit()
   vfsMount("/tmp", vfsTmpfs)
-  printBootMsg("mounted tmpfs on /tmp\n")
+  printBootMsg("  mounted tmpfs on /tmp\n")
   fsReady = true
 
 

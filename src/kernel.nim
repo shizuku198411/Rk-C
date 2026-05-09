@@ -45,11 +45,11 @@ proc bootTask() {.cdecl.} =
   if currentProc != nil:
     currentProc.detached = true
 
+  kernelBanner()
+
 
 proc kernel_main*(hartid: U64, dtb: pointer) {.exportc, cdecl.} =
   kernelBootstrap(hartid, dtb)
-
-  kernelBanner()
 
   if createKernelProcessNamed(bootTask, "boot_task") < 0:
     panic("failed to create boot task")

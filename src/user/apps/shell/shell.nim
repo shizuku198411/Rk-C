@@ -37,14 +37,6 @@ proc printPrompt() =
   write("$ ")
 
 
-proc printBanner() =
-  let pid = sysGetPid()
-  write("\n[shell] Rk-C shell started pid=")
-  writeUnsigned(U64(pid))
-  write("\n")
-  write("[shell] type 'help' for commands\n")
-
-
 proc printHelp() =
   write("commands:\n")
   write("  help                       show this help\n")
@@ -343,7 +335,6 @@ proc stripBackgroundMarker(): bool =
 
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   discard arg
-  printBanner()
 
   while true:
     printPrompt()
