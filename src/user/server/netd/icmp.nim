@@ -17,7 +17,7 @@ proc sendIcmpEcho*(net: var NetdState, dstIp: U32,
   let payloadLen = 16
   let icmpLen = 8 + payloadLen
   let totalLen = U16(20 + icmpLen)
-  buildIpv4Header(net, totalLen, dstIp)
+  buildIpv4Header(net, totalLen, dstIp, IpProtoIcmp)
 
   let icmpOff = 34
   net.txBuf[icmpOff] = IcmpEchoRequest

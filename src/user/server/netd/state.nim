@@ -9,3 +9,5 @@ type
     cachedArpIp*: U32
     cachedArpMac*: array[SysNetMacLen, U8]
     pingSeq*: U16
+    ipIdent*: U16
+    dnsIdent*: U16

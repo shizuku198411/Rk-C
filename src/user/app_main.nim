@@ -32,6 +32,8 @@ elif defined(userApp_svc):
   import apps/svc/svc
 elif defined(userApp_ping):
   import apps/ping/ping
+elif defined(userApp_nslookup):
+  import apps/nslookup/nslookup
 elif defined(userApp_svcmgtd):
   import server/svcmgtd/svcmgtd
 elif defined(userApp_procmgtd):

@@ -43,7 +43,7 @@ const
   StatusFailed = U32(128)
 
   DescWrite = U16(2)
-  VqNum = U64(8)
+  VqNum = U64(32)
   VqBytes = U64(8192)
   VqAlign = U64(4096)
   NetBufSize = U64(2048)
@@ -65,7 +65,7 @@ type
   VirtqAvail {.packed.} = object
     flags: U16
     idx: U16
-    ring: array[8, U16]
+    ring: array[32, U16]
     usedEvent: U16
 
   VirtqUsedElem {.packed.} = object
@@ -75,7 +75,7 @@ type
   VirtqUsed {.packed.} = object
     flags: U16
     idx: U16
-    ring: array[8, VirtqUsedElem]
+    ring: array[32, VirtqUsedElem]
     availEvent: U16
 
   VirtQueue = object
@@ -93,6 +93,10 @@ var
   rxBufMem: PAddr
   txBufMem: PAddr
   txLastUsedIdx: U16
+  txNextDesc: U16
+  rxOrder: array[32, U16]
+  rxOrderHead: U16
+  rxOrderTail: U16
   netHdrLen: U64
   initialized: bool
 
@@ -107,6 +111,17 @@ proc mmioWrite(off: U64, val: U32) =
 
 proc readReg(base, off: U64): U32 =
   volatileLoad(cast[ptr U32](base + off))
+
+
+proc rxOrderPush(id: U16) =
+  rxOrder[rxOrderTail mod U16(VqNum)] = id
+  rxOrderTail = (rxOrderTail + 1) mod U16(VqNum)
+
+
+proc rxOrderPop(): U16 =
+  let id = rxOrder[rxOrderHead mod U16(VqNum)]
+  rxOrderHead = (rxOrderHead + 1) mod U16(VqNum)
+  id
 
 
 proc resetQueue(q: var VirtQueue) =
@@ -231,6 +246,9 @@ proc setupRxBuffers(): bool =
     if rxBufMem == NilPAddr:
       return false
 
+  rxOrderHead = 0
+  rxOrderTail = 0
+
   var i = U64(0)
   while i < VqNum:
     rxq.desc[i].paddr = rxBufMem + i * PageSize
@@ -238,6 +256,7 @@ proc setupRxBuffers(): bool =
     rxq.desc[i].flags = DescWrite
     rxq.desc[i].next = 0
     rxq.avail.ring[i] = U16(i)
+    rxOrderPush(U16(i))
     inc i
 
   arch.fenceRwRw()
@@ -249,11 +268,12 @@ proc setupRxBuffers(): bool =
 
 proc setupTxBuffer(): bool =
   if txBufMem == NilPAddr:
-    txBufMem = palloc(1)
+    txBufMem = palloc(VqNum)
     if txBufMem == NilPAddr:
       return false
 
   txLastUsedIdx = volatileLoad(addr txq.used.idx)
+  txNextDesc = 0
   true
 
 
@@ -299,10 +319,25 @@ proc netdevMac*(outMac: pointer): int =
 proc requeueRxDesc(id: U16) =
   let idx = volatileLoad(addr rxq.avail.idx)
   rxq.avail.ring[idx mod U16(VqNum)] = id
+  rxOrderPush(id)
   arch.fenceRwRw()
   volatileStore(addr rxq.avail.idx, idx + 1)
   arch.fenceRwRw()
   mmioWrite(RegQueueNotify, 0)
+
+
+proc rxNumBuffers(id: U16): U16 =
+  if netHdrLen != NetHdrMrgLen:
+    return U16(1)
+
+  let base = rxBufMem + U64(id) * PageSize
+  let lo = U16(cast[ptr U8](base + 10)[])
+  let hi = U16(cast[ptr U8](base + 11)[])
+  let n = lo or (hi shl 8)
+  if n == 0 or n > U16(VqNum):
+    return U16(1)
+
+  n
 
 
 proc netdevRecv*(outBuf: pointer, capacity: U64): int =
@@ -314,17 +349,26 @@ proc netdevRecv*(outBuf: pointer, capacity: U64): int =
   if volatileLoad(addr rxq.used.idx) == rxq.lastUsedIdx:
     return 0
 
+  arch.fenceRwRw()
   let usedElem = rxq.used.ring[rxq.lastUsedIdx mod U16(VqNum)]
   inc rxq.lastUsedIdx
-  arch.fenceRwRw()
 
   let id = U16(usedElem.id)
   if id >= U16(VqNum):
     return -1
 
+  let numBuffers = rxNumBuffers(id)
+  var consumed: array[32, U16]
+  var i = U16(0)
+  while i < numBuffers:
+    consumed[i] = rxOrderPop()
+    inc i
   var frameLen = U64(usedElem.len)
   if frameLen <= netHdrLen:
-    requeueRxDesc(id)
+    i = 0
+    while i < numBuffers:
+      requeueRxDesc(consumed[i])
+      inc i
     return 0
 
   frameLen -= netHdrLen
@@ -334,7 +378,12 @@ proc netdevRecv*(outBuf: pointer, capacity: U64): int =
     frameLen = SysNetPacketMax
 
   discard copyMem(outBuf, cast[pointer](rxBufMem + U64(id) * PageSize + netHdrLen), frameLen)
-  requeueRxDesc(id)
+
+  i = 0
+  while i < numBuffers:
+    requeueRxDesc(consumed[i])
+    inc i
+
   int(frameLen)
 
 
@@ -344,16 +393,20 @@ proc netdevSend*(inBuf: pointer, size: U64): int =
   if not initialized and netdevInit() != 0:
     return -1
 
-  zeroMem(cast[pointer](txBufMem), netHdrLen)
-  discard copyMem(cast[pointer](txBufMem + netHdrLen), inBuf, size)
+  let id = txNextDesc
+  txNextDesc = (txNextDesc + 1) mod U16(VqNum)
+  let bufAddr = txBufMem + U64(id) * PageSize
 
-  txq.desc[0].paddr = txBufMem
-  txq.desc[0].len = U32(netHdrLen + size)
-  txq.desc[0].flags = 0
-  txq.desc[0].next = 0
+  zeroMem(cast[pointer](bufAddr), netHdrLen)
+  discard copyMem(cast[pointer](bufAddr + netHdrLen), inBuf, size)
+
+  txq.desc[id].paddr = bufAddr
+  txq.desc[id].len = U32(netHdrLen + size)
+  txq.desc[id].flags = 0
+  txq.desc[id].next = 0
 
   let availIdx = volatileLoad(addr txq.avail.idx)
-  txq.avail.ring[availIdx mod U16(VqNum)] = 0
+  txq.avail.ring[availIdx mod U16(VqNum)] = id
   arch.fenceRwRw()
   volatileStore(addr txq.avail.idx, availIdx + 1)
   arch.fenceRwRw()

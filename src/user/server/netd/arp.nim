@@ -20,11 +20,47 @@ proc sendArpRequest*(net: var NetdState, targetIp: U32): bool =
   sendFrame(net.txBuf, 42)
 
 
+proc sendArpReply(net: var NetdState, targetMac: ptr array[SysNetMacLen, U8],
+                  targetIp: U32): bool =
+  clearTx(net.txBuf)
+  copyMacToFrame(net.txBuf, 0, targetMac)
+  copyMacToFrame(net.txBuf, 6, addr net.mac)
+  put16(net.txBuf, 12, EtherTypeArp)
+  put16(net.txBuf, 14, U16(1))
+  put16(net.txBuf, 16, EtherTypeIpv4)
+  net.txBuf[18] = 6
+  net.txBuf[19] = 4
+  put16(net.txBuf, 20, ArpOpReply)
+  copyMacToFrame(net.txBuf, 22, addr net.mac)
+  put32(net.txBuf, 28, LocalIp)
+  copyMacToFrame(net.txBuf, 32, targetMac)
+  put32(net.txBuf, 38, targetIp)
+  sendFrame(net.txBuf, 42)
+
+
+proc handleArpRequest(net: var NetdState, size: I32): bool =
+  if size < 42:
+    return false
+  if get16(addr net.rxBuf, 12) != EtherTypeArp:
+    return false
+  if get16(addr net.rxBuf, 20) != ArpOpRequest:
+    return false
+  if get32(addr net.rxBuf, 38) != LocalIp:
+    return false
+
+  var senderMac: array[SysNetMacLen, U8]
+  copyMacFromRx(addr net.rxBuf, senderMac, 22)
+  discard sendArpReply(net, addr senderMac, get32(addr net.rxBuf, 28))
+  true
+
+
 proc handleArpPacket*(net: var NetdState, size: I32, targetIp: U32,
                       outMac: var array[SysNetMacLen, U8]): bool =
   if size < 42:
     return false
   if get16(addr net.rxBuf, 12) != EtherTypeArp:
+    return false
+  if handleArpRequest(net, size):
     return false
   if get16(addr net.rxBuf, 20) != ArpOpReply:
     return false

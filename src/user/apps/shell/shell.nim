@@ -63,6 +63,7 @@ proc printHelp() =
   write("  svc list                   show services\n")
   write("  svc restart <name>         restart service\n")
   write("  ping [ip]                  send ICMP echo request\n")
+  write("  nslookup <name>            resolve DNS A record\n")
   write("  ticks                      show timer ticks\n")
   write("  bitmap                     show physical page bitmap usage\n")
   write("  <command> &                run command in background\n")

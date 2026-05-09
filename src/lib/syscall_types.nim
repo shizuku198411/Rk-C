@@ -3,7 +3,7 @@ import types
 const
   SysProcessNameMax* = 32
   SysProcessCwdMax* = 64
-  SysIpcMessageMax* = 128
+  SysIpcMessageMax* = 512
   SysIpcQueueCap* = 16
   SysFsPathMax* = 128
   SysFsDataMax* = 4096
@@ -28,6 +28,10 @@ const
   SysIpcOpProcKillResponse* = U32(6)
   SysIpcOpNetPingRequest* = U32(7)
   SysIpcOpNetPingResponse* = U32(8)
+  SysIpcOpNetUdpSendRequest* = U32(11)
+  SysIpcOpNetUdpSendResponse* = U32(12)
+  SysIpcOpNetUdpReceiveRequest* = U32(13)
+  SysIpcOpNetUdpReceiveResponse* = U32(14)
   SysServiceKindBlock* = U32(0)
   SysServiceKindFs* = U32(1)
   SysServiceKindManager* = U32(2)
