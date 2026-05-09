@@ -6,6 +6,7 @@ import ../../lib/syscall
 const
   LineMax = 80
   ExecArgMax = 160
+  HistoryMax = 50
   PromptOrange = "\x1b[38;5;208m"
   PromptReset = "\x1b[0m"
 
@@ -17,6 +18,8 @@ var
   execArgBuf: array[ExecArgMax, char]
   cwdBuf: array[SysProcessCwdMax, char]
 
+  history: array[HistoryMax, array[LineMax, char]]
+  historyPos: int32
 
 proc cstr(buf: var array[LineMax, char]): cstring =
   cast[cstring](addr buf[0])
@@ -74,28 +77,167 @@ proc clearArg() =
     inc i
 
 
+proc moveCursorLeft() =
+  write("\x1b[D")
+
+proc moveCursorRight() =
+  write("\x1b[C")
+
+
+proc clearCurrentLine(len: var int, cursor: var int) =
+  while cursor > 0:
+    write("\x1b[D")
+    dec cursor
+  
+  var i = 0
+  while i < len:
+    writeChar(' ')
+    inc i
+  
+  while i > 0:
+    write("\x1b[D")
+    dec i
+  
+  len = 0
+  cursor = 0
+
+
+proc lineLen(buf: var array[LineMax, char]): int =
+  var i = 0
+  while i < LineMax:
+    if buf[i] == '\0':
+      return i
+    inc i
+  LineMax - 1
+
+
+proc loadHistoryLine(
+  index: int,
+  len: var int,
+  cursor: var int
+) =
+  clearCurrentLine(len, cursor)
+
+  copyMem(addr lineBuf[0], addr history[index][0], LineMax)
+
+  len = lineLen(lineBuf)
+  cursor = len
+
+  var i = 0
+  while i < len:
+    writeChar(lineBuf[i])
+    inc i
+
+
 proc readLine(): cstring =
-  var len = 0
+  var 
+    len = 0
+    cursor = 0
+    historyView = historyPos
+
   while true:
     let ch = readChar()
+
+    # Enter
     if ch == '\r' or ch == '\n':
       lineBuf[len] = '\0'
       write("\n")
       return cstr(lineBuf)
 
+    # Escape sequence
+    if ch == char(27):
+      let ch1 = readChar()
+      let ch2 = readChar()
+
+      if ch1 == '[':
+        case ch2
+        of 'D': # Left
+          if cursor > 0:
+            dec cursor
+            moveCursorLeft()
+        of 'C': # Right
+          if cursor < len:
+            inc cursor
+            moveCursorRight()
+        of 'A': # Up
+          if historyPos > 0:
+            if historyView > 0:
+              dec historyView
+              loadHistoryLine(historyView, len, cursor)
+        of 'B': # Down
+          if historyView < historyPos:
+            inc historyView
+            if historyView < historyPos:
+              loadHistoryLine(historyView, len, cursor)
+            else:
+              clearCurrentLine(len, cursor)
+              lineBuf[0] = '\0'
+        else:
+          discard
+
+      continue
+
+    # Backspace
     if ch == '\b' or ch == char(127):
-      if len > 0:
+      if cursor > 0:
+        dec cursor
         dec len
-        write("\b \b")
+
+        var i = cursor
+        while i < len:
+          lineBuf[i] = lineBuf[i + 1]
+          inc i
+
+        lineBuf[len] = '\0'
+
+        write("\b")
+
+        i = cursor
+        while i < len:
+          writeChar(lineBuf[i])
+          inc i
+
+        writeChar(' ')
+
+        var back = len - cursor + 1
+        while back > 0:
+          moveCursorLeft()
+          dec back
+
       continue
 
     if ch < ' ' or ch > '~':
       continue
 
     if len < LineMax - 1:
-      lineBuf[len] = ch
-      inc len
-      writeChar(ch)
+      if cursor == len:
+        lineBuf[cursor] = ch
+        inc cursor
+        inc len
+        lineBuf[len] = '\0'
+        writeChar(ch)
+      else:
+        var i = len
+        while i > cursor:
+          lineBuf[i] = lineBuf[i - 1]
+          dec i
+
+        lineBuf[cursor] = ch
+        inc cursor
+        inc len
+        lineBuf[len] = '\0'
+
+        i = cursor - 1
+        while i < len:
+          writeChar(lineBuf[i])
+          inc i
+
+        var back = len - cursor
+        while back > 0:
+          moveCursorLeft()
+          dec back
+    
+    historyView = historyPos
 
 
 proc skipSpaces(s: cstring, pos: var int) =
@@ -240,6 +382,15 @@ proc printBitmapInfo() =
   writeUnsigned(info.free)
   write(" pages\n")
 
+proc printHistory() =
+  var pos = 0
+  while pos < historyPos:
+    write("[")
+    writeUnsigned(U64(pos + 1))
+    write("] ")
+    write(cstr(history[pos]))
+    write("\n")
+    inc pos
 
 proc copyArgChar(pos: var U64, ch: char): bool =
   if pos + 1 >= U64(ExecArgMax):
@@ -333,6 +484,18 @@ proc stripBackgroundMarker(): bool =
   true
 
 
+proc storeHistory() =
+  if historyPos < int32(HistoryMax):
+    copyMem(addr history[historyPos][0], addr lineBuf[0], LineMax)
+    inc historyPos
+  else:
+    var i = 1
+    while i < HistoryMax:
+      copyMem(addr history[i - 1][0], addr history[i][0], LineMax)
+      inc i
+    copyMem(addr history[HistoryMax - 1][0], addr lineBuf[0], LineMax)
+
+
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   discard arg
 
@@ -341,6 +504,8 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
     let cmd = readLine()
     if not parseCommand(cmd):
       continue
+
+    storeHistory()
 
     let background = stripBackgroundMarker()
 
@@ -359,6 +524,9 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
 
     elif streq(cstr(cmdBuf), "bitmap"):
       printBitmapInfo()
+
+    elif streq(cstr(cmdBuf), "history"):
+      printHistory()
 
     elif streq(cstr(cmdBuf), "exit"):
       sysExit(0)
