@@ -13,8 +13,7 @@ var
 
 
 proc printUsage() =
-  write("usage: curl <http-url|host|ip>[/path]\n")
-  write("       HTTPS is not supported yet\n")
+  write("usage: curl <http-url|https-url|host|ip>[/path]\n")
 
 
 proc parseOctet(arg: cstring, pos: var int, value: var U32): bool =
@@ -83,9 +82,12 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
       write("curl: could not resolve host\n")
       sysExit(1)
 
-  let handle = httpTcpGetStart(ip, url.port, host, path)
+  let handle = httpGetStart(ip, url.port, host, path, url.tls)
   if handle <= 0:
-    write("curl: HTTP request failed\n")
+    if url.tls:
+      write("curl: HTTPS/TLS request failed\n")
+    else:
+      write("curl: HTTP request failed\n")
     sysExit(1)
 
   var receivedAny = false

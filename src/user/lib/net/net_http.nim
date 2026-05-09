@@ -1,4 +1,5 @@
 import ./net_tcp
+import ./net_tls
 import ../core/syscall
 
 const
@@ -77,7 +78,7 @@ proc parseHttpUrl*(arg: cstring, url: var HttpUrl): bool =
   if startsWith(arg, "https://"):
     url.tls = true
     url.port = U16(443)
-    return false
+    pos = 8
   if startsWith(arg, "http://"):
     pos = 7
 
@@ -162,6 +163,31 @@ proc httpTcpGetStart*(ip: U32, port: U16, host, path: cstring): I32 =
     return -1
 
   handle
+
+
+proc httpTlsGetStart*(ip: U32, port: U16, host, path: cstring): I32 =
+  var reqBuf: array[HttpRequestMax, U8]
+  let reqLen = buildHttpGetRequest(host, path, addr reqBuf[0], U32(HttpRequestMax))
+  if reqLen <= 0:
+    return -1
+
+  var client = TlsClient()
+  let rc = tlsConnect(client, ip, port, host)
+  if rc <= 0:
+    return rc
+
+  if tlsSend(client, addr reqBuf[0], U32(reqLen)) != reqLen:
+    discard tlsClose(client)
+    return -1
+
+  client.handle
+
+
+proc httpGetStart*(ip: U32, port: U16, host, path: cstring, tls: bool): I32 =
+  if tls:
+    return httpTlsGetStart(ip, port, host, path)
+
+  httpTcpGetStart(ip, port, host, path)
 
 
 proc httpRead*(handle: I32, buf: pointer, capacity: U32): I32 =

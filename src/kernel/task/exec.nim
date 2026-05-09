@@ -14,7 +14,7 @@ const
   AppStackTop* = VAddr(0x01300000)
   UserImageMaxPages = U64(16)
   UserImageMaxSize = UserImageMaxPages * PageSize
-  UserStackPages = U64(1)
+  UserStackPages = U64(4)
   UserArgMax = U64(128)
 
 
@@ -135,10 +135,11 @@ proc replaceUserStack(root: PageTable, stackTop: VAddr, arg: cstring, userSp, ar
   if stackPa == NilPAddr:
     panic("failed to allocate user stack")
 
-  if mapPageReplaceFree(root, stackTop - PageSize, stackPa, PteU or PteR or PteW) != 0:
+  if mapRangeReplaceFree(root, stackTop - UserStackPages * PageSize, stackPa,
+                         UserStackPages * PageSize, PteU or PteR or PteW) != 0:
     panic("failed to map user stack")
 
-  let argPa = stackPa + PageSize - UserArgMax
+  let argPa = stackPa + UserStackPages * PageSize - UserArgMax
   argVa = stackTop - UserArgMax
   userSp = argVa
   copyArg(argPa, arg, UserArgMax)
