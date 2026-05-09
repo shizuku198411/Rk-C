@@ -15,4 +15,5 @@ const
 
   LocalIp* = U32(0x0a00020f'u32)
   GatewayIp* = U32(0x0a000202'u32)
+  Netmask* = U32(0xffffff00'u32)
   PingIdent* = U16(0x524b)

@@ -45,6 +45,9 @@ USER_ENTRY_OBJ := $(OBJ_DIR)/user/lib/entry.o
 USER_LIB_SRCS := $(shell find $(SRC_DIR)/user/lib -type f -name '*.nim' | sort)
 
 OPENSBI_FW ?= opensbi/build/platform/generic/firmware/fw_jump.bin
+QEMU_NET ?= tap
+QEMU_HOSTFWD ?= tcp::10080-:80
+QEMU_TAP_IF ?= tap0
 
 ARCH_FLAGS := \
 	-target $(TARGET) \
@@ -107,6 +110,14 @@ USER_NIMFLAGS := \
 	--passL:"-nostdlib" \
 	--passL:"-Wl,--no-relax"
 
+ifeq ($(QEMU_NET),tap)
+QEMU_NETDEV_ARGS := -netdev tap,id=net0,ifname=$(QEMU_TAP_IF),script=no,downscript=no
+else
+QEMU_NETDEV_ARGS := -netdev user,id=net0,hostfwd=$(QEMU_HOSTFWD)
+endif
+
+QEMU_NET_DEVICE_ARGS := -device virtio-net-device,netdev=net0,bus=virtio-mmio-bus.1
+
 QEMU_ARGS := \
 	-machine virt \
 	-m 256M \
@@ -116,8 +127,8 @@ QEMU_ARGS := \
 	-bios $(OPENSBI_FW) \
 	-drive file=$(DISK_IMG),format=raw,if=none,id=hd0 \
 	-device virtio-blk-device,drive=hd0,bus=virtio-mmio-bus.0 \
-	-netdev user,id=net0,hostfwd=tcp::10080-:80 \
-	-device virtio-net-device,netdev=net0,bus=virtio-mmio-bus.1 \
+	$(QEMU_NETDEV_ARGS) \
+	$(QEMU_NET_DEVICE_ARGS) \
 	-kernel $(KERNEL_ELF)
 
 QEMU_DEBUG_ARGS := \
@@ -125,7 +136,7 @@ QEMU_DEBUG_ARGS := \
 	-S \
 	-gdb tcp::$(GDB_PORT)
 
-.PHONY: all build appfs clean disasm run qemu-run qemu-debug
+.PHONY: all build appfs clean disasm run qemu-run qemu-debug net-host-help
 
 all: build
 
@@ -156,7 +167,7 @@ appfs: $(DISK_IMG) $(USER_SHELL_BIN) $(USER_APP_BINS) $(USER_SERVER_BINS)
 	python3 scripts/pack_appfs.py --disk $(DISK_IMG) --bin-dir $(BIN_DIR) --apps shell $(USER_PACK_NAMES)
 
 define USER_APP_template
-$(BIN_DIR)/$(1).elf: $(SRC_DIR)/user/app_main.nim $(SRC_DIR)/user/apps/$(1)/$(1).nim $(SRC_DIR)/user/panicoverride.nim $$(USER_LIB_SRCS) $(USER_SYSCALL_OBJ) $(USER_ENTRY_OBJ) $(USER_APP_LINKER_SCRIPT) | $(BIN_DIR)
+$(BIN_DIR)/$(1).elf: $(SRC_DIR)/user/app_main.nim $$(wildcard $(SRC_DIR)/user/apps/$(1)/*.nim) $(SRC_DIR)/user/panicoverride.nim $$(USER_LIB_SRCS) $(USER_SYSCALL_OBJ) $(USER_ENTRY_OBJ) $(USER_APP_LINKER_SCRIPT) | $(BIN_DIR)
 	$$(NIM) c $$(USER_NIMFLAGS) -d:userApp_$(1) --nimcache:$$(USER_NIMCACHE_DIR)/$(1) --passL:"$$(USER_ENTRY_OBJ)" --passL:"$$(USER_SYSCALL_OBJ)" --passL:"-Wl,-T,$$(USER_APP_LINKER_SCRIPT)" -o:$$@ $$<
 
 $(BIN_DIR)/$(1).bin: $(BIN_DIR)/$(1).elf | $(BIN_DIR)
@@ -166,7 +177,7 @@ endef
 $(foreach app,$(USER_APP_NAMES),$(eval $(call USER_APP_template,$(app))))
 
 define USER_SERVER_template
-$(BIN_DIR)/$(1).elf: $(SRC_DIR)/user/app_main.nim $(SRC_DIR)/user/server/$(1)/$(1).nim $(SRC_DIR)/user/panicoverride.nim $$(USER_LIB_SRCS) $(USER_SYSCALL_OBJ) $(USER_ENTRY_OBJ) $(USER_APP_LINKER_SCRIPT) | $(BIN_DIR)
+$(BIN_DIR)/$(1).elf: $(SRC_DIR)/user/app_main.nim $$(wildcard $(SRC_DIR)/user/server/$(1)/*.nim) $(SRC_DIR)/user/panicoverride.nim $$(USER_LIB_SRCS) $(USER_SYSCALL_OBJ) $(USER_ENTRY_OBJ) $(USER_APP_LINKER_SCRIPT) | $(BIN_DIR)
 	$$(NIM) c $$(USER_NIMFLAGS) -d:userApp_$(1) --nimcache:$$(USER_NIMCACHE_DIR)/$(1) --passL:"$$(USER_ENTRY_OBJ)" --passL:"$$(USER_SYSCALL_OBJ)" --passL:"-Wl,-T,$$(USER_APP_LINKER_SCRIPT)" -o:$$@ $$<
 
 $(BIN_DIR)/$(1).bin: $(BIN_DIR)/$(1).elf | $(BIN_DIR)
@@ -192,6 +203,24 @@ qemu-run: build
 
 qemu-debug: build
 	$(QEMU) $(QEMU_DEBUG_ARGS)
+
+net-host-help:
+	@echo "Default TAP network:"
+	@echo "  make run"
+	@echo "  guest ip: 10.0.2.15, gateway/host: 10.0.2.2"
+	@echo ""
+	@echo "User network:"
+	@echo "  make run QEMU_NET=user"
+	@echo "  guest ip: 10.0.2.15, gateway/host: 10.0.2.2"
+	@echo "  note: external ICMP may timeout with QEMU user networking"
+	@echo ""
+	@echo "TAP host setup:"
+	@echo "  sudo ip tuntap add dev tap0 mode tap user $$USER"
+	@echo "  sudo ip link set tap0 up"
+	@echo "  sudo ip addr add 10.0.2.2/24 dev tap0"
+	@echo "  sudo sysctl -w net.ipv4.ip_forward=1"
+	@echo "  sudo iptables -t nat -A POSTROUTING -s 10.0.2.0/24 -j MASQUERADE"
+	@echo "  make run QEMU_TAP_IF=tap0"
 
 clean:
 	rm -rf $(BUILD_DIR) $(BIN_DIR) $(MAP_DIR)

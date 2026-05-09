@@ -61,9 +61,15 @@ proc isIcmpEchoReply*(net: var NetdState, size: I32, srcIp: U32, seq: U16): bool
 
 proc pingHost*(net: var NetdState, targetIp: U32): bool =
   var targetMac: array[SysNetMacLen, U8]
-  if not resolveArp(net, targetIp, targetMac):
+  let nextHopIp =
+    if (targetIp and Netmask) == (LocalIp and Netmask):
+      targetIp
+    else:
+      GatewayIp
+
+  if not resolveArp(net, nextHopIp, targetMac):
     write("[netd] arp failed for ")
-    writeIp(targetIp)
+    writeIp(nextHopIp)
     write("\n")
     return false
 
@@ -77,7 +83,7 @@ proc pingHost*(net: var NetdState, targetIp: U32): bool =
     if size > 0:
       if isIcmpEchoReply(net, size, targetIp, net.pingSeq):
         return true
-      discard handleArpPacket(net, size, targetIp, targetMac)
+      discard handleArpPacket(net, size, nextHopIp, targetMac)
 
     discard sysSleep(1)
     inc tick
