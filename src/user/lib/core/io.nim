@@ -1,5 +1,5 @@
-import strutils
-import syscall
+import ./strutils
+import ./syscall
 
 
 proc write*(s: cstring) =

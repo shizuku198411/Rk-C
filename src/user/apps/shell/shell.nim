@@ -1,7 +1,7 @@
-import ../../lib/io
-import ../../lib/pathutils
-import ../../lib/strutils
-import ../../lib/syscall
+import ../../lib/core/io
+import ../../lib/core/pathutils
+import ../../lib/core/strutils
+import ../../lib/core/syscall
 
 const
   LineMax = 80
@@ -59,6 +59,7 @@ proc printHelp() =
   write("  svc restart <name>         restart service\n")
   write("  ping [ip]                  send ICMP echo request\n")
   write("  nslookup <name>            resolve DNS A record\n")
+  write("  curl <url>                 fetch HTTP URL\n")
   write("  tcpcheck <ip> <port>       test TCP connect/send/receive/close\n")
   write("  ticks                      show timer ticks\n")
   write("  traps                      show traps count\n")

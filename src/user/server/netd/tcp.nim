@@ -1,4 +1,4 @@
-import ../../lib/syscall
+import ../../lib/core/syscall
 import arp
 import config
 import ipv4
@@ -12,6 +12,14 @@ const
   TcpFlagPsh = U8(0x08)
   TcpFlagAck = U8(0x10)
   TcpHeaderLen = 20
+  TcpSynHeaderLen = 24
+
+
+proc tcpHeaderLenFor(flags: U8): int =
+  if (flags and TcpFlagSyn) != 0:
+    TcpSynHeaderLen
+  else:
+    TcpHeaderLen
 
 
 proc nextTcpHandle(net: var NetdState): U32 =
@@ -99,6 +107,21 @@ proc releaseTcpConnection(conn: ptr TcpConnection) =
     conn[] = TcpConnection()
 
 
+proc availableRxSpace(conn: ptr TcpConnection): U32 =
+  if conn == nil or conn.rxLen >= U32(TcpRxBufferMax):
+    return 0
+
+  U32(TcpRxBufferMax) - conn.rxLen
+
+
+proc advertisedWindow(conn: ptr TcpConnection): U16 =
+  let space = availableRxSpace(conn)
+  if space < U32(TcpReceiveWindow):
+    U16(space)
+  else:
+    TcpReceiveWindow
+
+
 proc sendTcpSegment(net: var NetdState, conn: ptr TcpConnection, flags: U8,
                     payload: pointer, payloadLen: int): bool =
   if conn == nil:
@@ -112,7 +135,8 @@ proc sendTcpSegment(net: var NetdState, conn: ptr TcpConnection, flags: U8,
   put16(net.txBuf, 12, EtherTypeIpv4)
 
   let tcpOff = 34
-  let tcpLen = TcpHeaderLen + payloadLen
+  let hdrLen = tcpHeaderLenFor(flags)
+  let tcpLen = hdrLen + payloadLen
   let totalLen = U16(20 + tcpLen)
   buildIpv4Header(net, totalLen, conn.remoteIp, IpProtoTcp)
 
@@ -120,17 +144,22 @@ proc sendTcpSegment(net: var NetdState, conn: ptr TcpConnection, flags: U8,
   put16(net.txBuf, tcpOff + 2, conn.remotePort)
   put32(net.txBuf, tcpOff + 4, conn.seq)
   put32(net.txBuf, tcpOff + 8, conn.ack)
-  net.txBuf[tcpOff + 12] = U8(TcpHeaderLen div 4) shl 4
+  net.txBuf[tcpOff + 12] = U8(hdrLen div 4) shl 4
   net.txBuf[tcpOff + 13] = flags
-  put16(net.txBuf, tcpOff + 14, U16(4096))
+  put16(net.txBuf, tcpOff + 14, advertisedWindow(conn))
   put16(net.txBuf, tcpOff + 16, 0)
   put16(net.txBuf, tcpOff + 18, 0)
+
+  if hdrLen == TcpSynHeaderLen:
+    net.txBuf[tcpOff + 20] = 2
+    net.txBuf[tcpOff + 21] = 4
+    put16(net.txBuf, tcpOff + 22, TcpMss)
 
   if payload != nil and payloadLen > 0:
     let src = cast[ptr UncheckedArray[U8]](payload)
     var i = 0
     while i < payloadLen:
-      net.txBuf[tcpOff + TcpHeaderLen + i] = src[i]
+      net.txBuf[tcpOff + hdrLen + i] = src[i]
       inc i
 
   put16(net.txBuf, tcpOff + 16,
@@ -174,21 +203,39 @@ proc isTcpPacket(net: var NetdState, size: I32, tcpOff: var int,
   true
 
 
-proc bufferTcpPayload(conn: ptr TcpConnection, net: var NetdState, payloadOff: int,
-                      payloadLen: int) =
-  if conn == nil or payloadLen <= 0:
+proc compactRxBuffer(conn: ptr TcpConnection) =
+  if conn == nil or conn.rxReadOff == 0:
     return
 
-  var copyLen = payloadLen
-  if copyLen > SysIpcMessageMax:
-    copyLen = SysIpcMessageMax
-
   var i = 0
-  while i < copyLen:
-    conn.rxBuf[i] = net.rxBuf[payloadOff + i]
+  while i < int(conn.rxLen):
+    conn.rxBuf[i] = conn.rxBuf[int(conn.rxReadOff) + i]
     inc i
 
-  conn.rxLen = U32(copyLen)
+  conn.rxReadOff = 0
+  conn.rxWriteOff = conn.rxLen
+
+
+proc appendTcpPayload(conn: ptr TcpConnection, net: var NetdState, payloadOff: int,
+                      payloadLen: int): bool =
+  if conn == nil or payloadLen <= 0:
+    return true
+  if U32(payloadLen) > availableRxSpace(conn):
+    return false
+
+  if conn.rxWriteOff + U32(payloadLen) > U32(TcpRxBufferMax):
+    compactRxBuffer(conn)
+  if conn.rxWriteOff + U32(payloadLen) > U32(TcpRxBufferMax):
+    return false
+
+  var i = 0
+  while i < payloadLen:
+    conn.rxBuf[int(conn.rxWriteOff) + i] = net.rxBuf[payloadOff + i]
+    inc i
+
+  conn.rxWriteOff += U32(payloadLen)
+  conn.rxLen += U32(payloadLen)
+  true
 
 
 proc handleTcpPacket*(net: var NetdState, size: I32): bool =
@@ -221,18 +268,23 @@ proc handleTcpPacket*(net: var NetdState, size: I32): bool =
     return true
 
   if payloadLen > 0:
-    conn.ack = seq + U32(payloadLen)
-    bufferTcpPayload(conn, net, tcpOff + hdrLen, payloadLen)
-    discard sendTcpSegment(net, conn, TcpFlagAck, nil, 0)
+    if seq == conn.ack and appendTcpPayload(conn, net, tcpOff + hdrLen, payloadLen):
+      conn.ack = seq + U32(payloadLen)
+      discard sendTcpSegment(net, conn, TcpFlagAck, nil, 0)
+    else:
+      discard sendTcpSegment(net, conn, TcpFlagAck, nil, 0)
 
   if (flags and TcpFlagFin) != 0:
-    conn.ack = seq + U32(payloadLen) + 1'u32
-    conn.finSeen = true
-    discard sendTcpSegment(net, conn, TcpFlagAck, nil, 0)
-    if conn.state == tcpFinWait1 or conn.state == tcpFinWait2:
-      conn.state = tcpTimeWait
-    elif conn.state == tcpEstablished:
-      conn.state = tcpCloseWait
+    if seq + U32(payloadLen) == conn.ack:
+      inc conn.ack
+      conn.finSeen = true
+      discard sendTcpSegment(net, conn, TcpFlagAck, nil, 0)
+      if conn.state == tcpFinWait1 or conn.state == tcpFinWait2:
+        conn.state = tcpTimeWait
+      elif conn.state == tcpEstablished:
+        conn.state = tcpCloseWait
+    else:
+      discard sendTcpSegment(net, conn, TcpFlagAck, nil, 0)
 
   if conn.state == tcpFinWait1 and ack == conn.seq:
     conn.state = tcpFinWait2
@@ -328,13 +380,21 @@ proc tcpReceive*(net: var NetdState, handle: U32,
   var tick = 0
   while tick < TcpTimeoutTicks:
     if conn.rxLen > 0:
+      var copyLen = conn.rxLen
+      if copyLen > U32(SysIpcMessageMax):
+        copyLen = U32(SysIpcMessageMax)
+
       var i = 0
-      while i < int(conn.rxLen):
-        outBuf[][i] = char(conn.rxBuf[i])
+      while i < int(copyLen):
+        outBuf[][i] = char(conn.rxBuf[int(conn.rxReadOff) + i])
         inc i
 
-      outLen = conn.rxLen
-      conn.rxLen = 0
+      outLen = copyLen
+      conn.rxReadOff += copyLen
+      conn.rxLen -= copyLen
+      if conn.rxLen == 0:
+        conn.rxReadOff = 0
+        conn.rxWriteOff = 0
       return true
 
     if conn.state == tcpCloseWait or conn.state == tcpTimeWait:

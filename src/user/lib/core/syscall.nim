@@ -1,5 +1,5 @@
-import ../../lib/syscall_ids
-import ../../lib/syscall_types
+import ../../../lib/syscall_ids
+import ../../../lib/syscall_types
 
 export syscall_types
 

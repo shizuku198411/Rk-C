@@ -1,4 +1,4 @@
-import syscall
+import ../core/syscall
 
 
 proc sendIpcRequest*(pid: I32, packet: ptr SysIpcPacket): I32 =

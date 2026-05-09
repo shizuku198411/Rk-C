@@ -35,13 +35,13 @@ KERNEL_MAP := $(MAP_DIR)/kernel.map
 DISK_IMG := $(BIN_DIR)/disk.img
 USER_SHELL_ELF := $(BIN_DIR)/shell.elf
 USER_SHELL_BIN := $(BIN_DIR)/shell.bin
-USER_APP_NAMES := ls cat mkdir ps rm rmdir date edit ipc kill svc ping nslookup tcpcheck
+USER_APP_NAMES := ls cat mkdir ps rm rmdir date edit ipc kill svc ping nslookup tcpcheck curl
 USER_SERVER_NAMES := svcmgtd procmgtd fsd blockd netd
-USER_PACK_NAMES := $(filter-out tcpcheck,$(USER_APP_NAMES)) $(USER_SERVER_NAMES) tcpcheck
+USER_PACK_NAMES := $(filter-out tcpcheck curl,$(USER_APP_NAMES)) $(USER_SERVER_NAMES) tcpcheck curl
 USER_APP_BINS := $(foreach app,$(USER_APP_NAMES),$(BIN_DIR)/$(app).bin)
 USER_SERVER_BINS := $(foreach server,$(USER_SERVER_NAMES),$(BIN_DIR)/$(server).bin)
-USER_SYSCALL_OBJ := $(OBJ_DIR)/user/lib/syscall.o
-USER_ENTRY_OBJ := $(OBJ_DIR)/user/lib/entry.o
+USER_SYSCALL_OBJ := $(OBJ_DIR)/user/lib/runtime/syscall.o
+USER_ENTRY_OBJ := $(OBJ_DIR)/user/lib/runtime/entry.o
 USER_LIB_SRCS := $(shell find $(SRC_DIR)/user/lib -type f -name '*.nim' | sort)
 
 OPENSBI_FW ?= opensbi/build/platform/generic/firmware/fw_jump.bin
@@ -149,11 +149,11 @@ $(OBJ_DIR)/%.o: $(SRC_DIR)/%.S
 	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c -o $@ $<
 
-$(USER_SYSCALL_OBJ): $(SRC_DIR)/user/lib/syscall.S
+$(USER_SYSCALL_OBJ): $(SRC_DIR)/user/lib/runtime/syscall.S
 	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c -o $@ $<
 
-$(USER_ENTRY_OBJ): $(SRC_DIR)/user/lib/entry.S
+$(USER_ENTRY_OBJ): $(SRC_DIR)/user/lib/runtime/entry.S
 	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c -o $@ $<
 

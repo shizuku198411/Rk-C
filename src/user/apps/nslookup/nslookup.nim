@@ -1,18 +1,7 @@
-import ../../lib/io
-import ../../lib/net_udp
-import ../../lib/strutils
-import ../../lib/syscall
-
-const
-  DnsServerIp = U32(0x08080808'u32)
-  DnsSourcePort = U16(49152)
-  DnsDestPort = U16(53)
-  DnsQueryIdent = U16(0x524b)
-  DnsPacketMax = 512
-
-var
-  txBuf: array[DnsPacketMax, U8]
-  rxBuf: array[DnsPacketMax, U8]
+import ../../lib/core/io
+import ../../lib/net/net_dns
+import ../../lib/core/strutils
+import ../../lib/core/syscall
 
 
 proc writeIp(value: U32) =
@@ -25,172 +14,12 @@ proc writeIp(value: U32) =
   writeUnsigned(U64(value and 0xff'u32))
 
 
-proc put16(buf: var array[DnsPacketMax, U8], off: int, value: U16) =
-  buf[off] = U8((value shr 8) and 0xff'u16)
-  buf[off + 1] = U8(value and 0xff'u16)
-
-
-proc get16(buf: ptr array[DnsPacketMax, U8], off: int): U16 =
-  (U16(buf[][off]) shl 8) or U16(buf[][off + 1])
-
-
-proc get32(buf: ptr array[DnsPacketMax, U8], off: int): U32 =
-  (U32(buf[][off]) shl 24) or (U32(buf[][off + 1]) shl 16) or
-    (U32(buf[][off + 2]) shl 8) or U32(buf[][off + 3])
-
-
 proc printUsage() =
   write("usage: nslookup <name>\n")
 
 
-proc clearTx() =
-  var i = 0
-  while i < DnsPacketMax:
-    txBuf[i] = 0
-    inc i
-
-
-proc encodeDnsName(off: int, name: cstring): int =
-  var pos = 0
-  var outPos = off
-  let nameLen = int(cstrlen(name))
-
-  while pos < nameLen:
-    let labelLenPos = outPos
-    var labelLen = 0
-    inc outPos
-
-    while pos < nameLen and name[pos] != '.':
-      if labelLen >= 63 or outPos >= DnsPacketMax:
-        return -1
-      txBuf[outPos] = U8(ord(name[pos]))
-      inc outPos
-      inc pos
-      inc labelLen
-
-    if labelLen == 0:
-      return -1
-    txBuf[labelLenPos] = U8(labelLen)
-
-    if pos < nameLen and name[pos] == '.':
-      inc pos
-
-  if outPos >= DnsPacketMax:
-    return -1
-
-  txBuf[outPos] = 0
-  outPos + 1
-
-
-proc buildDnsQuery(name: cstring): int =
-  clearTx()
-  put16(txBuf, 0, DnsQueryIdent)
-  put16(txBuf, 2, U16(0x0100))
-  put16(txBuf, 4, U16(1))
-  put16(txBuf, 6, U16(0))
-  put16(txBuf, 8, U16(0))
-  put16(txBuf, 10, U16(0))
-
-  let qnameEnd = encodeDnsName(12, name)
-  if qnameEnd < 0 or qnameEnd + 4 > DnsPacketMax:
-    return -1
-
-  put16(txBuf, qnameEnd, U16(1))
-  put16(txBuf, qnameEnd + 2, U16(1))
-  qnameEnd + 4
-
-
-proc skipDnsName(start, limit: int): int =
-  var pos = start
-  while pos < limit:
-    let len = rxBuf[pos]
-    if (len and 0xc0'u8) == 0xc0'u8:
-      if pos + 1 >= limit:
-        return -1
-      return pos + 2
-    if len == 0:
-      return pos + 1
-    pos += 1 + int(len)
-
-  -1
-
-
-proc parseDnsAnswer(size: int, outIp: var U32): bool =
-  if size < 12:
-    return false
-  if get16(addr rxBuf, 0) != DnsQueryIdent:
-    return false
-
-  let flags = get16(addr rxBuf, 2)
-  if (flags and U16(0x8000)) == 0:
-    return false
-  if (flags and U16(0x000f)) != 0:
-    return false
-
-  let qd = int(get16(addr rxBuf, 4))
-  let an = int(get16(addr rxBuf, 6))
-  var pos = 12
-
-  var i = 0
-  while i < qd:
-    pos = skipDnsName(pos, size)
-    if pos < 0 or pos + 4 > size:
-      return false
-    pos += 4
-    inc i
-
-  i = 0
-  while i < an and pos < size:
-    pos = skipDnsName(pos, size)
-    if pos < 0 or pos + 10 > size:
-      return false
-
-    let rrType = get16(addr rxBuf, pos)
-    let rrClass = get16(addr rxBuf, pos + 2)
-    let rdLen = int(get16(addr rxBuf, pos + 8))
-    pos += 10
-    if pos + rdLen > size:
-      return false
-
-    if rrType == U16(1) and rrClass == U16(1) and rdLen == 4:
-      outIp = get32(addr rxBuf, pos)
-      return true
-
-    pos += rdLen
-    inc i
-
-  false
-
-
-proc findAnyARecord(size: int, outIp: var U32): bool =
-  var pos = 12
-  while pos + 15 < size:
-    if (rxBuf[pos] and 0xc0'u8) == 0xc0'u8:
-      let rrType = get16(addr rxBuf, pos + 2)
-      let rrClass = get16(addr rxBuf, pos + 4)
-      let rdLen = int(get16(addr rxBuf, pos + 10))
-      if rrType == U16(1) and rrClass == U16(1) and rdLen == 4 and pos + 16 <= size:
-        outIp = get32(addr rxBuf, pos + 12)
-        return true
-
-      let next = pos + 12 + rdLen
-      if next > pos and next <= size:
-        pos = next
-      else:
-        inc pos
-    else:
-      inc pos
-
-  false
-
-
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   if isEmpty(arg):
-    printUsage()
-    sysExit(1)
-
-  let queryLen = buildDnsQuery(arg)
-  if queryLen <= 0:
     printUsage()
     sysExit(1)
 
@@ -199,20 +28,8 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   write(arg)
   write("\n")
 
-  if udpSend(DnsServerIp, DnsSourcePort, DnsDestPort, addr txBuf[0], U32(queryLen)) != 0:
-    write("nslookup: send failed\n")
-    sysExit(1)
-
-  var srcIp = U32(0)
-  var srcPort = U16(0)
-  let size = udpReceive(DnsServerIp, DnsDestPort, DnsSourcePort, addr rxBuf[0],
-                        U32(DnsPacketMax), addr srcIp, addr srcPort)
-  if size <= 0:
-    write("nslookup: query failed\n")
-    sysExit(1)
-
   var ip = U32(0)
-  if parseDnsAnswer(int(size), ip) or findAnyARecord(int(size), ip):
+  if resolveA(arg, ip):
     write("Address: ")
     writeIp(ip)
     write("\n")

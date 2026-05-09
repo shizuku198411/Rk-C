@@ -1,4 +1,4 @@
-import ../../lib/syscall
+import ../../lib/core/syscall
 import config
 import packet
 import state

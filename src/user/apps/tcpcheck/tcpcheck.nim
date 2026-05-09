@@ -1,7 +1,7 @@
-import ../../lib/io
-import ../../lib/net_tcp
-import ../../lib/strutils
-import ../../lib/syscall
+import ../../lib/core/io
+import ../../lib/net/net_tcp
+import ../../lib/core/strutils
+import ../../lib/core/syscall
 
 const
   RxCap = 512

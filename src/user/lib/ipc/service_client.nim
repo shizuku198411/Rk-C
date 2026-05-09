@@ -1,4 +1,4 @@
-import syscall
+import ../core/syscall
 
 const
   ServiceClientCap = 8

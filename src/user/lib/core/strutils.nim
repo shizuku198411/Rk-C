@@ -1,4 +1,4 @@
-import ../../lib/types
+import ../../../lib/types
 
 
 proc cstrlen*(s: cstring): U64 =

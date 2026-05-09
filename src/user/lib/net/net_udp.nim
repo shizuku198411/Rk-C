@@ -1,6 +1,6 @@
-import ipc_request
-import service_client
-import syscall
+import ../ipc/ipc_request
+import ../ipc/service_client
+import ../core/syscall
 
 
 proc packPorts(srcPort, dstPort: U16): U64 =

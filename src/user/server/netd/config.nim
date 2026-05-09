@@ -1,4 +1,4 @@
-import ../../lib/syscall
+import ../../lib/core/syscall
 
 const
   MonitorSleepTicks* = U64(1)
@@ -26,3 +26,5 @@ const
   TcpTimeoutTicks* = 5000
   TcpMaxConnections* = 4
   TcpInitialSourcePort* = U16(50000)
+  TcpMss* = U16(512)
+  TcpReceiveWindow* = U16(4096)

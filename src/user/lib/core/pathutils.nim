@@ -1,5 +1,5 @@
-import syscall
-import strutils
+import ./syscall
+import ./strutils
 
 const
   PathMax* = 128

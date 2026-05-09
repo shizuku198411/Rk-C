@@ -1,6 +1,6 @@
-import ../../lib/io
-import ../../lib/strutils
-import ../../lib/syscall
+import ../../lib/core/io
+import ../../lib/core/strutils
+import ../../lib/core/syscall
 
 const
   ProcessCap = 16

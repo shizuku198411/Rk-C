@@ -1,8 +1,8 @@
-import ../../lib/io
-import ../../lib/ipc_request
-import ../../lib/service_client
-import ../../lib/strutils
-import ../../lib/syscall
+import ../../lib/core/io
+import ../../lib/ipc/ipc_request
+import ../../lib/ipc/service_client
+import ../../lib/core/strutils
+import ../../lib/core/syscall
 
 const
   ServiceCap = 8

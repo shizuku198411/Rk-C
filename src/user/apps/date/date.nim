@@ -1,5 +1,5 @@
-import ../../lib/io
-import ../../lib/syscall
+import ../../lib/core/io
+import ../../lib/core/syscall
 
 
 proc write2(value: U32) =

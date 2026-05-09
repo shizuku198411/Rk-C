@@ -1,4 +1,7 @@
-import ../../lib/syscall
+import ../../lib/core/syscall
+
+const
+  TcpRxBufferMax* = 8192
 
 type
   TcpConnState* = enum
@@ -22,7 +25,9 @@ type
     seq*: U32
     ack*: U32
     rxLen*: U32
-    rxBuf*: array[SysIpcMessageMax, U8]
+    rxReadOff*: U32
+    rxWriteOff*: U32
+    rxBuf*: array[TcpRxBufferMax, U8]
     ackedSeq*: U32
     finSeen*: bool
 
