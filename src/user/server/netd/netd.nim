@@ -5,6 +5,7 @@ import config
 import icmp
 import packet
 import state
+import tcp
 import udp
 
 var
@@ -68,6 +69,47 @@ proc sendUdpReceiveReply(pid: I32, ok: bool, srcIp: U32, srcPort: U16,
   discard sysIpcSendPacket(pid, addr replyPacket)
 
 
+proc sendTcpHandleReply(pid: I32, op: U32, handle: I32) =
+  replyPacket = SysIpcPacket()
+  replyPacket.op = op
+  if handle >= 0:
+    replyPacket.arg0 = U64(handle)
+  else:
+    replyPacket.arg0 = U64(-1'i64)
+
+  discard sysIpcSendPacket(pid, addr replyPacket)
+
+
+proc sendTcpResultReply(pid: I32, op: U32, result: I32) =
+  replyPacket = SysIpcPacket()
+  replyPacket.op = op
+  if result >= 0:
+    replyPacket.arg0 = U64(result)
+  else:
+    replyPacket.arg0 = U64(-1'i64)
+
+  discard sysIpcSendPacket(pid, addr replyPacket)
+
+
+proc sendTcpReceiveReply(pid: I32, ok: bool, payload: ptr array[SysIpcMessageMax, char],
+                         len: U32) =
+  replyPacket = SysIpcPacket()
+  replyPacket.op = SysIpcOpNetTcpReceiveResponse
+  if ok:
+    replyPacket.arg0 = 0
+    replyPacket.len = len
+
+    var i = 0
+    while i < int(len) and i < SysIpcMessageMax:
+      replyPacket.data[i] = payload[][i]
+      inc i
+  else:
+    replyPacket.arg0 = U64(-1'i64)
+    replyPacket.len = 0
+
+  discard sysIpcSendPacket(pid, addr replyPacket)
+
+
 proc handlePacket(packet: ptr SysIpcPacket) =
   if packet.op == SysIpcOpNetPingRequest:
     let targetIp =
@@ -92,6 +134,23 @@ proc handlePacket(packet: ptr SysIpcPacket) =
                      unpackSrcPort(packet.arg1), unpackDstPort(packet.arg1),
                      addr data, srcIp, srcPort, len)
     sendUdpReceiveReply(packet.senderPid, ok, srcIp, srcPort, addr data, len)
+  elif packet.op == SysIpcOpNetTcpConnectRequest:
+    let handle = tcpConnect(net, U32(packet.arg0 and 0xffffffff'u64),
+                            unpackSrcPort(packet.arg1), unpackDstPort(packet.arg1))
+    sendTcpHandleReply(packet.senderPid, SysIpcOpNetTcpConnectResponse, handle)
+  elif packet.op == SysIpcOpNetTcpSendRequest:
+    let sent = tcpSend(net, U32(packet.arg0 and 0xffffffff'u64),
+                       addr packet.data[0], int(packet.len))
+    sendTcpResultReply(packet.senderPid, SysIpcOpNetTcpSendResponse, sent)
+  elif packet.op == SysIpcOpNetTcpReceiveRequest:
+    var data: array[SysIpcMessageMax, char]
+    var len = U32(0)
+    let ok = tcpReceive(net, U32(packet.arg0 and 0xffffffff'u64), addr data, len)
+    sendTcpReceiveReply(packet.senderPid, ok, addr data, len)
+  elif packet.op == SysIpcOpNetTcpCloseRequest:
+    let ok = tcpClose(net, U32(packet.arg0 and 0xffffffff'u64))
+    sendTcpResultReply(packet.senderPid, SysIpcOpNetTcpCloseResponse,
+                       if ok: I32(0) else: I32(-1))
 
 
 proc pollIpc() =
@@ -105,6 +164,10 @@ proc pollRx() =
     let size = sysRawNetRecv(addr net.rxBuf[0], U64(SysNetPacketMax))
     if size <= 0:
       return
+
+    if handleTcpPacket(net, size):
+      inc count
+      continue
 
     discard handleArpPacket(net, size, net.cachedArpIp, net.cachedArpMac)
     inc count
@@ -151,6 +214,8 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
     write("\n")
 
   initNetDevice()
+  net.tcpNextHandle = 1
+  net.tcpNextPort = TcpInitialSourcePort
 
   while true:
     pollIpc()

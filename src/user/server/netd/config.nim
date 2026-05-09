@@ -11,6 +11,7 @@ const
   ArpOpRequest* = U16(1)
   ArpOpReply* = U16(2)
   IpProtoIcmp* = U8(1)
+  IpProtoTcp* = U8(6)
   IpProtoUdp* = U8(17)
   IcmpEchoReply* = U8(0)
   IcmpEchoRequest* = U8(8)
@@ -22,3 +23,6 @@ const
   PingIdent* = U16(0x524b)
   DnsSourcePort* = U16(49152)
   DnsDestPort* = U16(53)
+  TcpTimeoutTicks* = 5000
+  TcpMaxConnections* = 4
+  TcpInitialSourcePort* = U16(50000)
