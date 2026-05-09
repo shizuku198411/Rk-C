@@ -1,5 +1,7 @@
 import ../../arch/riscv64/arch
 import ../../lib/types
+import ../../lib/syscall_types
+import ../syscall/system/trap_ops
 import ../dev/console
 import ../dev/timer
 import ../task/process
@@ -47,46 +49,60 @@ proc trapHandler*(frame: ptr TrapFrame) {.exportc: "trap_handler", cdecl.} =
 
   case scause
   of ScauseInstructionAddressMMisaligned:
+    inc trapCount.instructionAddressMissaligned
     panicMsg("Instruction Address Misaligned", scause, stval, userPc)
 
   of ScauseInstructionAccessFault:
+    inc trapCount.instructionAccessFault
     panicMsg("Instruction Access Fault", scause, stval, userPc)
 
   of ScauseIllegalInstruction:
+    inc trapCount.illegalInstruction
     panicMsg("Illegal Instruction", scause, stval, userPc)
   
   of ScauseBreakpoint:
+    inc trapCount.breakpoint
     panicMsg("Breakpoint", scause, stval, userPc)
   
   of ScauseLoadAddressMisaligned:
+    inc trapCount.loadAddressMisaligned
     panicMsg("Load Address Misaligned", scause, stval, userPc)
   
   of ScauseLoadAccessFault:
+    inc trapCount.loadAccessFault
     panicMsg("Load Access Fault", scause, stval, userPc)
   
   of ScauseStoreAMOAddressMisaligned:
+    inc trapCount.storeAMOAddressMisaligned
     panicMsg("Store/AMO Address Misaligned", scause, stval, userPc)
   
   of ScauseStoreAMOAccessFault:
+    inc trapCount.storeAMOAccessFault
     panicMsg("Store/AMO Access Fault", scause, stval, userPc)
   
   of ScauseEnvironmentCallFromUMode:
+    inc trapCount.environmentCallFromUMode
     handleSyscall(frame)
     arch.writeSepc(userPc + 4)
   
   of ScauseEnvironmentCallFromSMode:
+    inc trapCount.environmentCallFromSMode
     panicMsg("Environment Call from S-Mode", scause, stval, userPc)
   
   of ScauseInstructionPageFault:
+    inc trapCount.instructionPageFault
     panicMsg("Instruction Page Fault", scause, stval, userPc)
   
   of ScauseLoadPageFault:
+    inc trapCount.loadPageFault
     panicMsg("Load Page Fault", scause, stval, userPc)
   
   of ScauseStoreAMOPageFault:
+    inc trapCount.storeAMOPageFault
     panicMsg("Store/AMO Page Fault", scause, stval, userPc)
   
   of ScauseSupervisorTimer:
+    inc trapCount.supervisorTimer
     countUpTimerTick()
     wakeTimerWaiters(timerTickCount)
     if pollInput():

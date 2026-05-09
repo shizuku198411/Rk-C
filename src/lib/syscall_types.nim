@@ -68,6 +68,22 @@ type
     hour*: U32
     minute*: U32
     second*: U32
+  
+  SysTrapCount* {.packed.} = object
+    instructionAddressMissaligned*: U64
+    instructionAccessFault*: U64
+    illegalInstruction*: U64
+    breakpoint*: U64
+    loadAddressMisaligned*: U64
+    loadAccessFault*: U64
+    storeAMOAddressMisaligned*: U64
+    storeAMOAccessFault*: U64
+    environmentCallFromUMode*: U64
+    environmentCallFromSMode*: U64
+    instructionPageFault*: U64
+    loadPageFault*: U64
+    storeAMOPageFault*: U64
+    supervisorTimer*: U64
 
   SysBitmapInfo* {.packed.} = object
     total*: U64

@@ -66,6 +66,7 @@ proc printHelp() =
   write("  nslookup <name>            resolve DNS A record\n")
   write("  tcpcheck <ip> <port>       test TCP connect/send/receive/close\n")
   write("  ticks                      show timer ticks\n")
+  write("  traps                      show traps count\n")
   write("  bitmap                     show physical page bitmap usage\n")
   write("  <command> &                run command in background\n")
   write("  exit                       exit shell\n")
@@ -177,6 +178,57 @@ proc changeDirectory(path: cstring) =
 
   if sysSetCwd(resolved) != 0:
     write("cd: failed\n")
+
+
+proc printTrapCount() =
+  var trapCount: SysTrapCount
+  if sysTraps(addr trapCount) != 0:
+    write("traps: failed\n")
+    return
+
+  write("trap count:\n")
+  write("  instruction address misaligned : ")
+  writeUnsigned(trapCount.instructionAddressMissaligned)
+  write("\n")
+  write("  instruction access fault       : ")
+  writeUnsigned(trapCount.instructionAccessFault)
+  write("\n")
+  write("  illegal instruction            : ")
+  writeUnsigned(trapCount.illegalInstruction)
+  write("\n")
+  write("  breakpoint                     : ")
+  writeUnsigned(trapCount.breakpoint)
+  write("\n")
+  write("  load address misaligned        : ")
+  writeUnsigned(trapCount.loadAddressMisaligned)
+  write("\n")
+  write("  load access fault              : ")
+  writeUnsigned(trapCount.loadAccessFault)
+  write("\n")
+  write("  store/amo address misaligned   : ")
+  writeUnsigned(trapCount.storeAMOAddressMisaligned)
+  write("\n")
+  write("  store/amo access fault         : ")
+  writeUnsigned(trapCount.storeAMOAccessFault)
+  write("\n")
+  write("  environment call from u-mode   : ")
+  writeUnsigned(trapCount.environmentCallFromUMode)
+  write("\n")
+  write("  environment call from s-mode   : ")
+  writeUnsigned(trapCount.environmentCallFromSMode)
+  write("\n")
+  write("  instruction page fault         : ")
+  writeUnsigned(trapCount.instructionPageFault)
+  write("\n")
+  write("  load page fault                : ")
+  writeUnsigned(trapCount.loadPageFault)
+  write("\n")
+  write("  store/amo page fault           : ")
+  writeUnsigned(trapCount.storeAMOPageFault)
+  write("\n")
+  write("  supervisor timer               : ")
+  writeUnsigned(trapCount.supervisorTimer)
+  write("\n")
 
 
 proc printBitmapInfo() =
@@ -310,6 +362,9 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
     elif streq(cstr(cmdBuf), "ticks"):
       writeUnsigned(sysTicks())
       write("\n")
+    
+    elif streq(cstr(cmdBuf), "traps"):
+      printTrapCount()
 
     elif streq(cstr(cmdBuf), "bitmap"):
       printBitmapInfo()

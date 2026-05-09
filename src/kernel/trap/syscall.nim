@@ -9,6 +9,7 @@ import ../syscall/mm/memory_ops
 import ../syscall/net/net_ops
 import ../syscall/service/service_ops
 import ../syscall/system/system_ops
+import ../syscall/system/trap_ops
 import ../syscall/task/process_ops
 import ../trap/trap_types
 
@@ -26,6 +27,9 @@ proc handleSyscall*(frame: ptr TrapFrame) =
 
   of SysTicks:
     frame.a0 = syscallTicks()
+  
+  of SysTraps:
+    frame.a0 = syscallTrapCount(frame.a0)
 
   of SysExit:
     frame.a0 = syscallExit(frame.a0)

@@ -7,6 +7,7 @@ const
   SysTicks* = U64(4)
   SysExit* = U64(5)
   SysLs* = U64(6)
+  SysTraps* = U64(7)
   SysMkdir* = U64(9)
   SysExec* = U64(11)
   SysWait* = U64(12)

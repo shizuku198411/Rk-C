@@ -47,6 +47,9 @@ proc sysTicks*(): U64 =
   rawSyscall3(SysTicks, 0, 0, 0)
 
 
+proc sysTraps*(entries: ptr SysTrapCount): U64 =
+  rawSyscall3(SysTraps, cast[U64](entries), 0, 0)
+
 proc sysExit*(status: U64) {.noreturn.} =
   discard rawSyscall3(SysExit, status, 0, 0)
   halt()
