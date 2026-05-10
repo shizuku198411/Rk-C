@@ -177,6 +177,8 @@ proc restoreHistoryFromBuf(size: I32) =
     linePos: I32 = 0
     histPos: I32 = 0
   
+  clearHistory()
+  
   while inPos < size and histPos < HistoryMax:
     let ch = historySaveBuf[inPos]
     if ch == '\0':
