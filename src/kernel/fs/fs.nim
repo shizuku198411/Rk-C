@@ -68,6 +68,9 @@ proc fsWriteFile*(path: cstring, data: pointer, size: U64): int
 
 
 proc cstrlen(s: cstring): int =
+  if s == nil:
+    return 0
+
   var n = 0
   while s[n] != '\0':
     inc n
@@ -75,8 +78,9 @@ proc cstrlen(s: cstring): int =
 
 
 proc pathMatchesMount(path: cstring, mountPath: cstring, mountLen: int): bool =
-  if path == nil:
+  if path == nil or mountPath == nil or mountLen <= 0:
     return false
+
   var i = 0
   while i < mountLen:
     if path[i] != mountPath[i]:
@@ -92,12 +96,16 @@ proc mountLocalPath(path: cstring, mountLen: int): cstring =
 
 
 proc vfsMount(path: cstring, backend: VfsBackend) =
+  if path == nil or path[0] == '\0':
+    panic("invalid vfs mount path")
   if mountCount >= VfsMaxMounts:
     panic("vfs mount table full")
-  mounts[mountCount].used = true
-  mounts[mountCount].path = path
-  mounts[mountCount].pathLen = cstrlen(path)
-  mounts[mountCount].backend = backend
+
+  let idx = mountCount
+  mounts[idx].path = path
+  mounts[idx].pathLen = cstrlen(path)
+  mounts[idx].backend = backend
+  mounts[idx].used = true
   inc mountCount
 
 
@@ -110,6 +118,14 @@ proc findMount(path: cstring): int =
         best = i
     inc i
   best
+
+
+proc clearMounts() =
+  var i = 0
+  while i < VfsMaxMounts:
+    mounts[i] = VfsMount()
+    inc i
+  mountCount = 0
 
 
 proc pathEq(a, b: cstring): bool =
@@ -428,7 +444,7 @@ proc fsInit*() =
   printUnsigned(U64(appfsEntryCount))
   putChar('\n')
 
-  mountCount = 0
+  clearMounts()
   tmpfsInit()
   vfsMount("/tmp", vfsTmpfs)
   printBootMsg("  mounted tmpfs on /tmp\n")
@@ -641,7 +657,7 @@ proc fsRmdir*(path: cstring): int =
 
 
 proc fsReadFile*(path: cstring, dst: pointer, capacity: U64): int =
-  if not fsReady or dst == nil:
+  if not fsReady or path == nil or dst == nil:
     return -1
 
   let mountIdx = findMount(path)
