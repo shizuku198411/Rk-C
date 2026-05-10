@@ -145,46 +145,59 @@ proc x25519*(outShared: pointer, scalar: pointer, point: pointer): I32 =
   var z: array[X25519KeyLen, U8]
   clampScalar(addr z[0], scalar)
 
-  var x: FieldElement
-  var a = FeOne
+  var x1: FieldElement
+  var x2 = FeOne
+  var z2 = FeZero
+  var x3: FieldElement
+  var z3 = FeOne
+  var a: FieldElement
+  var aa: FieldElement
   var b: FieldElement
-  var c = FeZero
-  var d = FeOne
+  var bb: FieldElement
   var e: FieldElement
-  var f: FieldElement
-  unpack25519(x, point)
-  b = x
+  var c: FieldElement
+  var d: FieldElement
+  var da: FieldElement
+  var cb: FieldElement
+  var t0: FieldElement
+  var t1: FieldElement
+  var swap = int64(0)
+  unpack25519(x1, point)
+  x3 = x1
 
   var i = 254
   while i >= 0:
-    let r = int64((z[i shr 3] shr (i and 7)) and 1)
-    sel25519(a, b, r)
-    sel25519(c, d, r)
-    addFe(e, a, c)
-    subFe(a, a, c)
-    addFe(c, b, d)
-    subFe(b, b, d)
-    squareFe(d, e)
-    squareFe(f, a)
-    mulFe(a, c, a)
-    mulFe(c, b, e)
-    addFe(e, a, c)
-    subFe(a, a, c)
-    squareFe(b, a)
-    subFe(c, d, f)
-    mulFe(a, c, Fe121665)
-    addFe(a, a, d)
-    mulFe(c, c, a)
-    mulFe(a, d, f)
-    mulFe(d, b, x)
-    squareFe(b, e)
-    sel25519(a, b, r)
-    sel25519(c, d, r)
+    let bit = int64((z[i shr 3] shr (i and 7)) and 1)
+    swap = swap xor bit
+    sel25519(x2, x3, swap)
+    sel25519(z2, z3, swap)
+    swap = bit
+
+    addFe(a, x2, z2)
+    squareFe(aa, a)
+    subFe(b, x2, z2)
+    squareFe(bb, b)
+    subFe(e, aa, bb)
+    addFe(c, x3, z3)
+    subFe(d, x3, z3)
+    mulFe(da, d, a)
+    mulFe(cb, c, b)
+    addFe(t0, da, cb)
+    squareFe(x3, t0)
+    subFe(t1, da, cb)
+    squareFe(t1, t1)
+    mulFe(z3, t1, x1)
+    mulFe(x2, aa, bb)
+    mulFe(t0, e, Fe121665)
+    addFe(t0, t0, aa)
+    mulFe(z2, e, t0)
     dec i
 
-  inv25519(c, c)
-  mulFe(a, a, c)
-  pack25519(outShared, a)
+  sel25519(x2, x3, swap)
+  sel25519(z2, z3, swap)
+  inv25519(z2, z2)
+  mulFe(x2, x2, z2)
+  pack25519(outShared, x2)
   0
 
 

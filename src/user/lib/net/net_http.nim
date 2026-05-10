@@ -171,16 +171,15 @@ proc httpTlsGetStart*(ip: U32, port: U16, host, path: cstring): I32 =
   if reqLen <= 0:
     return -1
 
-  var client = TlsClient()
-  let rc = tlsConnect(client, ip, port, host)
-  if rc <= 0:
-    return rc
+  let handle = tlsOpen(ip, port, host)
+  if handle <= 0:
+    return handle
 
-  if tlsSend(client, addr reqBuf[0], U32(reqLen)) != reqLen:
-    discard tlsClose(client)
+  if tlsSendHandle(handle, addr reqBuf[0], U32(reqLen)) != reqLen:
+    discard tlsCloseHandle(handle)
     return -1
 
-  client.handle
+  handle
 
 
 proc httpGetStart*(ip: U32, port: U16, host, path: cstring, tls: bool): I32 =
@@ -191,8 +190,14 @@ proc httpGetStart*(ip: U32, port: U16, host, path: cstring, tls: bool): I32 =
 
 
 proc httpRead*(handle: I32, buf: pointer, capacity: U32): I32 =
+  if isTlsHandle(handle):
+    return tlsReceiveHandle(handle, buf, capacity)
+
   tcpReceive(handle, buf, capacity)
 
 
 proc httpClose*(handle: I32): I32 =
+  if isTlsHandle(handle):
+    return tlsCloseHandle(handle)
+
   tcpClose(handle)

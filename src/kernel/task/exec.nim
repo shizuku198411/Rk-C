@@ -12,7 +12,7 @@ const
   ShellStackTop* = VAddr(0x01100000)
   AppBase* = VAddr(0x01200000)
   AppStackTop* = VAddr(0x01300000)
-  UserImageMaxPages = U64(16)
+  UserImageMaxPages = U64(64)
   UserImageMaxSize = UserImageMaxPages * PageSize
   UserStackPages = U64(4)
   UserArgMax = U64(128)
