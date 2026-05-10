@@ -10,10 +10,10 @@ const
 
 
 proc nextHopFor*(targetIp: U32): U32 =
-  if (targetIp and Netmask) == (LocalIp and Netmask):
+  if (targetIp and subnet) == (interfaceIp and subnet):
     targetIp
   else:
-    GatewayIp
+    gatewayIp
 
 
 proc sendUdp*(net: var NetdState, dstIp: U32, srcPort, dstPort: U16,
@@ -60,7 +60,7 @@ proc isUdpPacket*(net: var NetdState, size: I32, srcIp: U32,
     return false
   if get32(addr net.rxBuf, 26) != srcIp:
     return false
-  if get32(addr net.rxBuf, 30) != LocalIp:
+  if get32(addr net.rxBuf, 30) != interfaceIp:
     return false
 
   let ihl = int(net.rxBuf[14] and 0x0f'u8) * 4
@@ -96,7 +96,7 @@ proc isUdpPacketFrom*(net: var NetdState, size: I32, srcIp: U32,
   let packetSrcIp = get32(addr net.rxBuf, 26)
   if srcIp != 0 and packetSrcIp != srcIp:
     return false
-  if get32(addr net.rxBuf, 30) != LocalIp:
+  if get32(addr net.rxBuf, 30) != interfaceIp:
     return false
 
   let ihl = int(net.rxBuf[14] and 0x0f'u8) * 4

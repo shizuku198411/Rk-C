@@ -2,6 +2,7 @@ import ../../lib/core/syscall
 import config
 import packet
 import state
+import ipv4
 
 
 proc sendArpRequest*(net: var NetdState, targetIp: U32): bool =
@@ -15,7 +16,7 @@ proc sendArpRequest*(net: var NetdState, targetIp: U32): bool =
   net.txBuf[19] = 4
   put16(net.txBuf, 20, ArpOpRequest)
   copyMacToFrame(net.txBuf, 22, addr net.mac)
-  put32(net.txBuf, 28, LocalIp)
+  put32(net.txBuf, 28, interfaceIp)
   put32(net.txBuf, 38, targetIp)
   sendFrame(net.txBuf, 42)
 
@@ -32,7 +33,7 @@ proc sendArpReply(net: var NetdState, targetMac: ptr array[SysNetMacLen, U8],
   net.txBuf[19] = 4
   put16(net.txBuf, 20, ArpOpReply)
   copyMacToFrame(net.txBuf, 22, addr net.mac)
-  put32(net.txBuf, 28, LocalIp)
+  put32(net.txBuf, 28, interfaceIp)
   copyMacToFrame(net.txBuf, 32, targetMac)
   put32(net.txBuf, 38, targetIp)
   sendFrame(net.txBuf, 42)
@@ -45,7 +46,7 @@ proc handleArpRequest(net: var NetdState, size: I32): bool =
     return false
   if get16(addr net.rxBuf, 20) != ArpOpRequest:
     return false
-  if get32(addr net.rxBuf, 38) != LocalIp:
+  if get32(addr net.rxBuf, 38) != interfaceIp:
     return false
 
   var senderMac: array[SysNetMacLen, U8]
@@ -66,7 +67,7 @@ proc handleArpPacket*(net: var NetdState, size: I32, targetIp: U32,
     return false
   if get32(addr net.rxBuf, 28) != targetIp:
     return false
-  if get32(addr net.rxBuf, 38) != LocalIp:
+  if get32(addr net.rxBuf, 38) != interfaceIp:
     return false
 
   copyMacFromRx(addr net.rxBuf, outMac, 22)

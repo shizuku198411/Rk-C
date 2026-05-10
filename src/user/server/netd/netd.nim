@@ -1,6 +1,7 @@
 import ../../lib/core/io
 import ../../lib/core/syscall
 import ../../lib/core/strutils
+import ../../lib/net/netutls
 import arp
 import config
 import icmp
@@ -8,17 +9,18 @@ import packet
 import state
 import tcp
 import udp
+import ipv4
 
 
 const
   ResolveConfPath = "/etc/resolve.conf"
+  InterfaceConfPath = "/etc/interface.conf"
 
 
 var
   net: NetdState
   requestPacket: SysIpcPacket
   replyPacket: SysIpcPacket
-
 
 proc sendPingReply(pid: I32, ok: bool) =
   replyPacket = SysIpcPacket()
@@ -120,7 +122,7 @@ proc handlePacket(packet: ptr SysIpcPacket) =
   if packet.op == SysIpcOpNetPingRequest:
     let targetIp =
       if packet.arg0 == 0:
-        GatewayIp
+        gatewayIp
       else:
         U32(packet.arg0 and 0xffffffff'u64)
 
@@ -179,6 +181,65 @@ proc pollRx() =
     inc count
 
 
+proc loadInterfaceConfig() =
+  const
+    bufSize = 128
+    lineSize = 128
+  
+  let
+    addressPrefix: cstring = "address"
+    subnetPrefix: cstring = "subnet"
+    gatewayPrefix: cstring = "gateway"
+
+  var
+    buf: array[bufSize, char]
+    lineBuf: array[lineSize, char]
+  let size = sysReadFile(cstring(InterfaceConfPath), addr buf[0], bufSize)
+  if size < 0:
+    write("[netd] load interface config failed\n")
+    sysExit(1)
+  
+  buf[size] = '\0'
+  var pos = 0
+
+  write("[netd] interface:\n")
+  while pos < size:
+    let lineLen = getLine(addr buf[0], size, pos, addr lineBuf[0], lineSize)
+    if lineLen > 0:
+      var valuepos: U32 = 0
+      let linecstr = cast[cstring](addr lineBuf[0])
+
+      # address
+      if startsWithPrefix(linecstr, addressPrefix):
+        valuepos = 7
+        while isSpace(linecstr[valuepos]):
+          inc valuepos
+        write("[netd]   address = ")
+        write(cast[cstring](addr lineBuf[valuepos]))
+        write("\n")
+        discard parseIpv4(linecstr, valuepos, interfaceIp)
+
+      # subnet
+      elif startsWithPrefix(linecstr, subnetPrefix):
+        valuepos = 6
+        while isSpace(linecstr[valuepos]):
+          inc valuepos
+        write("[netd]   subnet  = ")
+        write(cast[cstring](addr lineBuf[valuepos]))
+        write("\n")
+        discard parseIpv4(linecstr, valuepos, subnet)
+
+      # gateway
+      elif startsWithPrefix(linecstr, gatewayPrefix):
+        valuepos = 7
+        while isSpace(linecstr[valuepos]):
+          inc valuepos
+        write("[netd]   gateway = ")
+        write(cast[cstring](addr lineBuf[valuepos]))
+        write("\n")
+        discard parseIpv4(linecstr, valuepos, gatewayIp)
+
+
 proc initNetDevice() =
   if sysRawNetInit() != 0:
     write("[netd] virtio-net init failed\n")
@@ -196,9 +257,9 @@ proc initNetDevice() =
   writeHex(net.info.mmioBase)
   write(" mac=")
   writeMacValue(addr net.mac)
-  write(" ip=")
-  writeIp(LocalIp)
   write("\n")
+
+  loadInterfaceConfig()
 
 
 proc checkResolveConf(): bool =
@@ -210,14 +271,37 @@ proc checkResolveConf(): bool =
 proc createResolveConf() =
   let contents: cstring = "nameserver 8.8.8.8"
   if sysWriteFile(cstring(ResolveConfPath), addr contents[0], cstrlen(contents)) != 0:
-    write("failed to create /etc/resolve.conf")
+    write("failed to create ")
+    write(cstring(ResolveConfPath))
+    write("\n")
+
+
+proc checkInterfaceConf(): bool =
+  const bufSize = 128
+  var buf: array[bufSize, char]
+  sysReadFile(cstring(InterfaceConfPath), addr buf[0], bufSize) > 0
+
+
+proc createInterfaceConf() =
+  let contents: cstring = "address 10.0.2.15\nsubnet 255.255.255.0\ngateway 10.0.2.2"
+  if sysWriteFile(cstring(InterfaceConfPath), addr contents[0], cstrlen(contents)) != 0:
+    write("failed to create ")
+    write(cstring(InterfaceConfPath))
+    write("\n")
+
+
+proc setupConfigFile() =
+  if not checkResolveConf():
+    createResolveConf()
+  
+  if not checkInterfaceConf():
+    createInterfaceConf()
 
 
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   discard arg
 
-  if not checkResolveConf():
-    createResolveConf()
+  setupConfigFile()
 
   if sysRawNetInfo(addr net.info) != 0:
     write("[netd] virtio-net detection failed\n")

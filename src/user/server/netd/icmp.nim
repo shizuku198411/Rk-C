@@ -44,7 +44,7 @@ proc isIcmpEchoReply*(net: var NetdState, size: I32, srcIp: U32, seq: U16): bool
     return false
   if get32(addr net.rxBuf, 26) != srcIp:
     return false
-  if get32(addr net.rxBuf, 30) != LocalIp:
+  if get32(addr net.rxBuf, 30) != interfaceIp:
     return false
 
   let ihl = int(net.rxBuf[14] and 0x0f'u8) * 4
@@ -62,10 +62,10 @@ proc isIcmpEchoReply*(net: var NetdState, size: I32, srcIp: U32, seq: U16): bool
 proc pingHost*(net: var NetdState, targetIp: U32): bool =
   var targetMac: array[SysNetMacLen, U8]
   let nextHopIp =
-    if (targetIp and Netmask) == (LocalIp and Netmask):
+    if (targetIp and subnet) == (interfaceIp and subnet):
       targetIp
     else:
-      GatewayIp
+      gatewayIp
 
   if not resolveArp(net, nextHopIp, targetMac):
     write("[netd] arp failed for ")

@@ -163,7 +163,7 @@ proc sendTcpSegment(net: var NetdState, conn: ptr TcpConnection, flags: U8,
       inc i
 
   put16(net.txBuf, tcpOff + 16,
-        tcpChecksum(addr net.txBuf, tcpOff, tcpLen, LocalIp, conn.remoteIp))
+        tcpChecksum(addr net.txBuf, tcpOff, tcpLen, interfaceIp, conn.remoteIp))
 
   sendFrame(net.txBuf, U64(14 + int(totalLen)))
 
@@ -176,7 +176,7 @@ proc isTcpPacket(net: var NetdState, size: I32, tcpOff: var int,
     return false
   if net.rxBuf[23] != IpProtoTcp:
     return false
-  if get32(addr net.rxBuf, 30) != LocalIp:
+  if get32(addr net.rxBuf, 30) != interfaceIp:
     return false
 
   let ihl = int(net.rxBuf[14] and 0x0f'u8) * 4

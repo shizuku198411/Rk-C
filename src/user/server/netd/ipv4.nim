@@ -1,7 +1,11 @@
 import ../../lib/core/syscall
-import config
 import packet
 import state
+
+var
+  interfaceIp*: U32
+  gatewayIp*: U32
+  subnet*: U32
 
 
 proc buildIpv4Header*(net: var NetdState, totalLen: U16, dstIp: U32, proto: U8) =
@@ -14,6 +18,6 @@ proc buildIpv4Header*(net: var NetdState, totalLen: U16, dstIp: U32, proto: U8) 
   net.txBuf[22] = 64
   net.txBuf[23] = proto
   put16(net.txBuf, 24, 0)
-  put32(net.txBuf, 26, LocalIp)
+  put32(net.txBuf, 26, interfaceIp)
   put32(net.txBuf, 30, dstIp)
   put16(net.txBuf, 24, checksum(addr net.txBuf, 14, 20))
