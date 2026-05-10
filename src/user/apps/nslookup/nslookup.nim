@@ -4,6 +4,10 @@ import ../../lib/core/strutils
 import ../../lib/core/syscall
 
 
+const
+  ResolveConfPath = "/etc/resolve.conf"
+
+
 proc writeIp(value: U32) =
   writeUnsigned(U64((value shr 24) and 0xff'u32))
   writeChar('.')
@@ -18,12 +22,26 @@ proc printUsage() =
   write("usage: nslookup <name>\n")
 
 
+proc loadNameserverIp(): cstring =
+  const BufSize = 64
+  var buf: array[BufSize, char]
+  let size = sysReadFile(cstring(ResolveConfPath), addr buf[0], BufSize)
+  if size < 0:
+    return
+  buf[size] = '\0'
+  cast[cstring](addr buf[11])
+
+
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   if isEmpty(arg):
     printUsage()
     sysExit(1)
 
-  write("Server: 8.8.8.8\n")
+  let nameserver = loadNameserverIp()
+
+  write("Server: ")
+  write(nameserver)
+  write("\n")
   write("Name: ")
   write(arg)
   write("\n")

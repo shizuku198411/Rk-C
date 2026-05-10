@@ -3,6 +3,7 @@ import ../core/strutils
 import ../core/syscall
 
 const
+  ResolveConfPath = "/etc/resolve.conf"
   DnsServerIp* = U32(0x08080808'u32)
   DnsSourcePort* = U16(49152)
   DnsDestPort* = U16(53)
@@ -26,6 +27,104 @@ proc get16(buf: ptr array[DnsPacketMax, U8], off: int): U16 =
 proc get32(buf: ptr array[DnsPacketMax, U8], off: int): U32 =
   (U32(buf[][off]) shl 24) or (U32(buf[][off + 1]) shl 16) or
     (U32(buf[][off + 2]) shl 8) or U32(buf[][off + 3])
+
+
+proc isSpace(ch: char): bool =
+  ch == ' ' or ch == '\t' or ch == '\r' or ch == '\n'
+
+
+proc isDigit(ch: char): bool =
+  ch >= '0' and ch <= '9'
+
+
+proc parseDecimalU32(s: cstring, pos: var U32, value: var U32): bool =
+  var v = 0.U32
+  var found = false
+
+  while isDigit(s[pos]):
+    found = true
+    v = v * 10.U32 + U32(ord(s[pos]) - ord('0'))
+    pos += 1.U32
+
+  if not found:
+    return false
+
+  value = v
+  true
+
+
+proc parseIpv4*(s: cstring, pos: var U32, outIp: var U32): bool =
+  var a, b, c, d: U32
+
+  if not parseDecimalU32(s, pos, a):
+    return false
+  if s[pos] != '.':
+    return false
+  pos += 1.U32
+
+  if not parseDecimalU32(s, pos, b):
+    return false
+  if s[pos] != '.':
+    return false
+  pos += 1.U32
+
+  if not parseDecimalU32(s, pos, c):
+    return false
+  if s[pos] != '.':
+    return false
+  pos += 1.U32
+
+  if not parseDecimalU32(s, pos, d):
+    return false
+
+  if a > 255.U32 or b > 255.U32 or c > 255.U32 or d > 255.U32:
+    return false
+
+  outIp =
+    (a shl 24) or
+    (b shl 16) or
+    (c shl 8) or
+    d
+
+  true
+
+
+proc startsWithNameserver(s: cstring): bool =
+  const Prefix = "nameserver"
+  var i: U32 = 0
+
+  while Prefix[i] != '\0':
+    if s[i] != Prefix[i]:
+      return false
+    inc i
+  true
+
+
+proc parseNameserverIp(contents: cstring, outIp: var U32): bool =
+  var pos: U32 = 0
+
+  if not startsWithNameserver(contents):
+    return false
+  pos = 10
+
+  while isSpace(contents[pos]):
+    inc pos
+  
+  parseIpv4(contents, pos, outIp)
+
+
+proc loadNameServerIp(outIp: var U32): bool =
+  const BufSize = 64
+  var buf: array[BufSize, char]
+  let size = sysReadFile(cstring(ResolveConfPath), addr buf[0], BufSize)
+  if size < 0:
+    return false
+
+  # convert array to cstring
+  buf[size] = '\0'
+  let contents = cast[cstring](addr buf[0])
+
+  parseNameserverIp(contents, outIp)
 
 
 proc clearTx() =
@@ -173,16 +272,20 @@ proc resolveA*(name: cstring, outIp: var U32): bool =
   if isEmpty(name):
     return false
 
+  var dnsIp: U32
+  if not loadNameServerIp(dnsIp):
+    return false
+
   let queryLen = buildDnsQuery(name)
   if queryLen <= 0:
     return false
 
-  if udpSend(DnsServerIp, DnsSourcePort, DnsDestPort, addr txBuf[0], U32(queryLen)) != 0:
+  if udpSend(dnsIp, DnsSourcePort, DnsDestPort, addr txBuf[0], U32(queryLen)) != 0:
     return false
 
   var srcIp = U32(0)
   var srcPort = U16(0)
-  let size = udpReceive(DnsServerIp, DnsDestPort, DnsSourcePort, addr rxBuf[0],
+  let size = udpReceive(dnsIp, DnsDestPort, DnsSourcePort, addr rxBuf[0],
                         U32(DnsPacketMax), addr srcIp, addr srcPort)
   if size <= 0:
     return false

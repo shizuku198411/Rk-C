@@ -1,5 +1,6 @@
 import ../../lib/core/io
 import ../../lib/core/syscall
+import ../../lib/core/strutils
 import arp
 import config
 import icmp
@@ -7,6 +8,11 @@ import packet
 import state
 import tcp
 import udp
+
+
+const
+  ResolveConfPath = "/etc/resolve.conf"
+
 
 var
   net: NetdState
@@ -195,8 +201,23 @@ proc initNetDevice() =
   write("\n")
 
 
+proc checkResolveConf(): bool =
+  const bufSize = 64
+  var buf: array[bufSize, char]
+  sysReadFile(cstring(ResolveConfPath), addr buf[0], bufSize) > 0
+
+
+proc createResolveConf() =
+  let contents: cstring = "nameserver 8.8.8.8"
+  if sysWriteFile(cstring(ResolveConfPath), addr contents[0], cstrlen(contents)) != 0:
+    write("failed to create /etc/resolve.conf")
+
+
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   discard arg
+
+  if not checkResolveConf():
+    createResolveConf()
 
   if sysRawNetInfo(addr net.info) != 0:
     write("[netd] virtio-net detection failed\n")

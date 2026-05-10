@@ -420,6 +420,7 @@ proc fsInit*() =
 
   ensureRootDir("tmp", FsTypeMount)
   ensureRootDir("bin", FsTypeDir)
+  ensureRootDir("etc", FsTypeDir)
 
   if appfsLoad() < 0:
     panic("appfs load failed")
