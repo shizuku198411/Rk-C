@@ -194,7 +194,7 @@ proc loadInterfaceConfig() =
   var
     buf: array[bufSize, char]
     lineBuf: array[lineSize, char]
-  let size = sysReadFile(cstring(InterfaceConfPath), addr buf[0], bufSize)
+  let size = sysReadFile(cstring(InterfaceConfPath), addr buf[0], U64(bufSize - 1))
   if size < 0:
     write("[netd] load interface config failed\n")
     sysExit(1)

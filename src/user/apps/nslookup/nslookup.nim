@@ -6,7 +6,10 @@ import ../../lib/core/syscall
 
 const
   ResolveConfPath = "/etc/resolve.conf"
+  NameserverIpBufSize = 64
 
+var
+  nameserverIpBuf: array[NameserverIpBufSize, char]
 
 proc writeIp(value: U32) =
   writeUnsigned(U64((value shr 24) and 0xff'u32))
@@ -23,13 +26,11 @@ proc printUsage() =
 
 
 proc loadNameserverIp(): cstring =
-  const BufSize = 64
-  var buf: array[BufSize, char]
-  let size = sysReadFile(cstring(ResolveConfPath), addr buf[0], BufSize)
+  let size = sysReadFile(cstring(ResolveConfPath), addr nameserverIpBuf[0], U64(NameserverIpBufSize - 1))
   if size < 0:
     return
-  buf[size] = '\0'
-  cast[cstring](addr buf[11])
+  nameserverIpBuf[size] = '\0'
+  cast[cstring](addr nameserverIpBuf[11])
 
 
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =

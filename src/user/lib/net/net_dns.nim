@@ -47,7 +47,7 @@ proc parseNameserverIp(contents: cstring, outIp: var U32): bool =
 proc loadNameServerIp(outIp: var U32): bool =
   const BufSize = 64
   var buf: array[BufSize, char]
-  let size = sysReadFile(cstring(ResolveConfPath), addr buf[0], BufSize)
+  let size = sysReadFile(cstring(ResolveConfPath), addr buf[0], U64(BufSize))
   if size < 0:
     return false
 
