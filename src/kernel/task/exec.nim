@@ -2,7 +2,6 @@ import ../../lib/mem
 import ../../lib/types
 import ../dev/console
 import ../fs/fs
-import ../init/bootstrap
 import ../mm/memory
 import ../mm/paging
 import ../task/process
@@ -16,6 +15,23 @@ const
   UserImageMaxSize = UserImageMaxPages * PageSize
   UserStackPages = U64(4)
   UserArgMax = U64(128)
+
+  QemuUart0Base = PAddr(0x10000000)
+  QemuMmioSize = U64(0x00010000)
+  QemuPlicBase = PAddr(0x0c000000)
+  QemuPlicSize = U64(0x00400000)
+  QemuRtcBase = PAddr(0x00101000)
+  QemuRtcSize = U64(0x00001000)
+
+
+var
+  textStartSym {.importc: "__text_start".}: char
+  textEndSym {.importc: "__text_end".}: char
+  rodataStartSym {.importc: "__rodata_start".}: char
+  rodataEndSym {.importc: "__rodata_end".}: char
+  dataStartSym {.importc: "__data_start".}: char
+  freeRamEndSym {.importc: "__free_ram_end".}: char
+  kernelRootPageTable: PageTable
 
 
 proc copyArg(dst: PAddr, src: cstring, maxLen: U64) =
@@ -83,6 +99,10 @@ proc cloneMappedRange(srcRoot, dstRoot: PageTable, srcBase, dstBase: VAddr, page
     inc page
 
   0
+
+
+proc getKernelRootPageTable(): PageTable =
+  kernelRootPageTable
 
 
 proc cloneParentUserMemory(childRoot: PageTable, parent: ptr Process, childBase, childStackTop: VAddr): int =
@@ -162,6 +182,42 @@ proc installExecImage(p: ptr Process, root: PageTable, path: cstring, base, stac
   flushTlb()
   configureUserProcess(p, root, path, base, base, stackTop, userSp, imagePages, UserStackPages, argVa, 0)
   0
+
+
+proc mapKernelRanges(root: PageTable) =
+  let textStart = alignDown(cast[VAddr](addr textStartSym), PageSize)
+  let textSize = alignUp(cast[U64](addr textEndSym) - textStart, PageSize)
+  let rodataStart = alignDown(cast[VAddr](addr rodataStartSym), PageSize)
+  let rodataSize = alignUp(cast[U64](addr rodataEndSym) - rodataStart, PageSize)
+  let dataStart = alignDown(cast[VAddr](addr dataStartSym), PageSize)
+  let dataSize = alignUp(cast[U64](addr freeRamEndSym) - dataStart, PageSize)
+
+  if mapRange(root, textStart, textStart, textSize, PteR or PteX) != 0:
+    panic("failed to map kernel text range")
+
+  if mapRange(root, rodataStart, rodataStart, rodataSize, PteR) != 0:
+    panic("failed to map kernel rodata range")
+
+  if mapRange(root, dataStart, dataStart, dataSize, PteR or PteW) != 0:
+    panic("failed to map kernel data range")
+
+  if mapRange(root, QemuUart0Base, QemuUart0Base, QemuMmioSize, PteR or PteW) != 0:
+    panic("failed to map qemu mmio")
+
+  if mapRange(root, QemuPlicBase, QemuPlicBase, QemuPlicSize, PteR or PteW) != 0:
+    panic("failed to map plic mmio")
+
+  if mapRange(root, QemuRtcBase, QemuRtcBase, QemuRtcSize, PteR or PteW) != 0:
+    panic("failed to map rtc mmio")
+
+
+proc createKernelMappedPageTable*(): PageTable =
+  let root = allocPageTable()
+  if root == nil:
+    return nil
+
+  mapKernelRanges(root)
+  root
 
 
 proc loadUserProcess(path: cstring, base, stackTop: VAddr, arg: cstring): int32 =

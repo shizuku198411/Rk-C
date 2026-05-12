@@ -2,31 +2,20 @@ import ../../arch/riscv64/arch
 import ../../lib/mem
 import ../../lib/types
 import ../dev/console
-import ../dev/rtc
 import ../dev/timer
 import ../fs/fs
 import ../mm/memory
 import ../mm/paging
 import ../task/process
+import ../task/exec
+import ../service/registry
 
-const
-  QemuUart0Base = PAddr(0x10000000)
-  QemuMmioSize = U64(0x00010000)
-  QemuPlicBase = PAddr(0x0c000000)
-  QemuPlicSize = U64(0x00400000)
-  QemuRtcBase = PAddr(0x00101000)
-  QemuRtcSize = U64(0x00001000)
 
 var
   bssStartSym {.importc: "__bss_start".}: char
   bssEndSym {.importc: "__bss_end".}: char
   kernelBaseSym {.importc: "__kernel_base".}: char
   kernelEndSym {.importc: "__kernel_end".}: char
-  textStartSym {.importc: "__text_start".}: char
-  textEndSym {.importc: "__text_end".}: char
-  rodataStartSym {.importc: "__rodata_start".}: char
-  rodataEndSym {.importc: "__rodata_end".}: char
-  dataStartSym {.importc: "__data_start".}: char
   stackBottomSym {.importc: "__stack_bottom".}: char
   stackTopSym {.importc: "__stack_top".}: char
   freeRamStartSym {.importc: "__free_ram_start".}: char
@@ -53,42 +42,6 @@ proc enableTimerInterrupt() =
   arch.writeSstatus((arch.readSstatus() or SstatusSie) and not SstatusSum)
 
 
-proc mapKernelRanges(root: PageTable) =
-  let textStart = alignDown(cast[VAddr](addr textStartSym), PageSize)
-  let textSize = alignUp(cast[U64](addr textEndSym) - textStart, PageSize)
-  let rodataStart = alignDown(cast[VAddr](addr rodataStartSym), PageSize)
-  let rodataSize = alignUp(cast[U64](addr rodataEndSym) - rodataStart, PageSize)
-  let dataStart = alignDown(cast[VAddr](addr dataStartSym), PageSize)
-  let dataSize = alignUp(cast[U64](addr freeRamEndSym) - dataStart, PageSize)
-
-  if mapRange(root, textStart, textStart, textSize, PteR or PteX) != 0:
-    panic("failed to map kernel text range")
-
-  if mapRange(root, rodataStart, rodataStart, rodataSize, PteR) != 0:
-    panic("failed to map kernel rodata range")
-
-  if mapRange(root, dataStart, dataStart, dataSize, PteR or PteW) != 0:
-    panic("failed to map kernel data range")
-
-  if mapRange(root, QemuUart0Base, QemuUart0Base, QemuMmioSize, PteR or PteW) != 0:
-    panic("failed to map qemu mmio")
-
-  if mapRange(root, QemuPlicBase, QemuPlicBase, QemuPlicSize, PteR or PteW) != 0:
-    panic("failed to map plic mmio")
-
-  if mapRange(root, QemuRtcBase, QemuRtcBase, QemuRtcSize, PteR or PteW) != 0:
-    panic("failed to map rtc mmio")
-
-
-proc createKernelMappedPageTable*(): PageTable =
-  let root = allocPageTable()
-  if root == nil:
-    return nil
-
-  mapKernelRanges(root)
-  root
-
-
 proc enableSv39(memInfo: MemoryInfo) =
   kernelRootPageTable = createKernelMappedPageTable()
   if kernelRootPageTable == nil:
@@ -101,6 +54,41 @@ proc enableSv39(memInfo: MemoryInfo) =
   paging.flushTlb()
 
   discard memInfo
+
+
+proc kernelBanner() =
+  putChar('\n')
+  println("╔═══════════════════════════════════╗")
+  println("║  ██████╗  ██╗  ██╗       ██████╗  ║")
+  println("║  ██╔══██╗ ██║ ██╔╝      ██╔════╝  ║")
+  println("║  ██████╔╝ █████╔╝ █████╗██║       ║")
+  println("║  ██╔══██╗ ██╔═██╗ ╚════╝██║       ║")
+  println("║  ██║  ██║ ██║  ██╗      ╚██████╗  ║")
+  println("║  ╚═╝  ╚═╝ ╚═╝  ╚═╝       ╚═════╝  ║")
+  println("╠═══════════════════════════════════╣")
+  println("║  version: 0.1.0                   ║")
+  println("╚═══════════════════════════════════╝\n")
+
+
+proc waitForRequiredServices() =
+  while not requiredServicesReady():
+    sleepCurrentUntilTick(timerTickCount + 1)
+
+
+proc bootTask() {.cdecl.} =
+  if createServiceManagerUserProcess() < 0:
+    panic("failed to create service manager")
+
+  waitForRequiredServices()
+
+  if createShellUserProcess() < 0:
+    panic("failed to create shell")
+
+  if currentProc != nil:
+    currentProc.detached = true
+
+  kernelBanner()
+
 
 
 proc addressInfo(hartid: U64, dtb: pointer, memInfo: MemoryInfo) =
@@ -164,10 +152,6 @@ proc addressInfo(hartid: U64, dtb: pointer, memInfo: MemoryInfo) =
 
 proc kernelBootstrap*(hartid: U64, dtb: pointer) =
   putChar('\n')
-  printBootMsg("starting kernel bootstrap\n")
-  printBootMsg("  start time: ")
-  print(nowCString())
-  print("\n")
 
   printBootMsg("initial setup:\n")
   printBootMsg("  clear bss ")
@@ -199,11 +183,7 @@ proc kernelBootstrap*(hartid: U64, dtb: pointer) =
   fsInit()
 
   addressInfo(hartid, dtb, memInfo)
-  printBootMsg("kernel bootstrap completed\n")
-  printBootMsg("  end time: ")
-  print(nowCString())
-  print("\n\n")
+  print("\n")
 
-
-proc getKernelRootPageTable*(): PageTable =
-  kernelRootPageTable
+  if createKernelProcessNamed(bootTask, "boot_task") < 0:
+    panic("failed to create boot task")
