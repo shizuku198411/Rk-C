@@ -16,6 +16,11 @@ const
   DirEntryTypeDir* = U32(2)
   DirEntryTypeMount* = U32(3)
 
+  TraceOff* = U64(0)
+  TraceOn*  = U64(1)
+  TracePid* = U64(2)
+
+
 type
   DirEntry* {.packed.} = object
     typ*: U32
@@ -243,3 +248,7 @@ proc sysRawNetRecv*(buf: pointer, capacity: U64): I32 =
 
 proc sysRawNetSend*(buf: pointer, size: U64): I32 =
   I32(rawSyscall3(SysRawNetSend, cast[U64](buf), size, 0))
+
+
+proc sysTraceCtl*(cmd: U64, value: U64): I32 =
+  I32(rawSyscall3(SysTraceCtl, cmd, value, 0))

@@ -70,3 +70,36 @@ proc getLine*(src: ptr char, srcSize: int, pos: var int, dst: ptr char, dstSize:
     inc pos
 
   lineLen
+
+
+proc parseU64*(s: cstring, outValue: var U64): bool =
+  var
+    pos = U32(0)
+    value = U64(0)
+    found = false
+  
+  while isSpace(s[pos]):
+    inc pos
+  
+  while isDigit(s[pos]):
+    found = true
+    let digit = U64(ord(s[pos]) - ord('0'))
+
+    # check overflow
+    if value > (high(U64) - digit) div U64(10):
+      return false
+    
+    value = value * U64(10) + digit
+    inc pos
+
+  if not found:
+    return false
+
+  while isSpace(s[pos]):
+    inc pos
+  
+  if s[pos] != '\0':
+    return false
+
+  outValue = value
+  true

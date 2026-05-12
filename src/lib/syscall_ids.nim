@@ -53,3 +53,4 @@ const
   SysRawNetMac* = U64(52)
   SysRawNetRecv* = U64(53)
   SysRawNetSend* = U64(54)
+  SysTraceCtl* = U64(55)

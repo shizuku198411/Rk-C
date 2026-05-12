@@ -48,5 +48,7 @@ elif defined(userApp_blockd):
   import server/blockd/blockd
 elif defined(userApp_netd):
   import server/netd/netd
+elif defined(userApp_stracectl):
+  import apps/stracectl/stracectl
 else:
   {.error: "missing user app define".}

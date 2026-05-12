@@ -12,9 +12,12 @@ import ../syscall/system/system_ops
 import ../syscall/system/trap_ops
 import ../syscall/task/process_ops
 import ../trap/trap_types
+import ../trap/syscall_trace
 
 
 proc handleSyscall*(frame: ptr TrapFrame) =
+  traceSyscallEnter(frame)
+
   case frame.a3
   of SysWrite:
     frame.a0 = syscallWrite(frame.a0, frame.a1)
@@ -171,6 +174,11 @@ proc handleSyscall*(frame: ptr TrapFrame) =
   
   of SysGetPid:
     frame.a0 = syscallGetPid()
+  
+  of SysTraceCtl:
+    frame.a0 = syscallTraceCtl(frame.a0, frame.a1)
 
   else:
     frame.a0 = U64(-1'i64)
+  
+  traceSyscallExit(frame)
