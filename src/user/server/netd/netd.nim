@@ -241,6 +241,25 @@ proc loadInterfaceConfig() =
 
 
 proc initNetDevice() =
+  write("[netd] virtio-net:")
+  write("\n")
+  if sysRawNetInfo(addr net.info) != 0:
+    write("[netd]   virtio-net detection failed\n")
+    sysExit(1)
+
+  if net.info.found == 0:
+    write("[netd]   virtio-net not found\n")
+  else:
+    write("[netd]   mmio   = ")
+    writeHex(net.info.mmioBase)
+    write("\n")
+    write("[netd]   device = ")
+    writeUnsigned(U64(net.info.deviceId))
+    write("\n")
+    write("[netd]   vendor = ")
+    writeHex(U64(net.info.vendorId))
+    write("\n")
+
   if sysRawNetInit() != 0:
     write("[netd] virtio-net init failed\n")
     sysExit(1)
@@ -253,9 +272,7 @@ proc initNetDevice() =
     write("[netd] virtio-net mac read failed\n")
     sysExit(1)
 
-  write("[netd] virtio-net initialized mmio=")
-  writeHex(net.info.mmioBase)
-  write(" mac=")
+  write("[netd]   mac    = ")
   writeMacValue(addr net.mac)
   write("\n")
 
@@ -302,22 +319,6 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   discard arg
 
   setupConfigFile()
-
-  if sysRawNetInfo(addr net.info) != 0:
-    write("[netd] virtio-net detection failed\n")
-    sysExit(1)
-
-  if net.info.found == 0:
-    write("[netd] virtio-net not found\n")
-  else:
-    write("[netd] virtio-net found mmio=")
-    writeHex(net.info.mmioBase)
-    write(" device=")
-    writeUnsigned(U64(net.info.deviceId))
-    write(" vendor=")
-    writeHex(U64(net.info.vendorId))
-    write("\n")
-
   initNetDevice()
   net.tcpNextHandle = 1
   net.tcpNextPort = TcpInitialSourcePort
