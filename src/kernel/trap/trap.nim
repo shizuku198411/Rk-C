@@ -40,6 +40,22 @@ proc panicMsg(scauseType: cstring, scause: U64, stval: U64, userPc: U64) =
     arch.wfi()
 
 
+proc faultOrPanic(scauseType: cstring, scause: U64, stval: U64, userPc: U64) =
+  if currentProc != nil and currentProc.user.active:
+    print("PAGE FAULT DETECTED: ")
+    print(scauseType)
+    print(". scause=")
+    printPtr(scause)
+    print(", stval=")
+    printPtr(stval)
+    print(", sepc=")
+    printPtr(userPc)
+    putChar('\n')
+    killCurrentUserProcess(U64(255))
+  else:
+    panicMsg(scauseType, scause, stval, userPc)
+
+
 proc trapHandler*(frame: ptr TrapFrame) {.exportc: "trap_handler", cdecl.} =
   discard frame
 
@@ -58,7 +74,7 @@ proc trapHandler*(frame: ptr TrapFrame) {.exportc: "trap_handler", cdecl.} =
 
   of ScauseIllegalInstruction:
     inc trapCount.illegalInstruction
-    panicMsg("Illegal Instruction", scause, stval, userPc)
+    faultOrPanic("Illegal Instruction", scause, stval, userPc)
   
   of ScauseBreakpoint:
     inc trapCount.breakpoint
@@ -95,11 +111,11 @@ proc trapHandler*(frame: ptr TrapFrame) {.exportc: "trap_handler", cdecl.} =
   
   of ScauseLoadPageFault:
     inc trapCount.loadPageFault
-    panicMsg("Load Page Fault", scause, stval, userPc)
+    faultOrPanic("Load Page Fault", scause, stval, userPc)
   
   of ScauseStoreAMOPageFault:
     inc trapCount.storeAMOPageFault
-    panicMsg("Store/AMO Page Fault", scause, stval, userPc)
+    faultOrPanic("Store/AMO Page Fault", scause, stval, userPc)
   
   of ScauseSupervisorTimer:
     inc trapCount.supervisorTimer

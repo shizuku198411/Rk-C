@@ -1,5 +1,5 @@
 import ../../lib/syscall_ids
-import ../dev/console
+import ../../lib/types
 import ../syscall/blk/block_service_ops
 import ../syscall/fs/file_ops
 import ../syscall/fs/fs_service_ops
@@ -173,8 +173,4 @@ proc handleSyscall*(frame: ptr TrapFrame) =
     frame.a0 = syscallGetPid()
 
   else:
-    print("PANIC: unknown syscall ")
-    printUnsigned(frame.a3)
-    putChar('\n')
-    while true:
-      discard
+    frame.a0 = U64(-1'i64)

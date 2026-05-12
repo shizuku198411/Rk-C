@@ -496,6 +496,14 @@ proc maybeYieldOnResched*() =
   yieldCpu()
 
 
+proc killCurrentUserProcess*(status: U64) =
+  if currentProc != nil and currentProc.user.active:
+    currentProc.exitStatus = status
+    currentProc.state = procZombie
+    wakePidWaiters(currentProc.pid)
+    schedule()
+
+
 proc processBootstrap*() =
   if currentProc == nil or currentProc.entry == nil:
     panic("invalid current process")
