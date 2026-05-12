@@ -330,14 +330,24 @@ proc readComponent(path: cstring, pos: var int, name: var array[FsNameMax, char]
     return false
 
   var i = 0
+  var tooLong = false
+
   while path[pos] != '\0' and path[pos] != '/':
     if i < FsNameMax - 1:
       name[i] = path[pos]
       inc i
+    else:
+      tooLong = true
     inc pos
+  
+  if tooLong:
+    name[0] = '\0'
+    return false
+  
   while i < FsNameMax:
     name[i] = '\0'
     inc i
+  
   true
 
 
