@@ -1,6 +1,7 @@
 import ../../lib/core/io
 import ../../lib/net/net_dns
 import ../../lib/net/net_http
+import ../../lib/core/args
 import ../../lib/core/strutils
 import ../../lib/core/syscall
 
@@ -13,27 +14,26 @@ var
   url: HttpUrl
   rxBuf: array[RxCap, U8]
   targetArg: array[ArgCap, char]
+  parsedArgs: UserArgs
 
 
 proc printUsage() =
   write("usage: curl [-v|--tls-info] [-i|--include] <http-url|https-url|host|ip>[/path]\n")
+  write("  -v, --tls-info    show negotiated TLS version and cipher\n")
+  write("  -i, --include     include HTTP response headers\n")
 
 
-proc copyArg(dst: var array[ArgCap, char], src: cstring, start: int): bool =
+proc copyArg(dst: var array[ArgCap, char], src: cstring): bool =
   var i = 0
-  while src[start + i] != '\0' and i < ArgCap - 1:
-    dst[i] = src[start + i]
+  while src[i] != '\0' and i < ArgCap - 1:
+    dst[i] = src[i]
     inc i
 
-  if src[start + i] != '\0':
+  if src[i] != '\0':
     return false
 
   dst[i] = '\0'
   true
-
-
-proc isOptionEnd(arg: cstring, pos: int): bool =
-  arg[pos] == '\0' or isSpace(arg[pos])
 
 
 proc headerSepByte(pos: U32): U8 =
@@ -44,49 +44,33 @@ proc headerSepByte(pos: U32): U8 =
   else: U8('\n')
 
 
-proc parseArgs(arg: cstring, verbose: var bool, includeHeaders: var bool,
-               outTarget: var array[ArgCap, char]): bool =
-  if isEmpty(arg):
+proc parseCurlArgs(arg: cstring, verbose: var bool, includeHeaders: var bool,
+                   outTarget: var array[ArgCap, char]): bool =
+  if not parseUserArgs(arg, parsedArgs):
     return false
 
-  var pos = 0
-  while isSpace(arg[pos]):
-    inc pos
-
-  while arg[pos] == '-':
-    if arg[pos + 1] == 'v' and isOptionEnd(arg, pos + 2):
+  var target: cstring = nil
+  var i = U32(0)
+  while i < parsedArgs.argc:
+    let item = argAt(parsedArgs, i)
+    if streq(item, "-v") or streq(item, "--tls-info"):
       verbose = true
-      pos = pos + 2
-    elif arg[pos + 1] == 'i' and isOptionEnd(arg, pos + 2):
+    elif streq(item, "-i") or streq(item, "--include"):
       includeHeaders = true
-      pos = pos + 2
-    elif startsWithPrefix(cast[cstring](cast[U64](arg) + U64(pos)), "--tls-info"):
-      let next = pos + 10
-      if not isOptionEnd(arg, next):
-        return false
-
-      verbose = true
-      pos = next
-    elif startsWithPrefix(cast[cstring](cast[U64](arg) + U64(pos)), "--include"):
-      let next = pos + 9
-      if not isOptionEnd(arg, next):
-        return false
-
-      includeHeaders = true
-      pos = next
-    else:
+    elif item[0] == '-':
       return false
+    else:
+      if target != nil:
+        return false
 
-    while isSpace(arg[pos]):
-      inc pos
+      target = item
 
-  if arg[pos] == '\0':
+    inc i
+
+  if target == nil:
     return false
 
-  if not copyArg(outTarget, arg, pos):
-    return false
-
-  true
+  copyArg(outTarget, target)
 
 
 proc printTlsInfo(handle: I32) =
@@ -176,9 +160,14 @@ proc parseIp(arg: cstring, ip: var U32): bool =
 
 
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
+  if parseUserArgs(arg, parsedArgs) and parsedArgs.argc == 1 and
+      streq(argAt(parsedArgs, 0), "--help"):
+    printUsage()
+    sysExit(0)
+
   var verbose = false
   var includeHeaders = false
-  if not parseArgs(arg, verbose, includeHeaders, targetArg):
+  if not parseCurlArgs(arg, verbose, includeHeaders, targetArg):
     printUsage()
     sysExit(1)
 

@@ -1,14 +1,29 @@
 import ../../lib/core/io
+import ../../lib/core/args
 import ../../lib/core/strutils
 import ../../lib/core/syscall
 
+var parsedArgs: UserArgs
+
+
+proc printUsage() =
+  write("usage: rm <path>\n")
+
 
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
-  if isEmpty(arg):
-    write("usage: rm <path>\n")
+  if not parseUserArgs(arg, parsedArgs):
+    printUsage()
     sysExit(1)
 
-  let rc = sysUnlink(arg)
+  if parsedArgs.argc == 1 and streq(argAt(parsedArgs, 0), "--help"):
+    printUsage()
+    sysExit(0)
+
+  if parsedArgs.argc != 1:
+    printUsage()
+    sysExit(1)
+
+  let rc = sysUnlink(argAt(parsedArgs, 0))
   if rc != 0:
     write("rm: failed\n")
     sysExit(1)

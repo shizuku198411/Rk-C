@@ -46,32 +46,34 @@ proc printPrompt() =
 
 
 proc printHelp() =
-  write("commands:\n")
-  write("  help                       show this help\n")
-  write("  cd <path>                  change current directory\n")
-  write("  ls [-l] [path]             list directory\n")
-  write("  cat <path>                 print file\n")
-  write("  mkdir <path>               create directory\n")
-  write("  rm <path>                  remove file\n")
-  write("  rmdir <path>               remove empty directory\n")
-  write("  edit <path>                edit file\n")
-  write("  ps                         show process slots\n")
-  write("  date                       show current time\n")
-  write("  ipc send <pid> <message>   send for IPC message\n")
-  write("  ipc receive                wait for IPC message\n")
-  write("  kill <pid>                 terminate process\n")
-  write("  svc list                   show services\n")
-  write("  svc restart <name>         restart service\n")
-  write("  ping [ip]                  send ICMP echo request\n")
-  write("  nslookup <name>            resolve DNS A record\n")
-  write("  curl <url>                 fetch HTTP URL\n")
-  write("  tcpcheck <ip> <port>       test TCP connect/send/receive/close\n")
-  write("  ticks                      show timer ticks\n")
-  write("  traps                      show traps count\n")
-  write("  bitmap                     show physical page bitmap usage\n")
-  write("  <command> &                run command in background\n")
-  write("  exit                       exit shell\n")
-  write("  shutdown                   shutdown kernel\n")
+  write("available commands:\n")
+  write("  help\n")
+  write("  cd\n")
+  write("  ls\n")
+  write("  cat\n")
+  write("  mkdir\n")
+  write("  rm\n")
+  write("  rmdir\n")
+  write("  edit\n")
+  write("  ps\n")
+  write("  date\n")
+  write("  ipc\n")
+  write("  kill\n")
+  write("  svc\n")
+  write("  ping\n")
+  write("  nslookup\n")
+  write("  curl\n")
+  write("  tcpcheck\n")
+  write("  stracectl\n")
+  write("  ticks\n")
+  write("  traps\n")
+  write("  bitmap\n")
+  write("  history\n")
+  write("  exit\n")
+  write("  shutdown\n")
+  write("\n")
+  write("run '<command> --help' for app help\n")
+  write("append '&' to run app commands in background\n")
 
 
 proc clearArg() =
@@ -506,8 +508,14 @@ proc resolveShellPath(path: cstring): cstring =
   resolved
 
 
+proc isHelpArg(arg: cstring): bool =
+  streq(arg, "--help")
+
+
 proc pathCommandArg(arg: cstring): cstring =
   if isEmpty(arg):
+    return arg
+  if isHelpArg(arg):
     return arg
   resolveShellPath(arg)
 
@@ -517,6 +525,9 @@ proc resolveLsArg(arg: cstring): cstring =
   skipSpaces(arg, pos)
   if arg[pos] == '\0':
     return resolveShellPath("")
+
+  if isHelpArg(cast[cstring](unsafeAddr arg[pos])):
+    return cast[cstring](unsafeAddr arg[pos])
 
   if arg[pos] == '-' and arg[pos + 1] == 'l' and
       (arg[pos + 2] == '\0' or arg[pos + 2] == ' '):

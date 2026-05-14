@@ -1,6 +1,8 @@
 import ../../lib/core/io
 import ../../lib/ipc/ipc_request
 import ../../lib/ipc/service_client
+import ../../lib/core/args
+import ../../lib/core/strutils
 import ../../lib/core/syscall
 
 const
@@ -10,6 +12,7 @@ var
   entries: array[PsMaxEntries, SysProcessInfo]
   requestPacket: SysIpcPacket
   responsePacket: SysIpcPacket
+  parsedArgs: UserArgs
 
 
 proc stateName(state: U32): cstring =
@@ -100,8 +103,22 @@ proc requestProcessList(maxEntries: I32): I32 =
   count
 
 
+proc printUsage() =
+  write("usage: ps\n")
+
+
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
-  discard arg
+  if not parseUserArgs(arg, parsedArgs):
+    printUsage()
+    sysExit(1)
+
+  if parsedArgs.argc == 1 and streq(argAt(parsedArgs, 0), "--help"):
+    printUsage()
+    sysExit(0)
+
+  if parsedArgs.argc != 0:
+    printUsage()
+    sysExit(1)
 
   let count = requestProcessList(PsMaxEntries)
   if count < 0:

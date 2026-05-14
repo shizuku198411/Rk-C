@@ -1,12 +1,14 @@
 import ../../lib/core/io
 import ../../lib/ipc/ipc_request
 import ../../lib/ipc/service_client
+import ../../lib/core/args
 import ../../lib/core/strutils
 import ../../lib/core/syscall
 
 var
   requestPacket: SysIpcPacket
   responsePacket: SysIpcPacket
+  parsedArgs: UserArgs
 
 
 proc parseOctet(arg: cstring, pos: var int, value: var U32): bool =
@@ -74,11 +76,22 @@ proc printUsage() =
 
 
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
+  if not parseUserArgs(arg, parsedArgs):
+    printUsage()
+    sysExit(1)
+
+  if parsedArgs.argc == 1 and streq(argAt(parsedArgs, 0), "--help"):
+    printUsage()
+    sysExit(0)
+
   var ip = U32(0x0a000202'u32)
-  if not isEmpty(arg):
-    if not parseIp(arg, ip):
-      printUsage()
-      sysExit(1)
+  if parsedArgs.argc > 1:
+    printUsage()
+    sysExit(1)
+
+  if parsedArgs.argc == 1 and not parseIp(argAt(parsedArgs, 0), ip):
+    printUsage()
+    sysExit(1)
 
   let pid = servicePidByKind(SysServiceKindNet)
   if pid <= 0:

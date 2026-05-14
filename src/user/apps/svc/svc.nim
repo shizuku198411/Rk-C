@@ -1,6 +1,7 @@
 import ../../lib/core/io
 import ../../lib/ipc/ipc_request
 import ../../lib/ipc/service_client
+import ../../lib/core/args
 import ../../lib/core/strutils
 import ../../lib/core/syscall
 
@@ -11,21 +12,7 @@ const
 var
   services: array[ServiceCap, SysServiceInfo]
   restartPacket: SysIpcPacket
-
-
-proc startsWithWord(s, word: cstring): bool =
-  var i = 0
-  while word[i] != '\0':
-    if s[i] != word[i]:
-      return false
-    inc i
-
-  s[i] == '\0' or s[i] == ' '
-
-
-proc skipSpaces(s: cstring, pos: var int) =
-  while s[pos] == ' ':
-    inc pos
+  parsedArgs: UserArgs
 
 
 proc printUsage() =
@@ -77,10 +64,8 @@ proc managerPid(): I32 =
   servicePidByKind(SysServiceKindManager)
 
 
-proc restartService(arg: cstring) =
-  var pos = 7
-  skipSpaces(arg, pos)
-  if arg[pos] == '\0':
+proc restartService() =
+  if parsedArgs.argc != 2:
     printUsage()
     sysExit(1)
 
@@ -92,9 +77,10 @@ proc restartService(arg: cstring) =
   restartPacket = SysIpcPacket()
   restartPacket.op = SysIpcOpSvcRestart
 
+  let name = argAt(parsedArgs, 1)
   var i = U32(0)
-  while i + 1 < U32(SysIpcMessageMax) and arg[pos + int(i)] != '\0':
-    restartPacket.data[int(i)] = arg[pos + int(i)]
+  while i + 1 < U32(SysIpcMessageMax) and name[i] != '\0':
+    restartPacket.data[int(i)] = name[i]
     inc i
 
   restartPacket.data[int(i)] = '\0'
@@ -106,16 +92,20 @@ proc restartService(arg: cstring) =
 
 
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
-  if isEmpty(arg):
+  if not parseUserArgs(arg, parsedArgs):
     printUsage()
     sysExit(1)
 
-  if startsWithWord(arg, "list"):
+  if parsedArgs.argc == 1 and streq(argAt(parsedArgs, 0), "--help"):
+    printUsage()
+    sysExit(0)
+
+  if parsedArgs.argc == 1 and streq(argAt(parsedArgs, 0), "list"):
     listServices()
     sysExit(0)
 
-  if startsWithWord(arg, "restart"):
-    restartService(arg)
+  if parsedArgs.argc >= 1 and streq(argAt(parsedArgs, 0), "restart"):
+    restartService()
     sysExit(0)
 
   printUsage()

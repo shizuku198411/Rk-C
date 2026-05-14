@@ -1,42 +1,35 @@
 import ../../lib/core/io
+import ../../lib/core/args
+import ../../lib/core/strutils
 import ../../lib/core/syscall
 
 const
   LsMaxEntries = 32
 
+var parsedArgs: UserArgs
 
-proc skipSpaces(s: cstring, pos: var U64) =
-  while s != nil and s[pos] == ' ':
-    inc pos
-
-
-proc tokenIsLongOption(s: cstring, pos: U64): bool =
-  s != nil and s[pos] == '-' and s[pos + 1] == 'l' and
-    (s[pos + 2] == '\0' or s[pos + 2] == ' ')
-
-
-proc restCString(s: cstring, pos: U64): cstring =
-  cast[cstring](unsafeAddr s[pos])
-
-
-proc parseArgs(arg: cstring, longFormat: var bool): cstring =
+proc parseLsArgs(arg: cstring, longFormat: var bool): cstring =
   longFormat = false
-  if arg == nil:
-    return "/"
+  if not parseUserArgs(arg, parsedArgs):
+    return nil
 
-  var pos = U64(0)
-  skipSpaces(arg, pos)
-  if arg[pos] == '\0':
-    return "/"
+  var path: cstring = "/"
+  var i = U32(0)
+  while i < parsedArgs.argc:
+    let item = argAt(parsedArgs, i)
+    if streq(item, "-l"):
+      longFormat = true
+    elif item[0] == '-':
+      return nil
+    else:
+      if not streq(path, "/"):
+        return nil
 
-  if tokenIsLongOption(arg, pos):
-    longFormat = true
-    pos += 2
-    skipSpaces(arg, pos)
-    if arg[pos] == '\0':
-      return "/"
+      path = item
 
-  restCString(arg, pos)
+    inc i
+
+  path
 
 
 proc printLongEntry(entry: ptr DirEntry) =
@@ -75,9 +68,22 @@ proc printCompact(entries: ptr UncheckedArray[DirEntry], count: int) =
     write("\n")
 
 
+proc printUsage() =
+  write("usage: ls [-l] [path]\n")
+  write("  -l    show entry name and size\n")
+
+
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
+  if parseUserArgs(arg, parsedArgs) and parsedArgs.argc == 1 and
+      streq(argAt(parsedArgs, 0), "--help"):
+    printUsage()
+    sysExit(0)
+
   var longFormat: bool
-  let path = parseArgs(arg, longFormat)
+  let path = parseLsArgs(arg, longFormat)
+  if path == nil:
+    printUsage()
+    sysExit(1)
 
   var entries: array[LsMaxEntries, DirEntry]
   let count = sysLs(path, addr entries[0], U64(LsMaxEntries))

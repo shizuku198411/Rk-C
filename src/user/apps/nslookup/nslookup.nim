@@ -1,5 +1,6 @@
 import ../../lib/core/io
 import ../../lib/net/net_dns
+import ../../lib/core/args
 import ../../lib/core/strutils
 import ../../lib/core/syscall
 
@@ -10,6 +11,7 @@ const
 
 var
   nameserverIpBuf: array[NameserverIpBufSize, char]
+  parsedArgs: UserArgs
 
 proc writeIp(value: U32) =
   writeUnsigned(U64((value shr 24) and 0xff'u32))
@@ -34,21 +36,30 @@ proc loadNameserverIp(): cstring =
 
 
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
-  if isEmpty(arg):
+  if not parseUserArgs(arg, parsedArgs):
     printUsage()
     sysExit(1)
 
+  if parsedArgs.argc == 1 and streq(argAt(parsedArgs, 0), "--help"):
+    printUsage()
+    sysExit(0)
+
+  if parsedArgs.argc != 1:
+    printUsage()
+    sysExit(1)
+
+  let name = argAt(parsedArgs, 0)
   let nameserver = loadNameserverIp()
 
   write("Server: ")
   write(nameserver)
   write("\n")
   write("Name: ")
-  write(arg)
+  write(name)
   write("\n")
 
   var ip = U32(0)
-  if resolveA(arg, ip):
+  if resolveA(name, ip):
     write("Address: ")
     writeIp(ip)
     write("\n")

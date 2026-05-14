@@ -1,4 +1,5 @@
 import ../../lib/core/io
+import ../../lib/core/args
 import ../../lib/core/strutils
 import ../../lib/core/syscall
 
@@ -17,6 +18,14 @@ const
   Esc = char(27)
 
 var buffer: array[BufferMax, char]
+var parsedArgs: UserArgs
+
+
+proc printUsage() =
+  write("usage: edit <path>\n")
+  write("  save: C-x C-s\n")
+  write("  exit: C-x C-c\n")
+  write("  move: arrow keys\n")
 
 
 proc save(path: cstring, len: U64): bool =
@@ -292,10 +301,19 @@ proc editorLoop(path: cstring, len: var U64) =
 
 
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
-  if isEmpty(arg):
-    write("usage: edit <path>\n")
+  if not parseUserArgs(arg, parsedArgs):
+    printUsage()
     sysExit(1)
 
-  var len = load(arg)
-  editorLoop(arg, len)
+  if parsedArgs.argc == 1 and streq(argAt(parsedArgs, 0), "--help"):
+    printUsage()
+    sysExit(0)
+
+  if parsedArgs.argc != 1:
+    printUsage()
+    sysExit(1)
+
+  let path = argAt(parsedArgs, 0)
+  var len = load(path)
+  editorLoop(path, len)
   sysExit(0)

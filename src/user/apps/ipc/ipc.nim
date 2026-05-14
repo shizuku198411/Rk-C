@@ -1,40 +1,32 @@
 import ../../lib/core/io
+import ../../lib/core/args
 import ../../lib/core/strutils
 import ../../lib/core/syscall
 
 const
   ArgMax = 160
 
-var msg: SysIpcMessage
+var
+  msg: SysIpcMessage
+  parsedArgs: UserArgs
+  messageBuf: array[ArgMax, char]
 
 
-proc skipSpaces(s: cstring, pos: var int) =
-  while s[pos] == ' ':
-    inc pos
-
-
-proc parsePid(s: cstring, pos: var int, pid: var I32): bool =
-  skipSpaces(s, pos)
-  if s[pos] < '0' or s[pos] > '9':
+proc parsePid(s: cstring, pid: var I32): bool =
+  if s[0] < '0' or s[0] > '9':
     return false
 
   var value = I32(0)
+  var pos = U32(0)
   while s[pos] >= '0' and s[pos] <= '9':
     value = value * 10 + I32(ord(s[pos]) - ord('0'))
     inc pos
 
+  if s[pos] != '\0':
+    return false
+
   pid = value
   true
-
-
-proc startsWithWord(s, word: cstring): bool =
-  var i = 0
-  while word[i] != '\0':
-    if s[i] != word[i]:
-      return false
-    inc i
-
-  s[i] == '\0' or s[i] == ' '
 
 
 proc printUsage() =
@@ -43,19 +35,17 @@ proc printUsage() =
   write("  ipc receive\n")
 
 
-proc sendMessage(arg: cstring) =
-  var pos = 4
+proc sendMessage() =
   var pid = I32(0)
-  if not parsePid(arg, pos, pid):
+  if parsedArgs.argc < 4 or not parsePid(argAt(parsedArgs, 2), pid):
     printUsage()
     sysExit(1)
 
-  skipSpaces(arg, pos)
-  if arg[pos] == '\0':
+  if not copyArgvTail(parsedArgs, 3, addr messageBuf[0], U32(ArgMax)):
     printUsage()
     sysExit(1)
 
-  if sysIpcSend(pid, cast[cstring](unsafeAddr arg[pos])) != 0:
+  if sysIpcSend(pid, cast[cstring](addr messageBuf[0])) != 0:
     write("ipc: send failed\n")
     sysExit(1)
 
@@ -75,15 +65,23 @@ proc receiveMessage() =
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   discard ArgMax
 
-  if isEmpty(arg):
+  if not parseUserArgs(arg, parsedArgs):
     printUsage()
     sysExit(1)
 
-  if startsWithWord(arg, "send"):
-    sendMessage(arg)
+  if parsedArgs.argc == 1 and streq(argAt(parsedArgs, 0), "--help"):
+    printUsage()
     sysExit(0)
 
-  if startsWithWord(arg, "receive"):
+  if parsedArgs.argc == 0:
+    printUsage()
+    sysExit(1)
+
+  if streq(argAt(parsedArgs, 0), "send"):
+    sendMessage()
+    sysExit(0)
+
+  if streq(argAt(parsedArgs, 0), "receive") and parsedArgs.argc == 1:
     receiveMessage()
     sysExit(0)
 

@@ -1,5 +1,6 @@
 import ../../lib/core/io
 import ../../lib/net/net_tcp
+import ../../lib/core/args
 import ../../lib/core/strutils
 import ../../lib/core/syscall
 
@@ -9,6 +10,7 @@ const
 
 var
   rxBuf: array[RxCap, U8]
+  parsedArgs: UserArgs
   httpReq = [
     U8(ord('G')), U8(ord('E')), U8(ord('T')), U8(ord(' ')), U8(ord('/')),
     U8(ord(' ')), U8(ord('H')), U8(ord('T')), U8(ord('T')), U8(ord('P')),
@@ -84,28 +86,6 @@ proc parseUint(arg: cstring, value: var U32): bool =
   true
 
 
-proc skipSpaces(arg: cstring, pos: var int) =
-  while arg[pos] == ' ':
-    inc pos
-
-
-proc nextArg(arg: cstring, pos: var int): cstring =
-  skipSpaces(arg, pos)
-  if arg[pos] == '\0':
-    return nil
-
-  let start = pos
-  while arg[pos] != '\0' and arg[pos] != ' ':
-    inc pos
-
-  cast[cstring](cast[uint](arg) + uint(start))
-
-
-proc terminateArg(arg: cstring, pos: int) =
-  if arg[pos] == ' ':
-    cast[ptr char](cast[uint](arg) + uint(pos))[] = '\0'
-
-
 proc printUsage() =
   write("usage: tcpcheck <ip> <port>\n")
 
@@ -119,19 +99,20 @@ proc writeI32(value: I32) =
 
 
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
-  var pos = 0
-  let ipArg = nextArg(arg, pos)
-  let ipEnd = pos
-  let portArg = nextArg(arg, pos)
-  let portEnd = pos
-
-  if ipArg == nil or portArg == nil:
+  if not parseUserArgs(arg, parsedArgs):
     printUsage()
     sysExit(1)
 
-  terminateArg(arg, ipEnd)
-  terminateArg(arg, portEnd)
+  if parsedArgs.argc == 1 and streq(argAt(parsedArgs, 0), "--help"):
+    printUsage()
+    sysExit(0)
 
+  if parsedArgs.argc != 2:
+    printUsage()
+    sysExit(1)
+
+  let ipArg = argAt(parsedArgs, 0)
+  let portArg = argAt(parsedArgs, 1)
   var ip = U32(0)
   var portValue = U32(0)
   if not parseIp(ipArg, ip) or not parseUint(portArg, portValue) or portValue > 65535:

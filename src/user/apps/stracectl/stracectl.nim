@@ -1,4 +1,5 @@
 import ../../lib/core/io
+import ../../lib/core/args
 import ../../lib/core/strutils
 import ../../lib/core/syscall
 
@@ -10,7 +11,9 @@ const
 var
   cmdBuf: array[CmdMax, char]
   childArgBuf: array[ArgMax, char]
+  targetBuf: array[ArgMax, char]
   pathBuf: array[PathMax, char]
+  parsedArgs: UserArgs
 
 
 proc skipSpaces(arg: cstring, pos: var U32) =
@@ -109,31 +112,41 @@ proc traceCommand(arg: cstring, verbose: bool) =
   sysExit(status)
 
 
-proc parseVerboseFlag(arg: cstring, outArg: var cstring): bool =
-  var pos = U32(0)
-  skipSpaces(arg, pos)
-  if arg[pos] == '-' and arg[pos + 1] == 'v' and
-      (arg[pos + 2] == '\0' or isSpace(arg[pos + 2])):
-    pos += 2
-    skipSpaces(arg, pos)
-    outArg = cast[cstring](cast[U64](arg) + U64(pos))
-    return true
-
-  outArg = arg
-  false
+proc printUsage() =
+  write("usage:\n")
+  write("  stracectl on\n")
+  write("  stracectl off\n")
+  write("  stracectl [-v] <pid>\n")
+  write("  stracectl [-v] <command> [args...]\n")
+  write("\n")
+  write("options:\n")
+  write("  -v    include verbose syscall details\n")
 
 
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
-  if isEmpty(arg):
-    write("usage: stracectl [-v] <on|off|<pid>|<command>>\n")
+  if not parseUserArgs(arg, parsedArgs) or parsedArgs.argc == 0:
+    printUsage()
     sysExit(1)
   
   var pid: U64
-  var targetArg = arg
-  let verbose = parseVerboseFlag(arg, targetArg)
+  var targetIndex = U32(0)
+  var verbose = false
+  if streq(argAt(parsedArgs, 0), "-v"):
+    verbose = true
+    targetIndex = 1
+
+  if targetIndex >= parsedArgs.argc:
+    printUsage()
+    sysExit(1)
+
+  let targetArg = argAt(parsedArgs, targetIndex)
+
+  if streq(targetArg, "--help") and parsedArgs.argc == targetIndex + 1:
+    printUsage()
+    sysExit(0)
 
     
-  if streq(targetArg, "on"):
+  if streq(targetArg, "on") and parsedArgs.argc == targetIndex + 1:
     if verbose:
       discard sysTraceCtl(TraceVerbose, 1)
     if sysTraceCtl(TraceOn, 0) < 0:
@@ -141,15 +154,19 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
       sysExit(1)
     write("strace on\n")
 
-  elif streq(targetArg, "off"):
+  elif streq(targetArg, "off") and parsedArgs.argc == targetIndex + 1:
     if sysTraceCtl(TraceOff, 0) < 0:
       write("trace off failed\n")
       sysExit(1)
     write("strace off\n")
 
   else:
-    if not parseU64(targetArg, pid):
-      traceCommand(targetArg, verbose)
+    if parsedArgs.argc != targetIndex + 1 or not parseU64(targetArg, pid):
+      if not copyArgvTail(parsedArgs, targetIndex, addr targetBuf[0], U32(ArgMax)):
+        printUsage()
+        sysExit(1)
+
+      traceCommand(cast[cstring](addr targetBuf[0]), verbose)
     if verbose:
       discard sysTraceCtl(TraceVerbose, 1)
     if sysTraceCtl(TracePid, pid) < 0:
