@@ -1,5 +1,6 @@
 import ../../lib/core/io
 import ../../lib/core/args
+import ../../lib/core/pathutils
 import ../../lib/core/strutils
 import ../../lib/core/syscall
 
@@ -13,7 +14,8 @@ proc parseLsArgs(arg: cstring, longFormat: var bool): cstring =
   if not parseUserArgs(arg, parsedArgs):
     return nil
 
-  var path: cstring = "/"
+  var path = resolvePath("")
+  var foundPath = false
   var i = U32(0)
   while i < parsedArgs.argc:
     let item = argAt(parsedArgs, i)
@@ -22,10 +24,13 @@ proc parseLsArgs(arg: cstring, longFormat: var bool): cstring =
     elif item[0] == '-':
       return nil
     else:
-      if not streq(path, "/"):
+      if foundPath:
         return nil
 
-      path = item
+      path = resolvePath(item)
+      foundPath = true
+      if path == nil:
+        return nil
 
     inc i
 

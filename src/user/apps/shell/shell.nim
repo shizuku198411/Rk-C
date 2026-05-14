@@ -5,7 +5,6 @@ import ../../lib/core/syscall
 
 const
   LineMax = 80
-  ExecArgMax = 160
 
   HistoryMax = 50
   HistorySaveBufMax = HistoryMax * LineMax
@@ -19,7 +18,6 @@ var
   cmdBuf: array[LineMax, char]
   argBuf: array[LineMax, char]
   pathBuf: array[LineMax, char]
-  execArgBuf: array[ExecArgMax, char]
   cwdBuf: array[SysProcessCwdMax, char]
 
   history: array[HistoryMax, array[LineMax, char]]
@@ -479,86 +477,6 @@ proc printHistory() =
     write("\n")
     inc pos
 
-proc copyArgChar(pos: var U64, ch: char): bool =
-  if pos + 1 >= U64(ExecArgMax):
-    return false
-  execArgBuf[pos] = ch
-  inc pos
-  true
-
-
-proc copyArgCString(pos: var U64, s: cstring): bool =
-  var i = U64(0)
-  while s[i] != '\0':
-    if not copyArgChar(pos, s[i]):
-      return false
-    inc i
-  true
-
-
-proc finishExecArg(pos: U64): cstring =
-  execArgBuf[pos] = '\0'
-  cast[cstring](addr execArgBuf[0])
-
-
-proc resolveShellPath(path: cstring): cstring =
-  let resolved = resolvePath(path)
-  if resolved == nil:
-    write("path too long\n")
-  resolved
-
-
-proc isHelpArg(arg: cstring): bool =
-  streq(arg, "--help")
-
-
-proc pathCommandArg(arg: cstring): cstring =
-  if isEmpty(arg):
-    return arg
-  if isHelpArg(arg):
-    return arg
-  resolveShellPath(arg)
-
-
-proc resolveLsArg(arg: cstring): cstring =
-  var pos = 0
-  skipSpaces(arg, pos)
-  if arg[pos] == '\0':
-    return resolveShellPath("")
-
-  if isHelpArg(cast[cstring](unsafeAddr arg[pos])):
-    return cast[cstring](unsafeAddr arg[pos])
-
-  if arg[pos] == '-' and arg[pos + 1] == 'l' and
-      (arg[pos + 2] == '\0' or arg[pos + 2] == ' '):
-    pos += 2
-    skipSpaces(arg, pos)
-
-    let rawPath =
-      if arg[pos] == '\0': cstring("")
-      else: cast[cstring](unsafeAddr arg[pos])
-    let resolved = resolveShellPath(rawPath)
-    if resolved == nil:
-      return nil
-
-    var outPos = U64(0)
-    if not copyArgCString(outPos, "-l ") or not copyArgCString(outPos, resolved):
-      write("path too long\n")
-      return nil
-    return finishExecArg(outPos)
-
-  resolveShellPath(cast[cstring](unsafeAddr arg[pos]))
-
-
-proc prepareExecArg(cmd, arg: cstring): cstring =
-  if streq(cmd, "ls"):
-    return resolveLsArg(arg)
-  if streq(cmd, "cat") or streq(cmd, "mkdir") or streq(cmd, "rm") or
-      streq(cmd, "rmdir") or streq(cmd, "edit"):
-    return pathCommandArg(arg)
-  arg
-
-
 proc stripBackgroundMarker(): bool =
   var len = 0
   while argBuf[len] != '\0':
@@ -634,7 +552,4 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
       sysShutdown()
 
     else:
-      let execArg = prepareExecArg(cstr(cmdBuf), cstr(argBuf))
-      if execArg == nil:
-        continue
-      runApp(buildBinPath(cstr(cmdBuf)), execArg, background)
+      runApp(buildBinPath(cstr(cmdBuf)), cstr(argBuf), background)

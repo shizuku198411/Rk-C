@@ -1,5 +1,6 @@
 import ../../lib/core/io
 import ../../lib/core/args
+import ../../lib/core/pathutils
 import ../../lib/core/strutils
 import ../../lib/core/syscall
 
@@ -27,7 +28,12 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
     printUsage()
     sysExit(1)
 
-  let readLen = sysReadFile(argAt(parsedArgs, 0), addr buffer[0], U64(CatBufferSize))
+  let path = resolvePath(argAt(parsedArgs, 0))
+  if path == nil:
+    write("cat: path too long\n")
+    sysExit(1)
+
+  let readLen = sysReadFile(path, addr buffer[0], U64(CatBufferSize))
   if readLen < 0:
     write("cat: failed\n")
     sysExit(1)
