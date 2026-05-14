@@ -14,8 +14,9 @@ SECTIONS
     }
 
     .data : ALIGN(16) {
-        *(.data .data.*)
+        PROVIDE(__global_pointer$ = . + 0x800);
         *(.sdata .sdata.*)
+        *(.data .data.*)
     }
 
     .bss (NOLOAD) : ALIGN(16) {

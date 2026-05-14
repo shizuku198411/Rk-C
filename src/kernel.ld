@@ -29,6 +29,7 @@ SECTIONS
     . = ALIGN(4096);
     .data : ALIGN(4096) {
         __data_start = .;
+        PROVIDE(__global_pointer$ = . + 0x800);
         *(.sdata .sdata.*)
         *(.data .data.*)
         __data_end = .;
