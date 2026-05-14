@@ -252,3 +252,7 @@ proc sysRawNetSend*(buf: pointer, size: U64): I32 =
 
 proc sysTraceCtl*(cmd: U64, value: U64): I32 =
   I32(rawSyscall3(SysTraceCtl, cmd, value, 0))
+
+
+proc sysEntropy*(buf: pointer, size: U64): I32 =
+  I32(rawSyscall3(SysEntropy, cast[U64](buf), size, 0))

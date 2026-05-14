@@ -71,6 +71,23 @@ var
   cipherBuf: array[TlsMaxRecord, U8]
   appBuf: array[TlsMaxRecord, U8]
   rngCounter: U64
+  tlsLastError: I32
+
+
+proc tlsErrorName*(code: I32): cstring =
+  case code
+  of 0:
+    cstring("ok")
+  of TlsErrUnsupported:
+    cstring("unsupported TLS feature")
+  of TlsErrBadServerHello:
+    cstring("invalid ServerHello")
+  else:
+    cstring("unknown TLS error")
+
+
+proc tlsLastErrorName*(): cstring =
+  tlsErrorName(tlsLastError)
 
 
 proc tlsCryptoReady*(): bool =
@@ -170,8 +187,15 @@ proc fillPseudoRandom(buf: pointer, len: U32) =
     inc i
 
 
+proc fillRandom(buf: pointer, len: U32) =
+  if sysEntropy(buf, U64(len)) == I32(len):
+    return
+
+  fillPseudoRandom(buf, len)
+
+
 proc makeKeyPair(client: var TlsClient) =
-  fillPseudoRandom(addr client.privateKey[0], U32(32))
+  fillRandom(addr client.privateKey[0], U32(32))
   discard x25519Base(addr client.publicKey[0], addr client.privateKey[0])
 
 
@@ -204,8 +228,8 @@ proc buildClientHello(client: var TlsClient, host: cstring, outLen: var U32): bo
   var pos = U32(0)
   var randomBytes: array[32, U8]
   var sessionId: array[32, U8]
-  fillPseudoRandom(addr randomBytes[0], U32(32))
-  fillPseudoRandom(addr sessionId[0], U32(32))
+  fillRandom(addr randomBytes[0], U32(32))
+  fillRandom(addr sessionId[0], U32(32))
 
   if not put8(txBuf, pos, TlsHandshakeClientHello):
     return false
@@ -711,14 +735,17 @@ proc tlsClose*(client: var TlsClient): I32
 
 proc tlsConnect*(client: var TlsClient, ip: U32, port: U16, host: cstring): I32 =
   clear(client)
+  tlsLastError = 0
 
   if host == nil or host[0] == '\0':
     client.lastError = -1
+    tlsLastError = -1
     return -1
 
   let handle = tcpConnect(ip, U16(0), port)
   if handle <= 0:
     client.lastError = -1
+    tlsLastError = -1
     return -1
 
   client.handle = handle
@@ -728,12 +755,14 @@ proc tlsConnect*(client: var TlsClient, ip: U32, port: U16, host: cstring): I32 
   if not buildClientHello(client, host, clientHelloLen):
     discard tlsClose(client)
     client.lastError = -1
+    tlsLastError = -1
     return -1
 
   sha256Update(client.transcript, addr txBuf[0], clientHelloLen)
   if sendPlainRecord(handle, TlsRecordHandshake, addr txBuf[0], clientHelloLen) != I32(clientHelloLen + 5):
     discard tlsClose(client)
     client.lastError = -1
+    tlsLastError = -1
     return -1
 
   var contentType = U8(0)
@@ -741,11 +770,13 @@ proc tlsConnect*(client: var TlsClient, ip: U32, port: U16, host: cstring): I32 
   if serverHelloLen <= 0 or contentType != TlsRecordHandshake:
     discard tlsClose(client)
     client.lastError = TlsErrBadServerHello
+    tlsLastError = TlsErrBadServerHello
     return TlsErrBadServerHello
 
   if not parseServerHello(client, addr rxBuf[0], U32(serverHelloLen)):
     discard tlsClose(client)
     client.lastError = TlsErrBadServerHello
+    tlsLastError = TlsErrBadServerHello
     return TlsErrBadServerHello
 
   sha256Update(client.transcript, addr rxBuf[0], U32(serverHelloLen))
@@ -753,21 +784,25 @@ proc tlsConnect*(client: var TlsClient, ip: U32, port: U16, host: cstring): I32 
             addr client.serverPublicKey[0]) != 0:
     discard tlsClose(client)
     client.lastError = -1
+    tlsLastError = -1
     return -1
 
   deriveHandshakeSecrets(client)
   if not readServerHandshake(client):
     discard tlsClose(client)
     client.lastError = -1
+    tlsLastError = -1
     return -1
   deriveApplicationSecrets(client)
   if not sendClientFinished(client):
     discard tlsClose(client)
     client.lastError = -1
+    tlsLastError = -1
     return -1
 
   client.active = true
   client.lastError = 0
+  tlsLastError = 0
   client.handle
 
 
@@ -896,6 +931,22 @@ proc tlsCloseHandle*(handle: I32): I32 =
     return -1
 
   tlsClose(tlsSlots[idx])
+
+
+proc tlsVersionNameHandle*(handle: I32): cstring =
+  let idx = slotIndex(handle)
+  if idx < 0:
+    return cstring("unknown")
+
+  cstring("TLS1.3")
+
+
+proc tlsCipherNameHandle*(handle: I32): cstring =
+  let idx = slotIndex(handle)
+  if idx < 0:
+    return cstring("unknown")
+
+  cstring("TLS_CHACHA20_POLY1305_SHA256")
 
 
 proc isTlsHandle*(handle: I32): bool =

@@ -201,3 +201,21 @@ proc httpClose*(handle: I32): I32 =
     return tlsCloseHandle(handle)
 
   tcpClose(handle)
+
+
+proc httpTlsVersionName*(handle: I32): cstring =
+  if isTlsHandle(handle):
+    return tlsVersionNameHandle(handle)
+
+  cstring("none")
+
+
+proc httpTlsCipherName*(handle: I32): cstring =
+  if isTlsHandle(handle):
+    return tlsCipherNameHandle(handle)
+
+  cstring("none")
+
+
+proc httpTlsLastErrorName*(): cstring =
+  tlsLastErrorName()

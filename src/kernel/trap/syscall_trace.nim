@@ -69,6 +69,7 @@ proc syscallName*(num: U64): cstring =
   of SysRawNetRecv: cstring("raw_net_recv")
   of SysRawNetSend: cstring("raw_net_send")
   of SysTraceCtl: cstring("trace_ctl")
+  of SysEntropy: cstring("entropy")
   else: cstring("unknown")
 
 

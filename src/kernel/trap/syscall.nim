@@ -178,6 +178,9 @@ proc handleSyscall*(frame: ptr TrapFrame) =
   of SysTraceCtl:
     frame.a0 = syscallTraceCtl(frame.a0, frame.a1)
 
+  of SysEntropy:
+    frame.a0 = syscallEntropy(frame.a0, frame.a1)
+
   else:
     frame.a0 = U64(-1'i64)
   

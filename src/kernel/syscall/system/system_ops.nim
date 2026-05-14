@@ -1,3 +1,4 @@
+import ../../../arch/riscv64/arch
 import ../../../lib/syscall_types
 import ../../../lib/types
 import ../../dev/rtc
@@ -6,7 +7,32 @@ import ../../mm/usercopy
 import ../../task/process
 
 
+const
+  MaxEntropyBytes = U64(4096)
+
+var
+  entropyState {.volatile.}: U64 = U64(0x726b635f656e7472'u64)
+
+
 proc sbiShutdown() {.importc: "sbi_shutdown", cdecl.}
+
+
+proc entropyMix(value: U64): U64 =
+  var z = value
+  z = (z xor (z shr 30)) * U64(0xbf58476d1ce4e5b9'u64)
+  z = (z xor (z shr 27)) * U64(0x94d049bb133111eb'u64)
+  z xor (z shr 31)
+
+
+proc nextEntropy64(): U64 =
+  var pidPart = U64(0)
+  if currentProc != nil:
+    pidPart = U64(currentProc.pid)
+
+  entropyState = entropyState xor arch.rdtime() xor (timerTickCount shl 32) xor
+      (pidPart shl 16)
+  entropyState = entropyState + U64(0x9e3779b97f4a7c15'u64)
+  entropyMix(entropyState)
 
 
 proc syscallTicks*(): U64 =
@@ -39,3 +65,33 @@ proc syscallGetDateTime*(outDateTime: U64): U64 =
     return U64(-1'i64)
 
   0
+
+
+proc syscallEntropy*(outBuf: U64, size: U64): U64 =
+  if size == 0:
+    return 0
+  if outBuf == 0 or size > MaxEntropyBytes:
+    return U64(-1'i64)
+
+  var chunk: array[64, U8]
+  var written = U64(0)
+  while written < size:
+    var chunkLen = U64(sizeof(chunk))
+    if chunkLen > size - written:
+      chunkLen = size - written
+
+    var pos = U64(0)
+    while pos < chunkLen:
+      let value = nextEntropy64()
+      var byteIndex = U64(0)
+      while byteIndex < U64(8) and pos < chunkLen:
+        chunk[pos] = U8((value shr (byteIndex * U64(8))) and U64(0xff))
+        inc pos
+        inc byteIndex
+
+    if copyToUser(outBuf + written, addr chunk[0], chunkLen) != 0:
+      return U64(-1'i64)
+
+    written += chunkLen
+
+  written

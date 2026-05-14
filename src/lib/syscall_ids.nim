@@ -54,3 +54,4 @@ const
   SysRawNetRecv* = U64(53)
   SysRawNetSend* = U64(54)
   SysTraceCtl* = U64(55)
+  SysEntropy* = U64(56)
