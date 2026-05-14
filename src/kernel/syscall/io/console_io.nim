@@ -5,7 +5,7 @@ import ../../mm/usercopy
 import ../../task/process
 
 
-proc syscallWrite*(buf: U64, len: U64): U64 =
+proc syscallConsoleWrite*(buf: U64, len: U64): U64 =
   if len == 0:
     return 0
   if not validateUserRange(buf, len, false):
@@ -22,7 +22,7 @@ proc syscallWrite*(buf: U64, len: U64): U64 =
   len
 
 
-proc syscallRead*(buf: U64, len: U64): U64 =
+proc syscallConsoleRead*(buf: U64, len: U64): U64 =
   if len == 0:
     return 0
   if not validateUserRange(buf, len, true):

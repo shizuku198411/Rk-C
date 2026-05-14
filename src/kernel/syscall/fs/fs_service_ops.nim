@@ -262,6 +262,28 @@ proc serviceReadFile*(path: cstring, bufVal, capacity: U64): U64 =
   outValue
 
 
+proc serviceReadFileToKernel*(path: cstring, dst: pointer, capacity: U64): I32 =
+  if dst == nil or capacity > SysFsDataMax:
+    return -1
+
+  let req = queueFsRequest(SysFsOpReadFile, path, nil, 0, capacity)
+  if req == nil:
+    if not canFallbackToRawFs():
+      return -1
+
+    return I32(rawReadFileKernel(path, dst, capacity))
+
+  let resp = waitFsResponse(req)
+  if resp == nil or resp.result < 0:
+    finishPending(req)
+    return -1
+
+  discard copyMem(dst, addr resp.data[0], U64(resp.result))
+  let outValue = resp.result
+  finishPending(req)
+  outValue
+
+
 proc serviceWriteFile*(path: cstring, data: pointer, size: U64): U64 =
   let req = queueFsRequest(SysFsOpWriteFile, path, data, size, 0)
   if req == nil:

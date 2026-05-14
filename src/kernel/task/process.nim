@@ -25,6 +25,8 @@ type
     waitFsReq
     waitBlockReq
     waitTimer
+    waitPipeRead
+    waitPipeWrite
 
   WaitTarget* {.bycopy.} = object
     kind*: WaitKind
@@ -46,6 +48,27 @@ type
     stackPages*: U64
     arg0*: U64
     arg1*: U64
+
+  FdEntry* {.bycopy.} = object
+    used*: bool
+    kind*: U32
+    flags*: U32
+    offset*: U64
+    size*: U64
+    pipeId*: I32
+    path*: array[SysFdPathMax, char]
+
+  FileState* {.bycopy.} = object
+    entries*: array[SysFdMax, FdEntry]
+
+  PipeState* {.bycopy.} = object
+    used*: bool
+    readers*: U32
+    writers*: U32
+    head*: U32
+    tail*: U32
+    count*: U32
+    data*: array[SysPipeBufSize, U8]
 
   Context* {.bycopy.} = object
     ra*: U64
@@ -81,6 +104,7 @@ type
     detached*: bool
     exitStatus*: U64
     ipc*: IpcState
+    files*: FileState
 
 
 var
@@ -90,6 +114,7 @@ var
   needResched {.volatile.}: bool
   idleProc: ptr Process
   kernelPageTable: PageTable
+  pipes: array[SysPipeMax, PipeState]
 
 
 proc contextSwitch(prev: ptr Context, next: ptr Context) {.importc: "context_switch", cdecl.}
@@ -105,12 +130,16 @@ proc sleepCurrentForFsReq*(reqId: U64)
 proc sleepCurrentForBlockReq*(reqId: U64)
 proc sleepCurrentForPid*(pid: int32)
 proc sleepCurrentUntilTick*(tick: U64)
+proc sleepCurrentForPipeRead*(pipeId: I32)
+proc sleepCurrentForPipeWrite*(pipeId: I32)
 proc wakeInputWaiters*()
 proc wakeIpcWaiter*(pid: int32)
 proc wakeFsWaiter*(reqId: U64)
 proc wakeBlockWaiter*(reqId: U64)
 proc wakePidWaiters*(pid: int32)
 proc wakeTimerWaiters*(tick: U64)
+proc wakePipeReaders*(pipeId: I32)
+proc wakePipeWriters*(pipeId: I32)
 proc clearWait*(p: ptr Process)
 
 
@@ -153,6 +182,154 @@ proc clearIpcQueue(p: ptr Process) =
   var i = 0
   while i < SysIpcQueueCap:
     p.ipc.queue[i] = SysIpcPacket()
+    inc i
+
+
+proc pipeNext(index: U32): U32 =
+  (index + 1) mod SysPipeBufSize
+
+
+proc validPipeId(pipeId: I32): bool =
+  pipeId >= 0 and pipeId < I32(SysPipeMax) and pipes[U32(pipeId)].used
+
+
+proc allocPipe*(): I32 =
+  var i = U32(0)
+  while i < SysPipeMax:
+    if not pipes[i].used:
+      pipes[i] = PipeState()
+      pipes[i].used = true
+      pipes[i].readers = 1
+      pipes[i].writers = 1
+      return I32(i)
+
+    inc i
+
+  -1
+
+
+proc freePipe*(pipeId: I32) =
+  if validPipeId(pipeId):
+    pipes[U32(pipeId)] = PipeState()
+
+
+proc retainFdEntry*(entry: FdEntry) =
+  if entry.used and entry.kind == SysFdKindPipe and validPipeId(entry.pipeId):
+    if (entry.flags and SysOpenRead) != 0:
+      inc pipes[U32(entry.pipeId)].readers
+    if (entry.flags and SysOpenWrite) != 0:
+      inc pipes[U32(entry.pipeId)].writers
+
+
+proc releaseFdEntry*(entry: FdEntry) =
+  if not entry.used or entry.kind != SysFdKindPipe or not validPipeId(entry.pipeId):
+    return
+
+  let pipe = addr pipes[U32(entry.pipeId)]
+  if (entry.flags and SysOpenRead) != 0 and pipe.readers > 0:
+    dec pipe.readers
+    wakePipeWriters(entry.pipeId)
+  if (entry.flags and SysOpenWrite) != 0 and pipe.writers > 0:
+    dec pipe.writers
+    wakePipeReaders(entry.pipeId)
+
+  if pipe.readers == 0 and pipe.writers == 0:
+    pipe[] = PipeState()
+
+
+proc pipeReadKernel*(pipeId: I32, dst: ptr UncheckedArray[U8], len: U64): I32 =
+  if dst == nil or not validPipeId(pipeId):
+    return -1
+
+  let pipe = addr pipes[U32(pipeId)]
+  var readLen = U64(0)
+  while readLen < len:
+    while pipe.count == 0:
+      if pipe.writers == 0:
+        return I32(readLen)
+      sleepCurrentForPipeRead(pipeId)
+      if not validPipeId(pipeId):
+        return -1
+
+    dst[readLen] = pipe.data[pipe.head]
+    pipe.head = pipeNext(pipe.head)
+    dec pipe.count
+    inc readLen
+    wakePipeWriters(pipeId)
+
+  I32(readLen)
+
+
+proc pipeWriteKernel*(pipeId: I32, src: ptr UncheckedArray[U8], len: U64): I32 =
+  if src == nil or not validPipeId(pipeId):
+    return -1
+
+  let pipe = addr pipes[U32(pipeId)]
+  var written = U64(0)
+  while written < len:
+    if pipe.readers == 0:
+      return -1
+
+    while pipe.count == SysPipeBufSize:
+      if pipe.readers == 0:
+        return -1
+      sleepCurrentForPipeWrite(pipeId)
+      if not validPipeId(pipeId):
+        return -1
+
+    pipe.data[pipe.tail] = src[written]
+    pipe.tail = pipeNext(pipe.tail)
+    inc pipe.count
+    inc written
+    wakePipeReaders(pipeId)
+
+  I32(written)
+
+
+proc clearFileState*(p: ptr Process) =
+  var i = U32(0)
+  while i < SysFdMax:
+    releaseFdEntry(p.files.entries[i])
+    inc i
+
+  p.files = FileState()
+
+
+proc setFdPath(entry: var FdEntry, path: cstring) =
+  var i = U32(0)
+  while i < SysFdPathMax - 1 and path != nil and path[i] != '\0':
+    entry.path[i] = path[i]
+    inc i
+
+  while i < SysFdPathMax:
+    entry.path[i] = '\0'
+    inc i
+
+
+proc initStandardFiles*(p: ptr Process) =
+  clearFileState(p)
+
+  p.files.entries[0].used = true
+  p.files.entries[0].kind = SysFdKindStdin
+  p.files.entries[0].flags = SysOpenRead
+  setFdPath(p.files.entries[0], "/dev/stdin")
+
+  p.files.entries[1].used = true
+  p.files.entries[1].kind = SysFdKindStdout
+  p.files.entries[1].flags = SysOpenWrite
+  setFdPath(p.files.entries[1], "/dev/stdout")
+
+  p.files.entries[2].used = true
+  p.files.entries[2].kind = SysFdKindStderr
+  p.files.entries[2].flags = SysOpenWrite
+  setFdPath(p.files.entries[2], "/dev/stderr")
+
+
+proc copyFileState(dst, src: ptr Process) =
+  dst.files = src.files
+  var i = U32(0)
+  while i < SysFdMax:
+    retainFdEntry(dst.files.entries[i])
     inc i
 
 
@@ -231,6 +408,7 @@ proc createKernelProcessInternal(entry: KernelTask, isIdle: bool, name: cstring)
   p.detached = false
   p.exitStatus = 0
   clearIpcQueue(p)
+  initStandardFiles(p)
   p.context = Context()
   p.context.sp = stack + KernelStackPages * PageSize
   p.context.ra = cast[U64](processBootstrap)
@@ -258,6 +436,7 @@ proc processInit*() =
     procs[i].detached = false
     procs[i].exitStatus = 0
     clearIpcQueue(addr procs[i])
+    clearFileState(addr procs[i])
     inc i
 
   currentProc = nil
@@ -265,6 +444,10 @@ proc processInit*() =
   needResched = false
   idleProc = nil
   kernelPageTable = nil
+  var pipeIdx = U32(0)
+  while pipeIdx < SysPipeMax:
+    pipes[pipeIdx] = PipeState()
+    inc pipeIdx
 
   if createKernelProcessInternal(idleTask, true, "init") < 0:
     panic("failed to create idle task")
@@ -299,10 +482,12 @@ proc inheritProcessMetadata(child, parent: ptr Process) =
   if parent == nil:
     child.parentPid = 0
     setRootCwd(child)
+    initStandardFiles(child)
     return
 
   child.parentPid = parent.pid
   copyCwd(child.cwd, parent.cwd)
+  copyFileState(child, parent)
   # Future per-process attributes such as rootfs should be copied here.
 
 
@@ -379,6 +564,7 @@ proc discardProcess*(p: ptr Process) =
   p.detached = false
   p.exitStatus = 0
   clearIpcQueue(p)
+  clearFileState(p)
 
 
 proc createUserProcess*(path: cstring, userBase, userPc, userStackTop, userSp: VAddr,
@@ -443,6 +629,14 @@ proc sleepCurrentUntilTick*(tick: U64) =
   sleepCurrentFor(waitTimer, tick)
 
 
+proc sleepCurrentForPipeRead*(pipeId: I32) =
+  sleepCurrentFor(waitPipeRead, U64(pipeId))
+
+
+proc sleepCurrentForPipeWrite*(pipeId: I32) =
+  sleepCurrentFor(waitPipeWrite, U64(pipeId))
+
+
 proc wakeInputWaiters*() =
   wakeWaiters(waitInput, 1, true)
 
@@ -477,6 +671,14 @@ proc wakeTimerWaiters*(tick: U64) =
       clearWait(addr procs[i])
       procs[i].state = procRunnable
     inc i
+
+
+proc wakePipeReaders*(pipeId: I32) =
+  wakeWaiters(waitPipeRead, U64(pipeId), true)
+
+
+proc wakePipeWriters*(pipeId: I32) =
+  wakeWaiters(waitPipeWrite, U64(pipeId), true)
 
 
 proc reapDetachedZombies() =

@@ -3,7 +3,6 @@ import ../../lib/types
 import ../syscall/blk/block_service_ops
 import ../syscall/fs/file_ops
 import ../syscall/fs/fs_service_ops
-import ../syscall/io/console_io
 import ../syscall/ipc/ipc_ops
 import ../syscall/mm/memory_ops
 import ../syscall/net/net_ops
@@ -20,10 +19,10 @@ proc handleSyscall*(frame: ptr TrapFrame) =
 
   case frame.a3
   of SysWrite:
-    frame.a0 = syscallWrite(frame.a0, frame.a1)
+    frame.a0 = syscallWriteFd(1, frame.a0, frame.a1)
 
   of SysRead:
-    frame.a0 = syscallRead(frame.a0, frame.a1)
+    frame.a0 = syscallReadFd(0, frame.a0, frame.a1)
 
   of SysPs:
     frame.a0 = syscallPs(frame.a0, frame.a1)
@@ -72,6 +71,27 @@ proc handleSyscall*(frame: ptr TrapFrame) =
 
   of SysWriteFile:
     frame.a0 = syscallWriteFile(frame.a0, frame.a1, frame.a2)
+
+  of SysOpen:
+    frame.a0 = syscallOpen(frame.a0, frame.a1)
+
+  of SysReadFd:
+    frame.a0 = syscallReadFd(frame.a0, frame.a1, frame.a2)
+
+  of SysWriteFd:
+    frame.a0 = syscallWriteFd(frame.a0, frame.a1, frame.a2)
+
+  of SysClose:
+    frame.a0 = syscallClose(frame.a0)
+
+  of SysLseek:
+    frame.a0 = syscallLseek(frame.a0, frame.a1, frame.a2)
+
+  of SysPipe:
+    frame.a0 = syscallPipe(frame.a0)
+
+  of SysDup2:
+    frame.a0 = syscallDup2(frame.a0, frame.a1)
 
   of SysGetCwd:
     frame.a0 = syscallGetCwd(frame.a0, frame.a1)

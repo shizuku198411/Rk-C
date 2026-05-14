@@ -4,6 +4,7 @@ type
   U32* = uint32
   U64* = uint64
   I32* = int32
+  I64* = int64
   CSize* = uint
   Size* = uint64
   PAddr* = uint64

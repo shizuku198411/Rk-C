@@ -18,6 +18,15 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   while true:
     printPrompt()
     let cmd = readLine()
+
+    if runRedirection(cmd):
+      storeHistory()
+      continue
+
+    if runPipeline(cmd):
+      storeHistory()
+      continue
+
     if not parseCommand(cmd):
       continue
 

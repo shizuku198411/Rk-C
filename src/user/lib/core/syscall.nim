@@ -9,6 +9,7 @@ type
   U32* = uint32
   U64* = uint64
   I32* = int32
+  I64* = int64
 
 const
   DirEntryNameMax* = 16
@@ -105,6 +106,34 @@ proc sysReadFile*(path: cstring, buf: pointer, capacity: U64): I32 =
 
 proc sysWriteFile*(path: cstring, buf: pointer, size: U64): I32 =
   I32(rawSyscall3(SysWriteFile, cast[U64](path), cast[U64](buf), size))
+
+
+proc sysOpen*(path: cstring, flags: U32): I32 =
+  I32(rawSyscall3(SysOpen, cast[U64](path), U64(flags), 0))
+
+
+proc sysReadFd*(fd: I32, buf: pointer, len: U64): I32 =
+  I32(rawSyscall3(SysReadFd, U64(fd), cast[U64](buf), len))
+
+
+proc sysWriteFd*(fd: I32, buf: pointer, len: U64): I32 =
+  I32(rawSyscall3(SysWriteFd, U64(fd), cast[U64](buf), len))
+
+
+proc sysClose*(fd: I32): I32 =
+  I32(rawSyscall3(SysClose, U64(fd), 0, 0))
+
+
+proc sysLseek*(fd: I32, offset: I64, whence: U32): I32 =
+  I32(rawSyscall3(SysLseek, U64(fd), U64(offset), U64(whence)))
+
+
+proc sysPipe*(fds: ptr I32): I32 =
+  I32(rawSyscall3(SysPipe, cast[U64](fds), 0, 0))
+
+
+proc sysDup2*(oldFd, newFd: I32): I32 =
+  I32(rawSyscall3(SysDup2, U64(oldFd), U64(newFd), 0))
 
 
 proc sysGetCwd*(buf: pointer, capacity: U64): I32 =

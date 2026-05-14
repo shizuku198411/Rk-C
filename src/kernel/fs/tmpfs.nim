@@ -5,7 +5,7 @@ import ../fs/dirent
 const
   TmpfsMaxNodes = 16
   TmpfsNameMax = 16
-  TmpfsFileMax = 512
+  TmpfsFileMax = 4096
 
   TmpfsTypeFile = U32(1)
   TmpfsTypeDir = U32(2)

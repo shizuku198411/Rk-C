@@ -19,6 +19,7 @@ const
   FsTypeDir = U32(2)
   FsTypeMount = U32(3)
   VfsMaxMounts = 4
+  DevEntryCount = 4
 
 type
   AppfsEntry {.packed.} = object
@@ -62,6 +63,13 @@ var
   appfsEntries: array[AppfsMaxEntries, AppfsEntry]
   appfsEntryCount: U32
   appfsReady: bool
+
+let devEntryNames = [
+  cstring("stdin"),
+  cstring("stdout"),
+  cstring("stderr"),
+  cstring("console"),
+]
 
 
 proc fsWriteFile*(path: cstring, data: pointer, size: U64): int
@@ -141,6 +149,28 @@ proc pathEq(a, b: cstring): bool =
 
 proc isBinRoot(path: cstring): bool =
   pathEq(path, "/bin") or pathEq(path, "/bin/")
+
+
+proc isDevRoot(path: cstring): bool =
+  pathEq(path, "/dev") or pathEq(path, "/dev/")
+
+
+proc resolveDevPath(path: cstring): int =
+  if path == nil or not (path[0] == '/' and path[1] == 'd' and path[2] == 'e' and
+      path[3] == 'v' and path[4] == '/'):
+    return -1
+
+  let name = cast[cstring](unsafeAddr path[5])
+  if name[0] == '\0':
+    return -1
+
+  var i = 0
+  while i < DevEntryCount:
+    if pathEq(name, devEntryNames[i]):
+      return i
+    inc i
+
+  -1
 
 
 proc appfsReadBytes(absOff: U64, outBuf: pointer, n: U64): int =
@@ -447,6 +477,7 @@ proc fsInit*() =
   ensureRootDir("tmp", FsTypeMount)
   ensureRootDir("bin", FsTypeDir)
   ensureRootDir("etc", FsTypeDir)
+  ensureRootDir("dev", FsTypeDir)
 
   if appfsLoad() < 0:
     panic("appfs load failed")
@@ -481,6 +512,23 @@ proc fillAppfsEntry(idx: int, outEntry: ptr FsDirEntry) =
     inc i
 
 
+proc fillDevEntry(idx: int, outEntry: ptr FsDirEntry) =
+  outEntry.typ = FsDirEntryTypeFile
+  outEntry.size = 0
+
+  var i = 0
+  let name = devEntryNames[idx]
+  while i < FsDirEntryNameMax:
+    if name[i] == '\0':
+      break
+    outEntry.name[i] = name[i]
+    inc i
+
+  while i < FsDirEntryNameMax:
+    outEntry.name[i] = '\0'
+    inc i
+
+
 proc fsReadDirEntry*(path: cstring, entryIndex: U64, outEntry: ptr FsDirEntry): int =
   if not fsReady:
     return -1
@@ -502,6 +550,19 @@ proc fsReadDirEntry*(path: cstring, entryIndex: U64, outEntry: ptr FsDirEntry): 
     if entryIndex >= U64(appfsEntryCount):
       return 0
     fillAppfsEntry(int(entryIndex), outEntry)
+    return 1
+
+  if isDevRoot(path):
+    if entryIndex >= U64(DevEntryCount):
+      return 0
+    fillDevEntry(int(entryIndex), outEntry)
+    return 1
+
+  let devIdx = resolveDevPath(path)
+  if devIdx >= 0:
+    if entryIndex != 0:
+      return 0
+    fillDevEntry(devIdx, outEntry)
     return 1
 
   let dir = resolvePath(path)
@@ -559,7 +620,13 @@ proc fsIsDir*(path: cstring): bool =
   if isBinRoot(path):
     return true
 
+  if isDevRoot(path):
+    return true
+
   if resolveAppfsPath(path) >= 0:
+    return false
+
+  if resolveDevPath(path) >= 0:
     return false
 
   let idx = resolvePath(path)

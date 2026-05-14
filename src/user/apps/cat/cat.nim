@@ -12,16 +12,30 @@ var parsedArgs: UserArgs
 
 
 proc printUsage() =
-  write("usage: cat <path>\n")
+  write("usage: cat [path]\n")
+
+
+proc catStdin() =
+  while true:
+    let readLen = sysReadFd(0, addr buffer[0], U64(CatBufferSize))
+    if readLen < 0:
+      write("cat: failed\n")
+      sysExit(1)
+    if readLen == 0:
+      break
+
+    discard sysWriteFd(1, addr buffer[0], U64(readLen))
 
 
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
-  if not parseUserArgs(arg, parsedArgs):
-    printUsage()
-    sysExit(1)
+  discard parseUserArgs(arg, parsedArgs)
 
   if parsedArgs.argc == 1 and streq(argAt(parsedArgs, 0), "--help"):
     printUsage()
+    sysExit(0)
+
+  if parsedArgs.argc == 0:
+    catStdin()
     sysExit(0)
 
   if parsedArgs.argc != 1:

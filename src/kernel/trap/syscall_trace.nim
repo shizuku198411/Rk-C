@@ -73,6 +73,13 @@ proc syscallName*(num: U64): cstring =
   of SysRawNetSend: cstring("raw_net_send")
   of SysTraceCtl: cstring("trace_ctl")
   of SysEntropy: cstring("entropy")
+  of SysOpen: cstring("open")
+  of SysReadFd: cstring("read_fd")
+  of SysWriteFd: cstring("write_fd")
+  of SysClose: cstring("close")
+  of SysLseek: cstring("lseek")
+  of SysPipe: cstring("pipe")
+  of SysDup2: cstring("dup2")
   else: cstring("unknown")
 
 
@@ -229,6 +236,37 @@ proc printSyscallArgs(frame: ptr TrapFrame) =
     printNamedPtr("buf", frame.a1)
     print(", ")
     printNamedU64("size", frame.a2)
+  of SysOpen:
+    printNamedCString("path", frame.a0)
+    print(", ")
+    printNamedU64("flags", frame.a1)
+  of SysReadFd:
+    printNamedI64("fd", frame.a0)
+    print(", ")
+    printNamedPtr("buf", frame.a1)
+    print(", ")
+    printNamedU64("len", frame.a2)
+  of SysWriteFd:
+    printNamedI64("fd", frame.a0)
+    print(", ")
+    printNamedPtr("buf", frame.a1)
+    print(", ")
+    printNamedU64("len", frame.a2)
+    printBufferPreview(frame.a1, frame.a2)
+  of SysClose:
+    printNamedI64("fd", frame.a0)
+  of SysLseek:
+    printNamedI64("fd", frame.a0)
+    print(", ")
+    printNamedI64("offset", frame.a1)
+    print(", ")
+    printNamedU64("whence", frame.a2)
+  of SysPipe:
+    printNamedPtr("fds", frame.a0)
+  of SysDup2:
+    printNamedI64("oldfd", frame.a0)
+    print(", ")
+    printNamedI64("newfd", frame.a1)
   of SysExec:
     printNamedCString("path", frame.a0)
     print(", ")
