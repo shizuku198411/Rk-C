@@ -162,11 +162,6 @@ proc kernelBootstrap*(hartid: U64, dtb: pointer) =
   setTrapVector()
   println("OK")
 
-  printBootMsg("  enable timer interrupt ")
-  enableTimerInterrupt()
-  setNextTimer()
-  println("OK")
-
   printBootMsg("  initialize memory allocator ")
   let memInfo = memoryInit()
   println("OK")
@@ -181,6 +176,11 @@ proc kernelBootstrap*(hartid: U64, dtb: pointer) =
 
   printBootMsg("initialize file system:\n")
   fsInit()
+
+  printBootMsg("  enable timer interrupt ")
+  setNextTimer()
+  enableTimerInterrupt()
+  println("OK")
 
   addressInfo(hartid, dtb, memInfo)
   print("\n")
