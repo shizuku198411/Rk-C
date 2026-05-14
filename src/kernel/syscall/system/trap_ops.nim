@@ -8,6 +8,7 @@ const
   TraceOff = U64(0)
   TraceOn  = U64(1)
   TracePid = U64(2)
+  TraceVerbose = U64(3)
 
 
 var trapCount* {.volatile.}: SysTrapCount
@@ -27,6 +28,7 @@ proc syscallTraceCtl*(cmd: U64, value: U64): U64 =
   case cmd
   of TraceOff:
     syscallTraceEnabled = false
+    syscallTraceVerbose = false
     syscallTracePid = -1
     return 0
   
@@ -37,6 +39,10 @@ proc syscallTraceCtl*(cmd: U64, value: U64): U64 =
   of TracePid:
     syscallTraceEnabled = true
     syscallTracePid = int32(value)
+    return 0
+
+  of TraceVerbose:
+    syscallTraceVerbose = value != 0
     return 0
 
   else:

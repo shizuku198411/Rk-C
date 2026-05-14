@@ -8,11 +8,14 @@ import ../mm/usercopy
 
 const
   traceStrBufSize = 64
+  tracePreviewBufSize = 48
 
 var
   syscallTraceEnabled* = false
+  syscallTraceVerbose* = false
   syscallTracePid*: int32 = -1
   traceStrBuf: array[traceStrBufSize, char]
+  tracePreviewBuf: array[tracePreviewBufSize, U8]
 
 proc syscallName*(num: U64): cstring = 
   case num:
@@ -97,34 +100,258 @@ proc printUserCStringArg(ptrVal: U64) =
   print("\"")
 
 
+proc printEscapedByte(ch: U8) =
+  case ch
+  of U8('\n'):
+    print("\\n")
+  of U8('\r'):
+    print("\\r")
+  of U8('\t'):
+    print("\\t")
+  of U8('"'):
+    print("\\\"")
+  of U8('\\'):
+    print("\\\\")
+  else:
+    if ch >= U8(32) and ch < U8(127):
+      putChar(char(ch))
+    else:
+      print(".")
+
+
+proc printBufferPreview(ptrVal, len: U64) =
+  if not syscallTraceVerbose:
+    return
+  if ptrVal == 0 or len == 0:
+    return
+
+  var previewLen = len
+  if previewLen > U64(tracePreviewBufSize):
+    previewLen = U64(tracePreviewBufSize)
+
+  print(", preview=\"")
+  if copyFromUser(addr tracePreviewBuf[0], ptrVal, previewLen) != 0:
+    print("<badptr>")
+  else:
+    var i = U64(0)
+    while i < previewLen:
+      printEscapedByte(tracePreviewBuf[i])
+      inc i
+    if len > previewLen:
+      print("...")
+  print("\"")
+
+
+proc printName(name: cstring) =
+  print(name)
+  print("=")
+
+
+proc printNamedPtr(name: cstring, value: U64) =
+  printName(name)
+  printPtr(value)
+
+
+proc printNamedU64(name: cstring, value: U64) =
+  printName(name)
+  printUnsigned(value)
+
+
+proc printNamedI64(name: cstring, value: U64) =
+  printName(name)
+  printSigned(int64(value))
+
+
+proc printNamedCString(name: cstring, value: U64) =
+  printName(name)
+  printUserCStringArg(value)
+
+
+proc printNamedBool(name: cstring, value: U64) =
+  printName(name)
+  if value == 0:
+    print("false")
+  else:
+    print("true")
+
+
+proc printTraceCtlCmd(value: U64) =
+  case value
+  of 0:
+    print("off")
+  of 1:
+    print("on")
+  of 2:
+    print("pid")
+  of 3:
+    print("verbose")
+  else:
+    printUnsigned(value)
+
+
+proc printNamedTraceCtlCmd(name: cstring, value: U64) =
+  printName(name)
+  printTraceCtlCmd(value)
+
+
+proc printDefaultArgs(frame: ptr TrapFrame) =
+  printNamedPtr("a0", frame.a0)
+  print(", ")
+  printNamedPtr("a1", frame.a1)
+  print(", ")
+  printNamedPtr("a2", frame.a2)
+
+
+proc printSyscallArgs(frame: ptr TrapFrame) =
+  case frame.a3
+  of SysWrite:
+    printNamedPtr("buf", frame.a0)
+    print(", ")
+    printNamedU64("len", frame.a1)
+    printBufferPreview(frame.a0, frame.a1)
+  of SysRead:
+    printNamedPtr("buf", frame.a0)
+    print(", ")
+    printNamedU64("len", frame.a1)
+  of SysExit:
+    printNamedU64("status", frame.a0)
+  of SysLs, SysMkdir, SysUnlink, SysRmdir, SysSetCwd:
+    printNamedCString("path", frame.a0)
+  of SysReadFile:
+    printNamedCString("path", frame.a0)
+    print(", ")
+    printNamedPtr("buf", frame.a1)
+    print(", ")
+    printNamedU64("capacity", frame.a2)
+  of SysWriteFile:
+    printNamedCString("path", frame.a0)
+    print(", ")
+    printNamedPtr("buf", frame.a1)
+    print(", ")
+    printNamedU64("size", frame.a2)
+  of SysExec:
+    printNamedCString("path", frame.a0)
+    print(", ")
+    printNamedCString("arg", frame.a1)
+    print(", ")
+    printNamedBool("detached", frame.a2)
+  of SysWait, SysKill:
+    printNamedI64("pid", frame.a0)
+  of SysGetCwd:
+    printNamedPtr("buf", frame.a0)
+    print(", ")
+    printNamedU64("capacity", frame.a1)
+  of SysPs:
+    printNamedPtr("entries", frame.a0)
+    print(", ")
+    printNamedU64("max", frame.a1)
+  of SysTraps:
+    printNamedPtr("out", frame.a0)
+  of SysGetBitMap:
+    printNamedPtr("info", frame.a0)
+  of SysIpcSend:
+    printNamedI64("pid", frame.a0)
+    print(", ")
+    printNamedCString("msg", frame.a1)
+  of SysIpcReceive, SysIpcTryReceive:
+    printNamedPtr("msg", frame.a0)
+  of SysIpcSendPacket:
+    printNamedI64("pid", frame.a0)
+    print(", ")
+    printNamedPtr("packet", frame.a1)
+  of SysIpcReceivePacket, SysIpcTryReceivePacket:
+    printNamedPtr("packet", frame.a0)
+  of SysFsServiceReceive:
+    printNamedPtr("req", frame.a0)
+  of SysFsServiceReply:
+    printNamedPtr("resp", frame.a0)
+  of SysRawLs:
+    printNamedCString("path", frame.a0)
+    print(", ")
+    printNamedPtr("entries", frame.a1)
+    print(", ")
+    printNamedU64("max", frame.a2)
+  of SysRawMkdir, SysRawUnlink, SysRawRmdir, SysRawReadFile, SysRawWriteFile:
+    printNamedCString("path", frame.a0)
+    print(", ")
+    printNamedPtr("arg1", frame.a1)
+    print(", ")
+    printNamedU64("arg2", frame.a2)
+  of SysBlockServiceReceive:
+    printNamedPtr("req", frame.a0)
+  of SysBlockServiceReply:
+    printNamedPtr("resp", frame.a0)
+  of SysRawBlockRead:
+    printNamedU64("block", frame.a0)
+    print(", ")
+    printNamedPtr("out", frame.a1)
+  of SysRawBlockWrite:
+    printNamedU64("block", frame.a0)
+    print(", ")
+    printNamedPtr("in", frame.a1)
+  of SysServiceRegister:
+    printNamedU64("kind", frame.a0)
+    print(", ")
+    printNamedI64("pid", frame.a1)
+  of SysServiceUnregister:
+    printNamedU64("kind", frame.a0)
+  of SysServiceList:
+    printNamedPtr("entries", frame.a0)
+    print(", ")
+    printNamedU64("max", frame.a1)
+  of SysSleep:
+    printNamedU64("ticks", frame.a0)
+  of SysRawNetMac:
+    printNamedPtr("mac", frame.a0)
+  of SysRawNetRecv:
+    printNamedPtr("buf", frame.a0)
+    print(", ")
+    printNamedU64("capacity", frame.a1)
+  of SysRawNetSend:
+    printNamedPtr("buf", frame.a0)
+    print(", ")
+    printNamedU64("size", frame.a1)
+  of SysTraceCtl:
+    printNamedTraceCtlCmd("cmd", frame.a0)
+    print(", ")
+    printNamedU64("value", frame.a1)
+  of SysEntropy:
+    printNamedPtr("buf", frame.a0)
+    print(", ")
+    printNamedU64("size", frame.a1)
+  else:
+    printDefaultArgs(frame)
+
+
 proc traceSyscallEnter*(frame: ptr TrapFrame) =
   if not shouldTrace():
     return
 
-  print("[strace] pid = ")
+  print("[strace] -> pid=")
   printSigned(currentProc.pid)
-  print(" ")
+  print(" exe=")
+  print(currentProc.exePath)
+  print(" sys=")
   print(syscallName(frame.a3))
+  print("#")
+  printUnsigned(frame.a3)
   print("(")
 
-  case frame.a3:
-  of SysRawReadFile, SysRawWriteFile:
-    printUserCStringArg(frame.a0)
-  else:
-    printPtr(frame.a0)
-  
-  print(", ")
-  printPtr(frame.a1)
-  print(", ")
-  printPtr(frame.a2)
-
+  printSyscallArgs(frame)
   print(")")
+  putChar('\n')
 
 
 proc traceSyscallExit*(frame: ptr TrapFrame) =
   if not shouldTrace():
     return
 
-  print(" = ")
+  print("[strace] <- pid=")
+  printSigned(currentProc.pid)
+  print(" sys=")
+  print(syscallName(frame.a3))
+  print("#")
+  printUnsigned(frame.a3)
+  print(" ret=")
   printPtr(frame.a0)
   putChar('\n')

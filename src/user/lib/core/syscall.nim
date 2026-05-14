@@ -19,6 +19,7 @@ const
   TraceOff* = U64(0)
   TraceOn*  = U64(1)
   TracePid* = U64(2)
+  TraceVerbose* = U64(3)
 
 
 type
