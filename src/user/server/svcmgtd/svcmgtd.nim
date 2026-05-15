@@ -5,19 +5,24 @@ import ../../lib/core/syscall
 const
   ProcessCap = 16
   MonitorSleepTicks = U64(10)
+  ServiceReadyTimeoutTicks = U64(200)
 
 type
   ServiceState = enum
     srvStopped
+    srvDegraded
+    srvStarting
     srvRunning
 
   ServiceEntry = object
     kind: U32
     name: cstring
     path: cstring
+    required: bool
     pid: I32
     state: ServiceState
     restarts: U64
+    readyDeadline: U64
 
 var
   services: array[4, ServiceEntry]
@@ -29,24 +34,28 @@ proc initServices() =
   services[0].kind = SysServiceKindProcess
   services[0].name = "procmgtd"
   services[0].path = "/bin/procmgtd"
+  services[0].required = true
   services[0].pid = -1
   services[0].state = srvStopped
 
   services[1].kind = SysServiceKindBlock
   services[1].name = "blockd"
   services[1].path = "/bin/blockd"
+  services[1].required = true
   services[1].pid = -1
   services[1].state = srvStopped
 
   services[2].kind = SysServiceKindFs
   services[2].name = "fsd"
   services[2].path = "/bin/fsd"
+  services[2].required = true
   services[2].pid = -1
   services[2].state = srvStopped
 
   services[3].kind = SysServiceKindNet
   services[3].name = "netd"
   services[3].path = "/bin/netd"
+  services[3].required = false
   services[3].pid = -1
   services[3].state = srvStopped
 
@@ -95,13 +104,57 @@ proc stopService(entry: ptr ServiceEntry) =
   entry.state = srvStopped
 
 
+proc degradeService(entry: ptr ServiceEntry) =
+  unregisterService(entry)
+  if entry.pid > 0:
+    if serviceAlive(entry):
+      discard sysKill(entry.pid)
+    discard sysWait(entry.pid)
+  entry.pid = -1
+  entry.state = srvDegraded
+  write("[svcmgtd] service degraded ")
+  write(entry.name)
+  write("\n")
+
+
+proc findServiceByPid(pid: I32): ptr ServiceEntry =
+  var i = 0
+  while i < len(services):
+    if services[i].pid == pid:
+      return addr services[i]
+    inc i
+
+  nil
+
+
+proc markServiceReady(entry: ptr ServiceEntry) =
+  if entry == nil or entry.pid <= 0:
+    return
+
+  if sysServiceReady(entry.kind, entry.pid) != 0:
+    write("[svcmgtd] failed to mark ready ")
+    write(entry.name)
+    write("\n")
+    return
+
+  entry.state = srvRunning
+  write("[svcmgtd] service ready ")
+  write(entry.name)
+  write(" pid=")
+  writeUnsigned(U64(entry.pid))
+  write("\n")
+
+
 proc startService(entry: ptr ServiceEntry) =
   let pid = sysExec(entry.path, nil, false)
   if pid < 0:
     write("[svcmgtd] failed to start ")
     write(entry.name)
     write("\n")
-    entry.state = srvStopped
+    if entry.required:
+      entry.state = srvStopped
+    else:
+      degradeService(entry)
     return
 
   if sysServiceRegister(entry.kind, pid) != 0:
@@ -110,12 +163,16 @@ proc startService(entry: ptr ServiceEntry) =
     write("\n")
     discard sysKill(pid)
     discard sysWait(pid)
-    entry.state = srvStopped
     entry.pid = -1
+    if entry.required:
+      entry.state = srvStopped
+    else:
+      degradeService(entry)
     return
 
   entry.pid = pid
-  entry.state = srvRunning
+  entry.state = srvStarting
+  entry.readyDeadline = sysTicks() + ServiceReadyTimeoutTicks
   write("[svcmgtd] service started ")
   write(entry.name)
   write(" pid=")
@@ -156,9 +213,31 @@ proc handleRestartCommand(name: cstring) =
   restartService(service)
 
 
+proc handleReadyPacket(packet: ptr SysIpcPacket) =
+  let service = findServiceByPid(packet.senderPid)
+  if service == nil:
+    write("[svcmgtd] ready from unknown pid=")
+    writeUnsigned(U64(packet.senderPid))
+    write("\n")
+    return
+
+  if service.state != srvStarting:
+    return
+
+  if packet.arg0 != U64(service.kind):
+    write("[svcmgtd] ready kind mismatch pid=")
+    writeUnsigned(U64(packet.senderPid))
+    write("\n")
+    return
+
+  markServiceReady(service)
+
+
 proc handleControlPacket(packet: ptr SysIpcPacket) =
   if packet.op == SysIpcOpSvcRestart:
     handleRestartCommand(cast[cstring](addr packet.data[0]))
+  elif packet.op == SysIpcOpSvcReady:
+    handleReadyPacket(packet)
 
 
 proc pollControlMessages() =
@@ -169,12 +248,52 @@ proc pollControlMessages() =
 proc monitorServices() =
   var i = 0
   while i < len(services):
+    if services[i].state == srvDegraded and not services[i].required:
+      inc i
+      continue
+
+    if services[i].state == srvStarting and sysTicks() >= services[i].readyDeadline:
+      write("[svcmgtd] service ready timeout ")
+      write(services[i].name)
+      write("\n")
+      if services[i].required:
+        restartService(addr services[i])
+      else:
+        degradeService(addr services[i])
+      inc i
+      continue
+
     if not serviceAlive(addr services[i]):
+      if not services[i].required:
+        degradeService(addr services[i])
+        inc i
+        continue
+
       write("[svcmgtd] service restarting ")
       write(services[i].name)
       write("\n")
       restartService(addr services[i])
     inc i
+
+
+proc waitForServiceReady(entry: ptr ServiceEntry) =
+  while entry.state == srvStarting and sysTicks() < entry.readyDeadline:
+    pollControlMessages()
+    discard sysSleep(1)
+
+  if entry.state == srvStarting:
+    write("[svcmgtd] service ready timeout ")
+    write(entry.name)
+    write("\n")
+    if entry.required:
+      stopService(entry)
+    else:
+      degradeService(entry)
+
+
+proc startInitialService(entry: ptr ServiceEntry) =
+  startService(entry)
+  waitForServiceReady(entry)
 
 
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
@@ -190,10 +309,10 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
     sysExit(1)
 
   initServices()
-  startService(addr services[0])
-  startService(addr services[1])
-  startService(addr services[2])
-  startService(addr services[3])
+  startInitialService(addr services[0])
+  startInitialService(addr services[1])
+  startInitialService(addr services[2])
+  startInitialService(addr services[3])
 
   while true:
     pollControlMessages()

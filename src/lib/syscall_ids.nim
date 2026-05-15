@@ -62,3 +62,4 @@ const
   SysLseek* = U64(61)
   SysPipe* = U64(62)
   SysDup2* = U64(63)
+  SysServiceReady* = U64(64)

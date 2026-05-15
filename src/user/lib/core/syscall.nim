@@ -240,6 +240,10 @@ proc sysServiceRegister*(kind: U32, pid: I32): I32 =
   I32(rawSyscall3(SysServiceRegister, U64(kind), U64(pid), 0))
 
 
+proc sysServiceReady*(kind: U32, pid: I32): I32 =
+  I32(rawSyscall3(SysServiceReady, U64(kind), U64(pid), 0))
+
+
 proc sysServiceUnregister*(kind: U32): I32 =
   I32(rawSyscall3(SysServiceUnregister, U64(kind), 0, 0))
 

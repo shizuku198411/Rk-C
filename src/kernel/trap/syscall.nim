@@ -186,6 +186,9 @@ proc handleSyscall*(frame: ptr TrapFrame) =
   of SysServiceRegister:
     frame.a0 = syscallServiceRegister(frame.a0, frame.a1)
 
+  of SysServiceReady:
+    frame.a0 = syscallServiceReady(frame.a0, frame.a1)
+
   of SysServiceUnregister:
     frame.a0 = syscallServiceUnregister(frame.a0)
 

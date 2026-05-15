@@ -11,18 +11,21 @@ type
 
   ServiceEntry = object
     registered: bool
+    ready: bool
     pid: int32
 
 var services: array[serviceMax, ServiceEntry]
 
 
-proc registerService*(kind: ServiceKind, pid: int32) =
+proc registerService*(kind: ServiceKind, pid: int32, ready: bool = false) =
   services[kind].registered = true
+  services[kind].ready = ready
   services[kind].pid = pid
 
 
 proc unregisterService*(kind: ServiceKind) =
   services[kind].registered = false
+  services[kind].ready = false
   services[kind].pid = 0
 
 
@@ -34,12 +37,28 @@ proc servicePid*(kind: ServiceKind): int32 =
   services[kind].pid
 
 
+proc serviceReady*(kind: ServiceKind): bool =
+  services[kind].ready
+
+
+proc markServiceReady*(kind: ServiceKind, pid: int32): bool =
+  if not services[kind].registered or services[kind].pid != pid:
+    return false
+
+  let p = findProcessByPid(pid)
+  if p == nil or p.state == procZombie or p.state == procUnused:
+    return false
+
+  services[kind].ready = true
+  true
+
+
 proc currentIsService*(kind: ServiceKind): bool =
   currentProc != nil and services[kind].registered and currentProc.pid == services[kind].pid
 
 
 proc serviceAvailable*(kind: ServiceKind): bool =
-  if not services[kind].registered:
+  if not services[kind].registered or not services[kind].ready:
     return false
 
   let p = findProcessByPid(services[kind].pid)
@@ -57,12 +76,31 @@ proc isServicePid*(pid: int32): bool =
   false
 
 
+proc serviceRequired*(kind: ServiceKind): bool =
+  case kind
+  of serviceManager, serviceBlock, serviceFs, serviceProcess:
+    true
+  of serviceNet, serviceMax:
+    false
+
+
 proc requiredServicesReady*(): bool =
+  var kind = low(ServiceKind)
+
+  while kind < serviceMax:
+    if serviceRequired(kind) and not serviceAvailable(kind):
+      return false
+    kind = ServiceKind(ord(kind) + 1)
+  
+  true
+
+
+proc allServicesReady*(): bool =
   var kind = low(ServiceKind)
 
   while kind < serviceMax:
     if not serviceAvailable(kind):
       return false
     kind = ServiceKind(ord(kind) + 1)
-  
+
   true

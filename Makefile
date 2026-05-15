@@ -43,6 +43,7 @@ USER_SERVER_BINS := $(foreach server,$(USER_SERVER_NAMES),$(BIN_DIR)/$(server).b
 USER_SYSCALL_OBJ := $(OBJ_DIR)/user/lib/runtime/syscall.o
 USER_ENTRY_OBJ := $(OBJ_DIR)/user/lib/runtime/entry.o
 USER_LIB_SRCS := $(shell find $(SRC_DIR)/user/lib -type f -name '*.nim' | sort)
+USER_SERVER_LIB_SRCS := $(shell find $(SRC_DIR)/user/server/lib -type f -name '*.nim' 2>/dev/null | sort)
 
 OPENSBI_FW ?= opensbi/build/platform/generic/firmware/fw_jump.bin
 QEMU_NET ?= tap
@@ -131,12 +132,23 @@ QEMU_ARGS := \
 	$(QEMU_NET_DEVICE_ARGS) \
 	-kernel $(KERNEL_ELF)
 
+QEMU_DEGRADED_ARGS := \
+	-machine virt \
+	-m 256M \
+	-nographic \
+	-serial mon:stdio \
+	-global virtio-mmio.force-legacy=false \
+	-bios $(OPENSBI_FW) \
+	-drive file=$(DISK_IMG),format=raw,if=none,id=hd0 \
+	-device virtio-blk-device,drive=hd0,bus=virtio-mmio-bus.0 \
+	-kernel $(KERNEL_ELF)
+
 QEMU_DEBUG_ARGS := \
 	$(QEMU_ARGS) \
 	-S \
 	-gdb tcp::$(GDB_PORT)
 
-.PHONY: all build appfs clean disasm run qemu-run qemu-debug net-host-help
+.PHONY: all build appfs clean disasm run qemu-run degraded-run qemu-debug net-host-help
 
 all: build
 
@@ -177,7 +189,7 @@ endef
 $(foreach app,$(USER_APP_NAMES),$(eval $(call USER_APP_template,$(app))))
 
 define USER_SERVER_template
-$(BIN_DIR)/$(1).elf: $(SRC_DIR)/user/app_main.nim $$(wildcard $(SRC_DIR)/user/server/$(1)/*.nim) $(SRC_DIR)/user/panicoverride.nim $$(USER_LIB_SRCS) $(USER_SYSCALL_OBJ) $(USER_ENTRY_OBJ) $(USER_APP_LINKER_SCRIPT) | $(BIN_DIR)
+$(BIN_DIR)/$(1).elf: $(SRC_DIR)/user/app_main.nim $$(wildcard $(SRC_DIR)/user/server/$(1)/*.nim) $$(USER_SERVER_LIB_SRCS) $(SRC_DIR)/user/panicoverride.nim $$(USER_LIB_SRCS) $(USER_SYSCALL_OBJ) $(USER_ENTRY_OBJ) $(USER_APP_LINKER_SCRIPT) | $(BIN_DIR)
 	$$(NIM) c $$(USER_NIMFLAGS) -d:userApp_$(1) --nimcache:$$(USER_NIMCACHE_DIR)/$(1) --passL:"$$(USER_ENTRY_OBJ)" --passL:"$$(USER_SYSCALL_OBJ)" --passL:"-Wl,-T,$$(USER_APP_LINKER_SCRIPT)" -o:$$@ $$<
 
 $(BIN_DIR)/$(1).bin: $(BIN_DIR)/$(1).elf | $(BIN_DIR)
@@ -200,6 +212,9 @@ run: build
 
 qemu-run: build
 	$(QEMU) $(QEMU_ARGS)
+
+degraded-run: build
+	$(QEMU) $(QEMU_DEGRADED_ARGS)
 
 qemu-debug: build
 	$(QEMU) $(QEMU_DEBUG_ARGS)

@@ -1,5 +1,6 @@
 import ../../lib/core/io
 import ../../lib/core/syscall
+import ../lib/service_ready
 
 var
   req: SysFsRequest
@@ -71,6 +72,8 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   if sysFsServiceRegister() != 0:
     write("fsd: register failed\n")
     sysExit(1)
+
+  notifyServiceReady(SysServiceKindFs)
 
   while true:
     if sysFsServiceReceive(addr req) < 0:

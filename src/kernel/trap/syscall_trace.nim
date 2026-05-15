@@ -57,6 +57,7 @@ proc syscallName*(num: U64): cstring =
   of SysRawBlockWrite: cstring("raw_block_write")
   of SysServiceManagerRegister: cstring("service_manager_register")
   of SysServiceRegister: cstring("service_register")
+  of SysServiceReady: cstring("service_ready")
   of SysServiceUnregister: cstring("service_unregister")
   of SysYield: cstring("yield")
   of SysSleep: cstring("sleep")

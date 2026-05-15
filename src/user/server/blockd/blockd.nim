@@ -1,5 +1,6 @@
 import ../../lib/core/io
 import ../../lib/core/syscall
+import ../lib/service_ready
 
 var
   req: SysBlockRequest
@@ -38,6 +39,8 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   if sysBlockServiceRegister() != 0:
     write("blockd: register failed\n")
     sysExit(1)
+
+  notifyServiceReady(SysServiceKindBlock)
 
   while true:
     if sysBlockServiceReceive(addr req) < 0:

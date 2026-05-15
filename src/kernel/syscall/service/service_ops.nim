@@ -102,7 +102,7 @@ proc syscallServiceManagerRegister*(): U64 =
   if serviceRegistered(serviceManager) and not currentIsService(serviceManager):
     return U64(-1'i64)
 
-  registerService(serviceManager, currentProc.pid)
+  registerService(serviceManager, currentProc.pid, true)
   0
 
 
@@ -121,6 +121,22 @@ proc syscallServiceRegister*(kindVal, pidVal: U64): U64 =
     return U64(-1'i64)
 
   registerService(kind, pid)
+  0
+
+
+proc syscallServiceReady*(kindVal, pidVal: U64): U64 =
+  if not currentIsService(serviceManager):
+    return U64(-1'i64)
+
+  var kind = serviceBlock
+  if not serviceKindFromValue(kindVal, kind):
+    return U64(-1'i64)
+  if kind == serviceManager:
+    return U64(-1'i64)
+
+  if not markServiceReady(kind, int32(pidVal)):
+    return U64(-1'i64)
+
   0
 
 

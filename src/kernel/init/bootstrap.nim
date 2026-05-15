@@ -10,6 +10,9 @@ import ../task/process
 import ../task/exec
 import ../service/registry
 
+const
+  ServiceWaitTimeoutTicks = U64(250)
+
 
 var
   bssStartSym {.importc: "__bss_start".}: char
@@ -70,8 +73,18 @@ proc kernelBanner() =
   println("╚═══════════════════════════════════╝\n")
 
 
-proc waitForRequiredServices() =
-  while not requiredServicesReady():
+proc waitForInitialServices() =
+  let deadline = timerTickCount + ServiceWaitTimeoutTicks
+
+  while not allServicesReady():
+    if timerTickCount >= deadline:
+      if not requiredServicesReady():
+        printBootMsg("  required service wait timeout\n")
+        panic("required services did not become ready")
+
+      printBootMsg("  optional service wait timeout; degraded boot\n")
+      return
+
     sleepCurrentUntilTick(timerTickCount + 1)
 
 
@@ -79,7 +92,7 @@ proc bootTask() {.cdecl.} =
   if createServiceManagerUserProcess() < 0:
     panic("failed to create service manager")
 
-  waitForRequiredServices()
+  waitForInitialServices()
 
   if createShellUserProcess() < 0:
     panic("failed to create shell")

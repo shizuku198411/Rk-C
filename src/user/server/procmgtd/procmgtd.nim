@@ -1,4 +1,5 @@
 import ../../lib/core/syscall
+import ../lib/service_ready
 
 const
   ProcessCap = 16
@@ -77,6 +78,8 @@ proc handlePacket(packet: ptr SysIpcPacket) =
 
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   discard arg
+
+  notifyServiceReady(SysServiceKindProcess)
 
   while true:
     if sysIpcReceivePacket(addr requestPacket) == 0:

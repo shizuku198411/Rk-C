@@ -2,6 +2,7 @@ import ../../lib/core/io
 import ../../lib/core/syscall
 import ../../lib/core/strutils
 import ../../lib/net/netutls
+import ../lib/service_ready
 import arp
 import config
 import icmp
@@ -322,6 +323,8 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   initNetDevice()
   net.tcpNextHandle = 1
   net.tcpNextPort = TcpInitialSourcePort
+
+  notifyServiceReady(SysServiceKindNet)
 
   while true:
     pollIpc()

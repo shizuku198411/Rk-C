@@ -28,6 +28,7 @@ const
   SysIpcOpProcKillResponse* = U32(6)
   SysIpcOpNetPingRequest* = U32(7)
   SysIpcOpNetPingResponse* = U32(8)
+  SysIpcOpSvcReady* = U32(9)
   SysIpcOpNetUdpSendRequest* = U32(11)
   SysIpcOpNetUdpSendResponse* = U32(12)
   SysIpcOpNetUdpReceiveRequest* = U32(13)
