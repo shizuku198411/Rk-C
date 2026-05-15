@@ -1,5 +1,6 @@
 import ./crypto_types
 import ./sha256
+import ../../core/strutils
 import ../../core/syscall
 
 
@@ -81,17 +82,6 @@ proc hkdfExpandSha256*(prk: pointer, prkLen: U32, info: pointer,
   0
 
 
-proc cstrlenLocal(s: cstring): U32 =
-  if s == nil:
-    return 0
-
-  var n = U32(0)
-  while s[n] != '\0':
-    inc n
-
-  n
-
-
 proc hkdfExpandLabelSha256*(secret: pointer, label: cstring, context: pointer,
                             contextLen: U32, outOkm: pointer, okmLen: U32): I32 =
   if secret == nil or label == nil or outOkm == nil:
@@ -100,7 +90,7 @@ proc hkdfExpandLabelSha256*(secret: pointer, label: cstring, context: pointer,
   const Prefix = "tls13 "
   var info: array[256, U8]
   var pos = U32(0)
-  let labelLen = cstrlenLocal(label)
+  let labelLen = U32(cstrlen(label))
   let fullLabelLen = U32(6) + labelLen
   if fullLabelLen > 255 or contextLen > 255:
     return -1

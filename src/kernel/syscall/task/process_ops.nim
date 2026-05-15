@@ -1,7 +1,9 @@
+import ../../../lib/fixed_string
 import ../../../lib/syscall_types
 import ../../../lib/types
 import ../../dev/console
 import ../../fs/fs
+import ../../lib/syscall_out
 import ../../mm/usercopy
 import ../../service/registry
 import ../../task/exec
@@ -20,16 +22,6 @@ proc processStateValue(state: ProcessState): U32 =
   of procRunning: SysProcessRunning
   of procSleeping: SysProcessSleeping
   of procZombie: SysProcessZombie
-
-
-proc copyProcessName(dst: var array[SysProcessNameMax, char], src: cstring) =
-  var i = 0
-  while i < SysProcessNameMax - 1:
-    if src == nil or src[i] == '\0':
-      break
-    dst[i] = src[i]
-    inc i
-  dst[i] = '\0'
 
 
 proc currentCanUseRawProcessOps(): bool =
@@ -53,12 +45,12 @@ proc syscallPs*(outEntries: U64, maxEntries: U64): U64 =
         processEntries[count].isUser = 1
       else:
         processEntries[count].isUser = 0
-      copyProcessName(processEntries[count].exePath, procs[i].exePath)
+      discard copyCString(processEntries[count].exePath, procs[i].exePath)
       inc count
     inc i
 
   let bytes = count * U64(sizeof(SysProcessInfo))
-  if copyToUser(outEntries, addr processEntries[0], bytes) != 0:
+  if not copyOutBuffer(outEntries, addr processEntries[0], bytes):
     return U64(-1'i64)
 
   count
@@ -131,23 +123,17 @@ proc syscallGetCwd*(outBuf, capacity: U64): U64 =
   cwd[i] = '\0'
   if capacity < i + 1:
     return U64(-1'i64)
-  if copyToUser(outBuf, addr cwd[0], i + 1) != 0:
+  if not copyOutBuffer(outBuf, addr cwd[0], i + 1):
     return U64(-1'i64)
 
   i
 
 
 proc setCurrentCwd(path: cstring): int =
-  var i = 0
-  while i < SysProcessCwdMax - 1 and path[i] != '\0':
-    currentProc.cwd[i] = path[i]
-    inc i
-
-  if path[i] != '\0':
-    return -1
-
-  currentProc.cwd[i] = '\0'
-  0
+  if copyCString(currentProc.cwd, path):
+    0
+  else:
+    -1
 
 
 proc syscallSetCwd*(pathVal: U64): U64 =

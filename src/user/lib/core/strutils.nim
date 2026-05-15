@@ -103,3 +103,14 @@ proc parseU64*(s: cstring, outValue: var U64): bool =
 
   outValue = value
   true
+
+
+proc parseU32*(s: cstring, outValue: var U32): bool =
+  var value = U64(0)
+  if not parseU64(s, value):
+    return false
+  if value > U64(high(U32)):
+    return false
+
+  outValue = U32(value)
+  true

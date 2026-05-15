@@ -1,6 +1,7 @@
 import ../../lib/core/io
 import ../../lib/net/net_dns
 import ../../lib/net/net_http
+import ../../lib/net/ipaddr
 import ../../lib/core/args
 import ../../lib/core/strutils
 import ../../lib/core/syscall
@@ -110,55 +111,6 @@ proc writeHttpChunk(buf: pointer, len: U32, includeHeaders: bool,
     inc i
 
 
-proc parseOctet(arg: cstring, pos: var int, value: var U32): bool =
-  if arg[pos] < '0' or arg[pos] > '9':
-    return false
-
-  var outValue = U32(0)
-  while arg[pos] >= '0' and arg[pos] <= '9':
-    outValue = outValue * 10 + U32(ord(arg[pos]) - ord('0'))
-    if outValue > 255:
-      return false
-    inc pos
-
-  value = outValue
-  true
-
-
-proc parseIp(arg: cstring, ip: var U32): bool =
-  var pos = 0
-  var a = U32(0)
-  var b = U32(0)
-  var c = U32(0)
-  var d = U32(0)
-
-  if not parseOctet(arg, pos, a):
-    return false
-  if arg[pos] != '.':
-    return false
-  inc pos
-
-  if not parseOctet(arg, pos, b):
-    return false
-  if arg[pos] != '.':
-    return false
-  inc pos
-
-  if not parseOctet(arg, pos, c):
-    return false
-  if arg[pos] != '.':
-    return false
-  inc pos
-
-  if not parseOctet(arg, pos, d):
-    return false
-  if arg[pos] != '\0':
-    return false
-
-  ip = (a shl 24) or (b shl 16) or (c shl 8) or d
-  true
-
-
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   if parseUserArgs(arg, parsedArgs) and parsedArgs.argc == 1 and
       streq(argAt(parsedArgs, 0), "--help"):
@@ -178,7 +130,7 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   var ip = U32(0)
   let host = cast[cstring](addr url.host[0])
   let path = cast[cstring](addr url.path[0])
-  if not parseIp(host, ip):
+  if not parseIpv4Addr(host, ip):
     if not resolveA(host, ip):
       write("curl: could not resolve host\n")
       sysExit(1)

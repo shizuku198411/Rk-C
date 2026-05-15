@@ -1,3 +1,6 @@
+import ../../lib/service_catalog
+import ../../lib/syscall_types
+import ../../lib/types
 import ../task/process
 
 type
@@ -76,12 +79,24 @@ proc isServicePid*(pid: int32): bool =
   false
 
 
-proc serviceRequired*(kind: ServiceKind): bool =
+proc sysServiceKindValue(kind: ServiceKind): U32 =
   case kind
-  of serviceManager, serviceBlock, serviceFs, serviceProcess:
-    true
-  of serviceNet, serviceMax:
-    false
+  of serviceManager:
+    SysServiceKindManager
+  of serviceBlock:
+    SysServiceKindBlock
+  of serviceFs:
+    SysServiceKindFs
+  of serviceProcess:
+    SysServiceKindProcess
+  of serviceNet:
+    SysServiceKindNet
+  of serviceMax:
+    U32(0xffffffff'u32)
+
+
+proc serviceRequired*(kind: ServiceKind): bool =
+  serviceRequiredByKind(sysServiceKindValue(kind))
 
 
 proc requiredServicesReady*(): bool =

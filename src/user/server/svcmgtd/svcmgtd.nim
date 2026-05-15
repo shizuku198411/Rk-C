@@ -1,6 +1,7 @@
 import ../../lib/core/io
 import ../../lib/core/strutils
 import ../../lib/core/syscall
+import ../../../lib/service_catalog
 
 const
   ProcessCap = 16
@@ -25,39 +26,23 @@ type
     readyDeadline: U64
 
 var
-  services: array[4, ServiceEntry]
+  services: array[SysManagedServiceCount, ServiceEntry]
   processes: array[ProcessCap, SysProcessInfo]
   controlPacket: SysIpcPacket
 
 
 proc initServices() =
-  services[0].kind = SysServiceKindProcess
-  services[0].name = "procmgtd"
-  services[0].path = "/bin/procmgtd"
-  services[0].required = true
-  services[0].pid = -1
-  services[0].state = srvStopped
-
-  services[1].kind = SysServiceKindBlock
-  services[1].name = "blockd"
-  services[1].path = "/bin/blockd"
-  services[1].required = true
-  services[1].pid = -1
-  services[1].state = srvStopped
-
-  services[2].kind = SysServiceKindFs
-  services[2].name = "fsd"
-  services[2].path = "/bin/fsd"
-  services[2].required = true
-  services[2].pid = -1
-  services[2].state = srvStopped
-
-  services[3].kind = SysServiceKindNet
-  services[3].name = "netd"
-  services[3].path = "/bin/netd"
-  services[3].required = false
-  services[3].pid = -1
-  services[3].state = srvStopped
+  var i = 0
+  while i < len(services):
+    services[i].kind = managedServices[i].kind
+    services[i].name = managedServices[i].name
+    services[i].path = managedServices[i].path
+    services[i].required = managedServices[i].required
+    services[i].pid = -1
+    services[i].state = srvStopped
+    services[i].restarts = 0
+    services[i].readyDeadline = 0
+    inc i
 
 
 proc processState(pid: I32, state: var U32): bool =

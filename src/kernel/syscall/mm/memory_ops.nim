@@ -1,7 +1,7 @@
 import ../../../lib/syscall_types
 import ../../../lib/types
+import ../../lib/syscall_out
 import ../../mm/memory
-import ../../mm/usercopy
 
 
 proc syscallGetBitMap*(outInfo: U64): U64 =
@@ -10,7 +10,7 @@ proc syscallGetBitMap*(outInfo: U64): U64 =
 
   let info = bitmapInfo()
   var bitmapOut = SysBitmapInfo(total: info.total, used: info.used, free: info.free)
-  if copyToUser(outInfo, addr bitmapOut, U64(sizeof(SysBitmapInfo))) != 0:
+  if not copyOutObject(outInfo, bitmapOut):
     return U64(-1'i64)
 
   0

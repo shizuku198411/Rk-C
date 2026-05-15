@@ -1,7 +1,9 @@
+import ../../lib/fixed_string
 import ../../lib/types
 import ../dev/console
 import ../fs/dirent
 import ../fs/tmpfs
+import ../lib/path
 import ../syscall/blk/block_service_ops
 
 const
@@ -75,16 +77,6 @@ let devEntryNames = [
 proc fsWriteFile*(path: cstring, data: pointer, size: U64): int
 
 
-proc cstrlen(s: cstring): int =
-  if s == nil:
-    return 0
-
-  var n = 0
-  while s[n] != '\0':
-    inc n
-  n
-
-
 proc pathMatchesMount(path: cstring, mountPath: cstring, mountLen: int): bool =
   if path == nil or mountPath == nil or mountLen <= 0:
     return false
@@ -111,7 +103,7 @@ proc vfsMount(path: cstring, backend: VfsBackend) =
 
   let idx = mountCount
   mounts[idx].path = path
-  mounts[idx].pathLen = cstrlen(path)
+  mounts[idx].pathLen = int(cstrlen(path))
   mounts[idx].backend = backend
   mounts[idx].used = true
   inc mountCount
@@ -136,23 +128,12 @@ proc clearMounts() =
   mountCount = 0
 
 
-proc pathEq(a, b: cstring): bool =
-  if a == nil or b == nil:
-    return false
-  var i = 0
-  while a[i] == b[i]:
-    if a[i] == '\0':
-      return true
-    inc i
-  false
-
-
 proc isBinRoot(path: cstring): bool =
-  pathEq(path, "/bin") or pathEq(path, "/bin/")
+  cstringEq(path, "/bin") or cstringEq(path, "/bin/")
 
 
 proc isDevRoot(path: cstring): bool =
-  pathEq(path, "/dev") or pathEq(path, "/dev/")
+  cstringEq(path, "/dev") or cstringEq(path, "/dev/")
 
 
 proc resolveDevPath(path: cstring): int =
@@ -166,7 +147,7 @@ proc resolveDevPath(path: cstring): int =
 
   var i = 0
   while i < DevEntryCount:
-    if pathEq(name, devEntryNames[i]):
+    if cstringEq(name, devEntryNames[i]):
       return i
     inc i
 
@@ -199,14 +180,7 @@ proc appfsReadBytes(absOff: U64, outBuf: pointer, n: U64): int =
 
 
 proc appfsNameEq(entry: AppfsEntry, name: cstring): bool =
-  var i = 0
-  while i < FsNameMax:
-    if entry.name[i] != name[i]:
-      return false
-    if entry.name[i] == '\0':
-      return true
-    inc i
-  name[FsNameMax] == '\0'
+  fixedCStringEq(entry.name, name)
 
 
 proc resolveAppfsPath(path: cstring): int =
@@ -259,25 +233,8 @@ proc clearBlock() =
     inc i
 
 
-proc copyName(dst: var array[FsNameMax, char], src: cstring) =
-  var i = 0
-  while i < FsNameMax - 1 and src[i] != '\0':
-    dst[i] = src[i]
-    inc i
-  while i < FsNameMax:
-    dst[i] = '\0'
-    inc i
-
-
 proc nameEq(node: FsNode, name: cstring): bool =
-  var i = 0
-  while i < FsNameMax:
-    if node.name[i] != name[i]:
-      return false
-    if node.name[i] == '\0':
-      return true
-    inc i
-  name[FsNameMax] == '\0'
+  fixedCStringEq(node.name, name)
 
 
 proc findChild(parent: int, name: cstring): int =
@@ -346,39 +303,11 @@ proc allocNode(parent: int, name: cstring, typ: U32): int =
       superBlock.nodes[i].parent = U32(parent)
       superBlock.nodes[i].size = 0
       superBlock.nodes[i].startBlock = U32(FsDataStartBlock + U64(i) * FsFileBlocks)
-      copyName(superBlock.nodes[i].name, name)
+      discard copyCString(superBlock.nodes[i].name, name)
       inc superBlock.count
       return i
     inc i
   -1
-
-
-proc readComponent(path: cstring, pos: var int, name: var array[FsNameMax, char]): bool =
-  while path[pos] == '/':
-    inc pos
-  if path[pos] == '\0':
-    return false
-
-  var i = 0
-  var tooLong = false
-
-  while path[pos] != '\0' and path[pos] != '/':
-    if i < FsNameMax - 1:
-      name[i] = path[pos]
-      inc i
-    else:
-      tooLong = true
-    inc pos
-  
-  if tooLong:
-    name[0] = '\0'
-    return false
-  
-  while i < FsNameMax:
-    name[i] = '\0'
-    inc i
-  
-  true
 
 
 proc resolvePath(path: cstring): int =
@@ -390,7 +319,7 @@ proc resolvePath(path: cstring): int =
   var pos = 0
   var current = 0
   var name: array[FsNameMax, char]
-  while readComponent(path, pos, name):
+  while readPathComponent(path, pos, name):
     let next = findChild(current, cast[cstring](addr name[0]))
     if next < 0:
       return -1
@@ -405,7 +334,7 @@ proc resolveParent(path: cstring, leaf: var array[FsNameMax, char]): int =
   var pos = 0
   var current = 0
   var name: array[FsNameMax, char]
-  while readComponent(path, pos, name):
+  while readPathComponent(path, pos, name):
     if path[pos] == '\0':
       leaf = name
       return current
@@ -446,7 +375,7 @@ proc formatFs() =
   superBlock.nodes[0].used = 1
   superBlock.nodes[0].typ = FsTypeDir
   superBlock.nodes[0].parent = 0
-  copyName(superBlock.nodes[0].name, "/")
+  discard copyCString(superBlock.nodes[0].name, "/")
 
   discard allocNode(0, "tmp", FsTypeMount)
   discard allocNode(0, "bin", FsTypeDir)

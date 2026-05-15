@@ -1,7 +1,7 @@
 import ../../arch/riscv64/arch
 import ../../lib/types
 import ../dev/console
-import ../mm/memory
+import ../lib/virtio
 import volatile
 
 const
@@ -15,70 +15,7 @@ const
   VqAlign = U64(4096)
   IoSpinLimit = U64(30000000)
 
-  VirtioMmioBase = U64(0x10001000)
-  VirtioMmioStride = U64(0x1000)
-  VirtioMmioMaxDevs = U64(8)
-
-  RegMagic = U64(0x000)
-  RegVersion = U64(0x004)
-  RegDeviceId = U64(0x008)
-  RegVendorId = U64(0x00c)
-  RegDeviceFeatures = U64(0x010)
-  RegDeviceFeaturesSel = U64(0x014)
-  RegDriverFeatures = U64(0x020)
-  RegDriverFeaturesSel = U64(0x024)
-  RegQueueSel = U64(0x030)
-  RegQueueNumMax = U64(0x034)
-  RegQueueNum = U64(0x038)
-  RegQueueReady = U64(0x044)
-  RegQueueNotify = U64(0x050)
-  RegStatus = U64(0x070)
-  RegQueueDescLow = U64(0x080)
-  RegQueueDescHigh = U64(0x084)
-  RegQueueAvailLow = U64(0x090)
-  RegQueueAvailHigh = U64(0x094)
-  RegQueueUsedLow = U64(0x0a0)
-  RegQueueUsedHigh = U64(0x0a4)
-  RegConfig = U64(0x100)
-
-  VirtioMagic = U32(0x74726976)
-  VirtioVendor = U32(0x554d4551)
-  VirtioDevBlock = U32(2)
-
-  StatusAcknowledge = U32(1)
-  StatusDriver = U32(2)
-  StatusDriverOk = U32(4)
-  StatusFeaturesOk = U32(8)
-  StatusFailed = U32(128)
-
-  DescNext = U16(1)
-  DescWrite = U16(2)
-  FeatureVersion1 = U64(32)
-  FeatureRingReset = U64(40)
-
 type
-  VirtqDesc {.packed.} = object
-    paddr: U64
-    len: U32
-    flags: U16
-    next: U16
-
-  VirtqAvail {.packed.} = object
-    flags: U16
-    idx: U16
-    ring: array[8, U16]
-    usedEvent: U16
-
-  VirtqUsedElem {.packed.} = object
-    id: U32
-    len: U32
-
-  VirtqUsed {.packed.} = object
-    flags: U16
-    idx: U16
-    ring: array[8, VirtqUsedElem]
-    availEvent: U16
-
   VirtioBlkReqHdr {.packed.} = object
     typ: U32
     reserved: U32
@@ -87,73 +24,31 @@ type
 var
   mmioBase: U64
   capacityBlocks: U64
-  vqMem: PAddr
-  vqDesc: ptr UncheckedArray[VirtqDesc]
-  vqAvail: ptr VirtqAvail
-  vqUsed: ptr VirtqUsed
-  vqLastUsedIdx: U16
+  vq: VirtQueue
   reqHdr: VirtioBlkReqHdr
   reqStatus: U8
   initialized: bool
 
 
 proc mmioRead(off: U64): U32 =
-  volatileLoad(cast[ptr U32](mmioBase + off))
+  virtioMmioRead(mmioBase, off)
 
 
 proc mmioWrite(off: U64, val: U32) =
-  volatileStore(cast[ptr U32](mmioBase + off), val)
+  virtioMmioWrite(mmioBase, off, val)
 
 
 proc findBlk(): bool =
-  var i = U64(0)
-  while i < VirtioMmioMaxDevs:
-    let base = VirtioMmioBase + i * VirtioMmioStride
-    if volatileLoad(cast[ptr U32](base + RegMagic)) == VirtioMagic and
-        volatileLoad(cast[ptr U32](base + RegVersion)) >= 2 and
-        volatileLoad(cast[ptr U32](base + RegDeviceId)) == VirtioDevBlock and
-        volatileLoad(cast[ptr U32](base + RegVendorId)) == VirtioVendor:
-      mmioBase = base
-      return true
-    inc i
-  false
+  scanVirtioMmio(VirtioDevBlock, mmioBase)
 
 
 proc setupVqLayout() =
-  if vqMem == NilPAddr:
-    vqMem = palloc(VqBytes div PageSize)
-    if vqMem == NilPAddr:
-      panic("virtio vq alloc failed")
-
-  let descBytes = U64(sizeof(VirtqDesc)) * VqNum
-  vqDesc = cast[ptr UncheckedArray[VirtqDesc]](vqMem)
-  vqAvail = cast[ptr VirtqAvail](vqMem + descBytes)
-  vqUsed = cast[ptr VirtqUsed](vqMem + VqAlign)
-
-  var p = cast[ptr UncheckedArray[U8]](vqMem)
-  var i = U64(0)
-  while i < VqBytes:
-    p[i] = 0
-    inc i
-  vqLastUsedIdx = 0
+  if not resetVirtQueue(vq, VqNum, VqBytes, VqAlign):
+    panic("virtio vq alloc failed")
 
 
 proc setupQueue(): bool =
-  mmioWrite(RegQueueSel, 0)
-  let qmax = mmioRead(RegQueueNumMax)
-  if qmax == 0 or qmax < U32(VqNum):
-    return false
-
-  mmioWrite(RegQueueNum, U32(VqNum))
-  mmioWrite(RegQueueReady, 0)
-  mmioWrite(RegQueueDescLow, U32(vqMem and 0xffffffff'u64))
-  mmioWrite(RegQueueDescHigh, U32(vqMem shr 32))
-  mmioWrite(RegQueueAvailLow, U32((cast[U64](vqAvail)) and 0xffffffff'u64))
-  mmioWrite(RegQueueAvailHigh, U32(cast[U64](vqAvail) shr 32))
-  mmioWrite(RegQueueUsedLow, U32((cast[U64](vqUsed)) and 0xffffffff'u64))
-  mmioWrite(RegQueueUsedHigh, U32(cast[U64](vqUsed) shr 32))
-  mmioWrite(RegQueueReady, 1)
-  true
+  setupVirtQueue(mmioBase, 0, VqNum, vq)
 
 
 proc configureDevice(): bool =
@@ -207,32 +102,32 @@ proc doIo(typ: U32, blockIndex: U64, buf: pointer): int =
   reqHdr.sector = blockIndex
   reqStatus = 0xff'u8
 
-  vqDesc[0].paddr = cast[U64](addr reqHdr)
-  vqDesc[0].len = U32(sizeof(reqHdr))
-  vqDesc[0].flags = DescNext
-  vqDesc[0].next = 1
+  vq.desc[0].paddr = cast[U64](addr reqHdr)
+  vq.desc[0].len = U32(sizeof(reqHdr))
+  vq.desc[0].flags = DescNext
+  vq.desc[0].next = 1
 
-  vqDesc[1].paddr = cast[U64](buf)
-  vqDesc[1].len = U32(BlockSize)
-  vqDesc[1].flags = DescNext
+  vq.desc[1].paddr = cast[U64](buf)
+  vq.desc[1].len = U32(BlockSize)
+  vq.desc[1].flags = DescNext
   if typ == VirtioBlkIn:
-    vqDesc[1].flags = vqDesc[1].flags or DescWrite
-  vqDesc[1].next = 2
+    vq.desc[1].flags = vq.desc[1].flags or DescWrite
+  vq.desc[1].next = 2
 
-  vqDesc[2].paddr = cast[U64](addr reqStatus)
-  vqDesc[2].len = 1
-  vqDesc[2].flags = DescWrite
-  vqDesc[2].next = 0
+  vq.desc[2].paddr = cast[U64](addr reqStatus)
+  vq.desc[2].len = 1
+  vq.desc[2].flags = DescWrite
+  vq.desc[2].next = 0
 
-  let availIdx = volatileLoad(addr vqAvail.idx)
-  volatileStore(addr vqAvail.ring[availIdx mod U16(VqNum)], U16(0))
+  let availIdx = volatileLoad(addr vq.avail.idx)
+  volatileStore(addr vq.avail.ring[availIdx mod U16(VqNum)], U16(0))
   arch.fenceRwRw()
-  volatileStore(addr vqAvail.idx, availIdx + 1)
+  volatileStore(addr vq.avail.idx, availIdx + 1)
   arch.fenceRwRw()
   mmioWrite(RegQueueNotify, 0)
 
   var spin = U64(0)
-  while volatileLoad(addr vqUsed.idx) == vqLastUsedIdx:
+  while volatileLoad(addr vq.used.idx) == vq.lastUsedIdx:
     inc spin
     if spin > IoSpinLimit:
       print("[blk] timeout type=")
@@ -242,13 +137,13 @@ proc doIo(typ: U32, blockIndex: U64, buf: pointer): int =
       print(" status=")
       printHex(U64(volatileLoad(addr reqStatus)))
       print(" used=")
-      printUnsigned(U64(volatileLoad(addr vqUsed.idx)))
+      printUnsigned(U64(volatileLoad(addr vq.used.idx)))
       print(" last=")
-      printUnsigned(U64(vqLastUsedIdx))
+      printUnsigned(U64(vq.lastUsedIdx))
       putChar('\n')
       return -1
 
-  vqLastUsedIdx = volatileLoad(addr vqUsed.idx)
+  vq.lastUsedIdx = volatileLoad(addr vq.used.idx)
   arch.fenceRwRw()
 
   if volatileLoad(addr reqStatus) != 0:

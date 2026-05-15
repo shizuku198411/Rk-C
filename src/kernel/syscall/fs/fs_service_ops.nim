@@ -1,3 +1,4 @@
+import ../../../lib/fixed_string
 import ../../../lib/mem
 import ../../../lib/syscall_types
 import ../../../lib/types
@@ -37,17 +38,6 @@ proc canFallbackToRawFs(): bool =
   not serviceRegistered(serviceFs) or currentIsFsServer()
 
 
-proc copyPath(dst: var array[SysFsPathMax, char], src: cstring) =
-  var i = 0
-  while i < SysFsPathMax - 1 and src != nil and src[i] != '\0':
-    dst[i] = src[i]
-    inc i
-
-  while i < SysFsPathMax:
-    dst[i] = '\0'
-    inc i
-
-
 proc allocPending(): ptr PendingFsRequest =
   allocIpcPending(pending)
 
@@ -70,7 +60,7 @@ proc queueFsRequest(op: U32, path: cstring, data: pointer, size, capacity: U64):
   p.request.op = op
   p.request.size = size
   p.request.capacity = capacity
-  copyPath(p.request.path, path)
+  discard copyCString(p.request.path, path)
 
   if size > 0:
     discard copyMem(addr p.request.data[0], data, size)

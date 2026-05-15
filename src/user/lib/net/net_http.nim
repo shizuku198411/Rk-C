@@ -1,5 +1,6 @@
 import ./net_tcp
 import ./net_tls
+import ../core/strutils
 import ../core/syscall
 
 const
@@ -29,16 +30,6 @@ proc clearUrl*(url: var HttpUrl) =
 
   url.port = HttpDefaultPort
   url.tls = false
-
-
-proc startsWith(s, prefix: cstring): bool =
-  var i = 0
-  while prefix[i] != '\0':
-    if s[i] != prefix[i]:
-      return false
-    inc i
-
-  true
 
 
 proc parsePort(s: cstring, pos: var int, port: var U16): bool =
@@ -75,11 +66,11 @@ proc parseHttpUrl*(arg: cstring, url: var HttpUrl): bool =
 
   clearUrl(url)
   var pos = 0
-  if startsWith(arg, "https://"):
+  if startsWithPrefix(arg, "https://"):
     url.tls = true
     url.port = U16(443)
     pos = 8
-  if startsWith(arg, "http://"):
+  if startsWithPrefix(arg, "http://"):
     pos = 7
 
   var hostLen = 0

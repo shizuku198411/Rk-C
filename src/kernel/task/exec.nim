@@ -1,3 +1,4 @@
+import ../../lib/fixed_string
 import ../../lib/mem
 import ../../lib/types
 import ../dev/console
@@ -44,27 +45,15 @@ proc copyArg(dst: PAddr, src: cstring, maxLen: U64) =
   d[i] = '\0'
 
 
-proc pathEquals(path: cstring, expected: cstring): bool =
-  var i = 0
-  while true:
-    let a = path[i]
-    let b = expected[i]
-    if a != b:
-      return false
-    if a == '\0':
-      return true
-    inc i
-
-
 proc execBaseForPath(path: cstring): VAddr =
-  if path != nil and pathEquals(path, "/bin/shell"):
+  if cstringEq(path, "/bin/shell"):
     return ShellBase
 
   AppBase
 
 
 proc execStackTopForPath(path: cstring): VAddr =
-  if path != nil and pathEquals(path, "/bin/shell"):
+  if cstringEq(path, "/bin/shell"):
     return ShellStackTop
 
   AppStackTop

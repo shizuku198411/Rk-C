@@ -1,5 +1,6 @@
 import ../../../lib/types
 import ../../../lib/syscall_types
+import ../../lib/fd_helpers
 import ../../syscall/fs/fs_service_ops
 import ../../syscall/io/console_io
 import ../../mm/usercopy
@@ -90,80 +91,6 @@ proc syscallWriteFile*(path, buf, size: U64): U64 =
     return U64(-1'i64)
 
   serviceWriteFile(copiedPath, addr fileBuf[0], size)
-
-
-proc copyFdPath(entry: var FdEntry, path: cstring) =
-  var i = U32(0)
-  while i < SysFdPathMax - 1 and path[i] != '\0':
-    entry.path[i] = path[i]
-    inc i
-
-  while i < SysFdPathMax:
-    entry.path[i] = '\0'
-    inc i
-
-
-proc fdPath(entry: var FdEntry): cstring =
-  cast[cstring](addr entry.path[0])
-
-
-proc pathEq(a, b: cstring): bool =
-  if a == nil or b == nil:
-    return false
-
-  var i = 0
-  while a[i] == b[i]:
-    if a[i] == '\0':
-      return true
-    inc i
-
-  false
-
-
-proc deviceKindForPath(path: cstring): U32 =
-  if pathEq(path, "/dev/stdin"):
-    return SysFdKindStdin
-  if pathEq(path, "/dev/stdout"):
-    return SysFdKindStdout
-  if pathEq(path, "/dev/stderr"):
-    return SysFdKindStderr
-  if pathEq(path, "/dev/console"):
-    return SysFdKindConsole
-
-  SysFdKindFile
-
-
-proc validFd(fd: I32): bool =
-  fd >= 0 and fd < I32(SysFdMax) and currentProc != nil and
-    currentProc.files.entries[U32(fd)].used
-
-
-proc allocFd(): I32 =
-  if currentProc == nil:
-    return -1
-
-  var i = U32(3)
-  while i < SysFdMax:
-    if not currentProc.files.entries[i].used:
-      return I32(i)
-
-    inc i
-
-  -1
-
-
-proc findFreeFd(exclude: I32 = -1): I32 =
-  if currentProc == nil:
-    return -1
-
-  var i = U32(3)
-  while i < SysFdMax:
-    if I32(i) != exclude and not currentProc.files.entries[i].used:
-      return I32(i)
-
-    inc i
-
-  -1
 
 
 proc refreshFdSize(entry: var FdEntry): bool =

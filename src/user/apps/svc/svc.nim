@@ -1,4 +1,5 @@
 import ../../lib/core/io
+import ../../lib/core/cli
 import ../../lib/ipc/ipc_request
 import ../../lib/ipc/service_client
 import ../../lib/core/args
@@ -21,41 +22,23 @@ proc printUsage() =
   write("  svc restart <service>\n")
 
 
-proc printAvailable(value: U32) =
-  if value != 0:
-    write("yes")
-  else:
-    write("no")
-
-
-proc printPaddedName(name: cstring) =
-  var i = 0
-  while i < ServiceNameWidth and name[i] != '\0':
-    writeChar(name[i])
-    inc i
-
-  while i < ServiceNameWidth:
-    write(" ")
-    inc i
-
-
 proc listServices() =
   let count = sysServiceList(addr services[0], U64(ServiceCap))
   if count < 0:
     write("svc: list failed\n")
     sysExit(1)
 
-  printPaddedName("service")
+  writePaddedCString("service", ServiceNameWidth)
   write("pid\tregistered\tavailable\n")
 
   var i = I32(0)
   while i < count:
-    printPaddedName(cast[cstring](addr services[i].name[0]))
+    writePaddedCString(cast[cstring](addr services[i].name[0]), ServiceNameWidth)
     writeUnsigned(U64(services[i].pid))
     write("\t")
-    printAvailable(services[i].registered)
+    writeYesNo(services[i].registered)
     write("\t\t")
-    printAvailable(services[i].available)
+    writeYesNo(services[i].available)
     write("\n")
     inc i
 

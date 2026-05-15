@@ -5,6 +5,7 @@ import ./crypto/crypto_types
 import ./crypto/hkdf
 import ./crypto/sha256
 import ./crypto/x25519
+import ../core/strutils
 import ../core/syscall
 
 const
@@ -162,17 +163,6 @@ proc get24(data: ptr UncheckedArray[U8], pos: U32): U32 =
   (U32(data[pos]) shl 16) or (U32(data[pos + 1]) shl 8) or U32(data[pos + 2])
 
 
-proc cstrlenLocal(s: cstring): U32 =
-  if s == nil:
-    return 0
-
-  var n = U32(0)
-  while s[n] != '\0':
-    inc n
-
-  n
-
-
 proc fillPseudoRandom(buf: pointer, len: U32) =
   let outBuf = cast[ptr UncheckedArray[U8]](buf)
   inc rngCounter
@@ -200,7 +190,7 @@ proc makeKeyPair(client: var TlsClient) =
 
 
 proc writeServerName(host: cstring, pos: var U32): bool =
-  let hostLen = cstrlenLocal(host)
+  let hostLen = U32(cstrlen(host))
   if hostLen == 0 or hostLen > 255:
     return false
 

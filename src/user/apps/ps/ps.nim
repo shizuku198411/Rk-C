@@ -1,4 +1,5 @@
 import ../../lib/core/io
+import ../../lib/ipc/packet_data
 import ../../lib/ipc/ipc_request
 import ../../lib/ipc/service_client
 import ../../lib/core/args
@@ -68,11 +69,7 @@ proc processManagerPid(): I32 =
 
 
 proc copyPacketToProcess(entry: ptr SysProcessInfo, packet: ptr SysIpcPacket) =
-  let dst = cast[ptr UncheckedArray[char]](entry)
-  var i = 0
-  while i < sizeof(SysProcessInfo):
-    dst[i] = packet.data[i]
-    inc i
+  discard copyFromPacketData(entry, packet, U32(sizeof(SysProcessInfo)))
 
 
 proc requestProcessList(maxEntries: I32): I32 =

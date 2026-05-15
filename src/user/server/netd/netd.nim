@@ -1,6 +1,7 @@
 import ../../lib/core/io
 import ../../lib/core/syscall
 import ../../lib/core/strutils
+import ../../lib/ipc/packet_data
 import ../../lib/net/netutls
 import ../lib/service_ready
 import arp
@@ -24,13 +25,7 @@ var
   replyPacket: SysIpcPacket
 
 proc sendPingReply(pid: I32, ok: bool) =
-  replyPacket = SysIpcPacket()
-  replyPacket.op = SysIpcOpNetPingResponse
-  if ok:
-    replyPacket.arg0 = 0
-  else:
-    replyPacket.arg0 = U64(-1'i64)
-
+  setBoolResultPacket(addr replyPacket, SysIpcOpNetPingResponse, ok)
   discard sysIpcSendPacket(pid, addr replyPacket)
 
 
@@ -47,13 +42,7 @@ proc unpackDstPort(value: U64): U16 =
 
 
 proc sendUdpSendReply(pid: I32, ok: bool) =
-  replyPacket = SysIpcPacket()
-  replyPacket.op = SysIpcOpNetUdpSendResponse
-  if ok:
-    replyPacket.arg0 = 0
-  else:
-    replyPacket.arg0 = U64(-1'i64)
-
+  setBoolResultPacket(addr replyPacket, SysIpcOpNetUdpSendResponse, ok)
   discard sysIpcSendPacket(pid, addr replyPacket)
 
 
@@ -64,12 +53,7 @@ proc sendUdpReceiveReply(pid: I32, ok: bool, srcIp: U32, srcPort: U16,
   if ok:
     replyPacket.arg0 = U64(srcIp)
     replyPacket.arg1 = packedPorts(srcPort, U16(0))
-    replyPacket.len = len
-
-    var i = 0
-    while i < int(len) and i < SysIpcMessageMax:
-      replyPacket.data[i] = payload[][i]
-      inc i
+    discard copyToPacketData(addr replyPacket, payload, len)
   else:
     replyPacket.arg0 = U64(-1'i64)
     replyPacket.arg1 = 0
@@ -79,24 +63,12 @@ proc sendUdpReceiveReply(pid: I32, ok: bool, srcIp: U32, srcPort: U16,
 
 
 proc sendTcpHandleReply(pid: I32, op: U32, handle: I32) =
-  replyPacket = SysIpcPacket()
-  replyPacket.op = op
-  if handle >= 0:
-    replyPacket.arg0 = U64(handle)
-  else:
-    replyPacket.arg0 = U64(-1'i64)
-
+  setI32ResultPacket(addr replyPacket, op, handle)
   discard sysIpcSendPacket(pid, addr replyPacket)
 
 
 proc sendTcpResultReply(pid: I32, op: U32, result: I32) =
-  replyPacket = SysIpcPacket()
-  replyPacket.op = op
-  if result >= 0:
-    replyPacket.arg0 = U64(result)
-  else:
-    replyPacket.arg0 = U64(-1'i64)
-
+  setI32ResultPacket(addr replyPacket, op, result)
   discard sysIpcSendPacket(pid, addr replyPacket)
 
 
@@ -106,12 +78,7 @@ proc sendTcpReceiveReply(pid: I32, ok: bool, payload: ptr array[SysIpcMessageMax
   replyPacket.op = SysIpcOpNetTcpReceiveResponse
   if ok:
     replyPacket.arg0 = 0
-    replyPacket.len = len
-
-    var i = 0
-    while i < int(len) and i < SysIpcMessageMax:
-      replyPacket.data[i] = payload[][i]
-      inc i
+    discard copyToPacketData(addr replyPacket, payload, len)
   else:
     replyPacket.arg0 = U64(-1'i64)
     replyPacket.len = 0

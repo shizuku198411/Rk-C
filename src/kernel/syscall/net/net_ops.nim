@@ -1,5 +1,6 @@
 import ../../../lib/syscall_types
 import ../../../lib/types
+import ../../lib/syscall_out
 import ../../mm/usercopy
 import ../../net/netdev
 import ../../service/registry
@@ -10,7 +11,7 @@ proc syscallRawNetInfo*(outInfo: U64): U64 =
     return U64(-1'i64)
 
   var info = netdevInfo()
-  if copyToUser(outInfo, addr info, U64(sizeof(SysNetDeviceInfo))) != 0:
+  if not copyOutObject(outInfo, info):
     return U64(-1'i64)
 
   0
@@ -30,7 +31,7 @@ proc syscallRawNetMac*(outMac: U64): U64 =
   var mac: array[SysNetMacLen, U8]
   if netdevMac(addr mac[0]) != 0:
     return U64(-1'i64)
-  if copyToUser(outMac, addr mac[0], U64(SysNetMacLen)) != 0:
+  if not copyOutBuffer(outMac, addr mac[0], U64(SysNetMacLen)):
     return U64(-1'i64)
 
   0
@@ -46,7 +47,7 @@ proc syscallRawNetRecv*(outBuf, capacity: U64): U64 =
     return U64(-1'i64)
   if size == 0:
     return U64(0)
-  if copyToUser(outBuf, addr packet[0], U64(size)) != 0:
+  if not copyOutBuffer(outBuf, addr packet[0], U64(size)):
     return U64(-1'i64)
 
   U64(size)

@@ -2,47 +2,11 @@ import ../../arch/riscv64/arch
 import ../../lib/mem
 import ../../lib/syscall_types
 import ../../lib/types
+import ../lib/virtio
 import ../mm/memory
 import volatile
 
 const
-  VirtioMmioBase = U64(0x10001000)
-  VirtioMmioStride = U64(0x1000)
-  VirtioMmioMaxDevs = U64(8)
-
-  RegMagic = U64(0x000)
-  RegVersion = U64(0x004)
-  RegDeviceId = U64(0x008)
-  RegVendorId = U64(0x00c)
-  RegDeviceFeatures = U64(0x010)
-  RegDeviceFeaturesSel = U64(0x014)
-  RegDriverFeatures = U64(0x020)
-  RegDriverFeaturesSel = U64(0x024)
-  RegQueueSel = U64(0x030)
-  RegQueueNumMax = U64(0x034)
-  RegQueueNum = U64(0x038)
-  RegQueueReady = U64(0x044)
-  RegQueueNotify = U64(0x050)
-  RegStatus = U64(0x070)
-  RegQueueDescLow = U64(0x080)
-  RegQueueDescHigh = U64(0x084)
-  RegQueueAvailLow = U64(0x090)
-  RegQueueAvailHigh = U64(0x094)
-  RegQueueUsedLow = U64(0x0a0)
-  RegQueueUsedHigh = U64(0x0a4)
-  RegConfig = U64(0x100)
-
-  VirtioMagic = U32(0x74726976)
-  VirtioVendor = U32(0x554d4551)
-  VirtioDevNetwork = U32(1)
-
-  StatusAcknowledge = U32(1)
-  StatusDriver = U32(2)
-  StatusDriverOk = U32(4)
-  StatusFeaturesOk = U32(8)
-  StatusFailed = U32(128)
-
-  DescWrite = U16(2)
   VqNum = U64(32)
   VqBytes = U64(8192)
   VqAlign = U64(4096)
@@ -50,40 +14,6 @@ const
   NetHdrBaseLen = U64(10)
   NetHdrMrgLen = U64(12)
   TxSpinLimit = U64(30000000)
-
-  FeatureMac = U64(5)
-  FeatureMrgRxbuf = U64(15)
-  FeatureVersion1 = U64(32)
-
-type
-  VirtqDesc {.packed.} = object
-    paddr: U64
-    len: U32
-    flags: U16
-    next: U16
-
-  VirtqAvail {.packed.} = object
-    flags: U16
-    idx: U16
-    ring: array[32, U16]
-    usedEvent: U16
-
-  VirtqUsedElem {.packed.} = object
-    id: U32
-    len: U32
-
-  VirtqUsed {.packed.} = object
-    flags: U16
-    idx: U16
-    ring: array[32, VirtqUsedElem]
-    availEvent: U16
-
-  VirtQueue = object
-    mem: PAddr
-    desc: ptr UncheckedArray[VirtqDesc]
-    avail: ptr VirtqAvail
-    used: ptr VirtqUsed
-    lastUsedIdx: U16
 
 var
   mmioBase: U64
@@ -102,15 +32,15 @@ var
 
 
 proc mmioRead(off: U64): U32 =
-  volatileLoad(cast[ptr U32](mmioBase + off))
+  virtioMmioRead(mmioBase, off)
 
 
 proc mmioWrite(off: U64, val: U32) =
-  volatileStore(cast[ptr U32](mmioBase + off), val)
+  virtioMmioWrite(mmioBase, off, val)
 
 
 proc readReg(base, off: U64): U32 =
-  volatileLoad(cast[ptr U32](base + off))
+  virtioMmioRead(base, off)
 
 
 proc rxOrderPush(id: U16) =
@@ -125,17 +55,7 @@ proc rxOrderPop(): U16 =
 
 
 proc resetQueue(q: var VirtQueue) =
-  if q.mem == NilPAddr:
-    q.mem = palloc(VqBytes div PageSize)
-    if q.mem == NilPAddr:
-      return
-
-  zeroMem(cast[pointer](q.mem), VqBytes)
-  let descBytes = U64(sizeof(VirtqDesc)) * VqNum
-  q.desc = cast[ptr UncheckedArray[VirtqDesc]](q.mem)
-  q.avail = cast[ptr VirtqAvail](q.mem + descBytes)
-  q.used = cast[ptr VirtqUsed](q.mem + VqAlign)
-  q.lastUsedIdx = 0
+  discard resetVirtQueue(q, VqNum, VqBytes, VqAlign)
 
 
 proc scanVirtioNet(): bool =
@@ -163,10 +83,6 @@ proc scanVirtioNet(): bool =
   false
 
 
-proc featureBit(bit: U64): U32 =
-  U32(1) shl U32(bit and 31'u64)
-
-
 proc readMacConfig() =
   var i = 0
   while i < SysNetMacLen:
@@ -178,22 +94,7 @@ proc setupQueue(index: U32, q: var VirtQueue): bool =
   resetQueue(q)
   if q.mem == NilPAddr:
     return false
-
-  mmioWrite(RegQueueSel, index)
-  let qmax = mmioRead(RegQueueNumMax)
-  if qmax == 0 or qmax < U32(VqNum):
-    return false
-
-  mmioWrite(RegQueueReady, 0)
-  mmioWrite(RegQueueNum, U32(VqNum))
-  mmioWrite(RegQueueDescLow, U32(q.mem and 0xffffffff'u64))
-  mmioWrite(RegQueueDescHigh, U32(q.mem shr 32))
-  mmioWrite(RegQueueAvailLow, U32((cast[U64](q.avail)) and 0xffffffff'u64))
-  mmioWrite(RegQueueAvailHigh, U32(cast[U64](q.avail) shr 32))
-  mmioWrite(RegQueueUsedLow, U32((cast[U64](q.used)) and 0xffffffff'u64))
-  mmioWrite(RegQueueUsedHigh, U32(cast[U64](q.used) shr 32))
-  mmioWrite(RegQueueReady, 1)
-  true
+  setupVirtQueue(mmioBase, index, VqNum, q)
 
 
 proc configureDevice(): bool =

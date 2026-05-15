@@ -4,70 +4,12 @@ import ../../lib/ipc/service_client
 import ../../lib/core/args
 import ../../lib/core/strutils
 import ../../lib/core/syscall
+import ../../lib/net/ipaddr
 
 var
   requestPacket: SysIpcPacket
   responsePacket: SysIpcPacket
   parsedArgs: UserArgs
-
-
-proc parseOctet(arg: cstring, pos: var int, value: var U32): bool =
-  if arg[pos] < '0' or arg[pos] > '9':
-    return false
-
-  var outValue = U32(0)
-  while arg[pos] >= '0' and arg[pos] <= '9':
-    outValue = outValue * 10 + U32(ord(arg[pos]) - ord('0'))
-    if outValue > 255:
-      return false
-    inc pos
-
-  value = outValue
-  true
-
-
-proc parseIp(arg: cstring, ip: var U32): bool =
-  var pos = 0
-  var a = U32(0)
-  var b = U32(0)
-  var c = U32(0)
-  var d = U32(0)
-
-  if not parseOctet(arg, pos, a):
-    return false
-  if arg[pos] != '.':
-    return false
-  inc pos
-
-  if not parseOctet(arg, pos, b):
-    return false
-  if arg[pos] != '.':
-    return false
-  inc pos
-
-  if not parseOctet(arg, pos, c):
-    return false
-  if arg[pos] != '.':
-    return false
-  inc pos
-
-  if not parseOctet(arg, pos, d):
-    return false
-  if arg[pos] != '\0':
-    return false
-
-  ip = (a shl 24) or (b shl 16) or (c shl 8) or d
-  true
-
-
-proc writeIp(value: U32) =
-  writeUnsigned(U64((value shr 24) and 0xff'u32))
-  writeChar('.')
-  writeUnsigned(U64((value shr 16) and 0xff'u32))
-  writeChar('.')
-  writeUnsigned(U64((value shr 8) and 0xff'u32))
-  writeChar('.')
-  writeUnsigned(U64(value and 0xff'u32))
 
 
 proc printUsage() =
@@ -89,7 +31,7 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
     printUsage()
     sysExit(1)
 
-  if parsedArgs.argc == 1 and not parseIp(argAt(parsedArgs, 0), ip):
+  if parsedArgs.argc == 1 and not parseIpv4Addr(argAt(parsedArgs, 0), ip):
     printUsage()
     sysExit(1)
 
@@ -103,7 +45,7 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   requestPacket.arg0 = U64(ip)
 
   write("PING ")
-  writeIp(ip)
+  writeIpv4Addr(ip)
   write("\n")
 
   if requestIpcReply(pid, addr requestPacket, addr responsePacket, SysIpcOpNetPingResponse) != 0:
@@ -112,11 +54,11 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
 
   if responsePacket.arg0 == 0:
     write("reply from ")
-    writeIp(ip)
+    writeIpv4Addr(ip)
     write("\n")
     sysExit(0)
 
   write("timeout from ")
-  writeIp(ip)
+  writeIpv4Addr(ip)
   write("\n")
   sysExit(1)

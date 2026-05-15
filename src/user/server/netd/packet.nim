@@ -1,5 +1,6 @@
 import ../../lib/core/io
 import ../../lib/core/syscall
+import ../../lib/net/ipaddr
 
 
 proc printHexNibble*(value: U64) =
@@ -38,13 +39,7 @@ proc writeMacValue*(value: ptr array[SysNetMacLen, U8]) =
 
 
 proc writeIp*(value: U32) =
-  writeUnsigned(U64((value shr 24) and 0xff'u32))
-  writeChar('.')
-  writeUnsigned(U64((value shr 16) and 0xff'u32))
-  writeChar('.')
-  writeUnsigned(U64((value shr 8) and 0xff'u32))
-  writeChar('.')
-  writeUnsigned(U64(value and 0xff'u32))
+  writeIpv4Addr(value)
 
 
 proc put16*(buf: var array[SysNetPacketMax, U8], off: int, value: U16) =

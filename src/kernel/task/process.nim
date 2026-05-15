@@ -1,4 +1,5 @@
 import ../../arch/riscv64/arch
+import ../../lib/fixed_string
 import ../../lib/syscall_types
 import ../../lib/types
 import ../dev/console
@@ -153,25 +154,12 @@ proc setRootCwd(p: ptr Process) =
 
 
 proc setExePath(p: ptr Process, path: cstring) =
-  var i = 0
-  while i < SysProcessNameMax - 1:
-    if path == nil or path[i] == '\0':
-      break
-    p.exePathBuf[i] = path[i]
-    inc i
-
-  while i < SysProcessNameMax:
-    p.exePathBuf[i] = '\0'
-    inc i
-
+  discard copyCString(p.exePathBuf, path)
   p.exePath = cast[cstring](addr p.exePathBuf[0])
 
 
 proc copyCwd(dst: var array[SysProcessCwdMax, char], src: array[SysProcessCwdMax, char]) =
-  var i = 0
-  while i < SysProcessCwdMax:
-    dst[i] = src[i]
-    inc i
+  copyChars(dst, src)
 
 
 proc clearIpcQueue(p: ptr Process) =

@@ -1,6 +1,8 @@
+import ../../../lib/fixed_string
+import ../../../lib/service_catalog
 import ../../../lib/syscall_types
 import ../../../lib/types
-import ../../mm/usercopy
+import ../../lib/syscall_out
 import ../../service/registry
 import ../../task/process
 
@@ -37,17 +39,6 @@ proc servicePidIsUsable(pid: int32): bool =
   p != nil and p.state != procUnused and p.state != procZombie and p.user.active
 
 
-proc copyServiceName(dst: var array[SysServiceNameMax, char], src: cstring) =
-  var i = U32(0)
-  while i < SysServiceNameMax - 1:
-    if src == nil or src[int(i)] == '\0':
-      break
-    dst[i] = src[int(i)]
-    inc i
-
-  dst[i] = '\0'
-
-
 proc serviceKindValue(kind: ServiceKind): U32 =
   case kind
   of serviceManager:
@@ -64,22 +55,6 @@ proc serviceKindValue(kind: ServiceKind): U32 =
     U32(0xffffffff'u32)
 
 
-proc serviceKindName(kind: ServiceKind): cstring =
-  case kind
-  of serviceManager:
-    "svcmgtd"
-  of serviceBlock:
-    "blockd"
-  of serviceFs:
-    "fsd"
-  of serviceProcess:
-    "procmgtd"
-  of serviceNet:
-    "netd"
-  of serviceMax:
-    "unknown"
-
-
 proc fillServiceInfo(kind: ServiceKind) =
   serviceInfos[kind] = SysServiceInfo()
   serviceInfos[kind].kind = serviceKindValue(kind)
@@ -92,7 +67,7 @@ proc fillServiceInfo(kind: ServiceKind) =
     serviceInfos[kind].available = 1
   else:
     serviceInfos[kind].available = 0
-  copyServiceName(serviceInfos[kind].name, serviceKindName(kind))
+  discard copyCString(serviceInfos[kind].name, serviceNameByKind(serviceKindValue(kind)))
 
 
 proc syscallServiceManagerRegister*(): U64 =
@@ -166,7 +141,7 @@ proc syscallServiceList*(outEntries, maxEntries: U64): U64 =
     kind = ServiceKind(ord(kind) + 1)
 
   let bytes = count * U64(sizeof(SysServiceInfo))
-  if copyToUser(outEntries, addr serviceInfos[serviceManager], bytes) != 0:
+  if not copyOutBuffer(outEntries, addr serviceInfos[serviceManager], bytes):
     return U64(-1'i64)
 
   count

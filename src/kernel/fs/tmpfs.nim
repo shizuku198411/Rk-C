@@ -1,5 +1,7 @@
+import ../../lib/fixed_string
 import ../../lib/types
 import ../fs/dirent
+import ../lib/path
 
 
 const
@@ -37,25 +39,8 @@ proc hasChildren(idx: int): bool =
   false
 
 
-proc copyName(dst: var array[TmpfsNameMax, char], src: cstring) =
-  var i = 0
-  while i < TmpfsNameMax - 1 and src[i] != '\0':
-    dst[i] = src[i]
-    inc i
-  while i < TmpfsNameMax:
-    dst[i] = '\0'
-    inc i
-
-
 proc nameEq(node: TmpfsNode, name: cstring): bool =
-  var i = 0
-  while i < TmpfsNameMax:
-    if node.name[i] != name[i]:
-      return false
-    if node.name[i] == '\0':
-      return true
-    inc i
-  name[TmpfsNameMax] == '\0'
+  fixedCStringEq(node.name, name)
 
 
 proc findChild(parent: int, name: cstring): int =
@@ -79,28 +64,10 @@ proc allocNode(parent: int, name: cstring, typ: U32): int =
       nodes[i].typ = typ
       nodes[i].parent = U32(parent)
       nodes[i].size = 0
-      copyName(nodes[i].name, name)
+      discard copyCString(nodes[i].name, name)
       return i
     inc i
   -1
-
-
-proc readComponent(path: cstring, pos: var int, name: var array[TmpfsNameMax, char]): bool =
-  while path[pos] == '/':
-    inc pos
-  if path[pos] == '\0':
-    return false
-
-  var i = 0
-  while path[pos] != '\0' and path[pos] != '/':
-    if i < TmpfsNameMax - 1:
-      name[i] = path[pos]
-      inc i
-    inc pos
-  while i < TmpfsNameMax:
-    name[i] = '\0'
-    inc i
-  true
 
 
 proc resolvePath(path: cstring): int =
@@ -112,7 +79,7 @@ proc resolvePath(path: cstring): int =
   var pos = 0
   var current = 0
   var name: array[TmpfsNameMax, char]
-  while readComponent(path, pos, name):
+  while readPathComponent(path, pos, name):
     let next = findChild(current, cast[cstring](addr name[0]))
     if next < 0:
       return -1
@@ -127,7 +94,7 @@ proc resolveParent(path: cstring, leaf: var array[TmpfsNameMax, char]): int =
   var pos = 0
   var current = 0
   var name: array[TmpfsNameMax, char]
-  while readComponent(path, pos, name):
+  while readPathComponent(path, pos, name):
     if path[pos] == '\0':
       leaf = name
       return current
@@ -143,7 +110,7 @@ proc tmpfsInit*() =
   nodes[0].used = 1
   nodes[0].typ = TmpfsTypeDir
   nodes[0].parent = 0
-  copyName(nodes[0].name, "/")
+  discard copyCString(nodes[0].name, "/")
   ready = true
 
 

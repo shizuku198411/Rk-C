@@ -1,5 +1,7 @@
 import ../../lib/core/io
+import ../../lib/core/cli
 import ../../lib/net/net_tcp
+import ../../lib/net/ipaddr
 import ../../lib/core/args
 import ../../lib/core/strutils
 import ../../lib/core/syscall
@@ -21,81 +23,8 @@ var
   ]
 
 
-proc parseOctet(arg: cstring, pos: var int, value: var U32): bool =
-  if arg[pos] < '0' or arg[pos] > '9':
-    return false
-
-  var outValue = U32(0)
-  while arg[pos] >= '0' and arg[pos] <= '9':
-    outValue = outValue * 10 + U32(ord(arg[pos]) - ord('0'))
-    if outValue > 255:
-      return false
-    inc pos
-
-  value = outValue
-  true
-
-
-proc parseIp(arg: cstring, ip: var U32): bool =
-  var pos = 0
-  var a = U32(0)
-  var b = U32(0)
-  var c = U32(0)
-  var d = U32(0)
-
-  if not parseOctet(arg, pos, a):
-    return false
-  if arg[pos] != '.':
-    return false
-  inc pos
-
-  if not parseOctet(arg, pos, b):
-    return false
-  if arg[pos] != '.':
-    return false
-  inc pos
-
-  if not parseOctet(arg, pos, c):
-    return false
-  if arg[pos] != '.':
-    return false
-  inc pos
-
-  if not parseOctet(arg, pos, d):
-    return false
-  if arg[pos] != '\0':
-    return false
-
-  ip = (a shl 24) or (b shl 16) or (c shl 8) or d
-  true
-
-
-proc parseUint(arg: cstring, value: var U32): bool =
-  if isEmpty(arg):
-    return false
-
-  var i = 0
-  var outValue = U32(0)
-  while arg[i] != '\0':
-    if arg[i] < '0' or arg[i] > '9':
-      return false
-    outValue = outValue * 10 + U32(ord(arg[i]) - ord('0'))
-    inc i
-
-  value = outValue
-  true
-
-
 proc printUsage() =
   write("usage: tcpcheck <ip> <port>\n")
-
-
-proc writeI32(value: I32) =
-  if value < 0:
-    writeChar('-')
-    writeUnsigned(U64(-value))
-  else:
-    writeUnsigned(U64(value))
 
 
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
@@ -115,7 +44,7 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   let portArg = argAt(parsedArgs, 1)
   var ip = U32(0)
   var portValue = U32(0)
-  if not parseIp(ipArg, ip) or not parseUint(portArg, portValue) or portValue > 65535:
+  if not parseIpv4Addr(ipArg, ip) or not parseU32(portArg, portValue) or portValue > 65535:
     printUsage()
     sysExit(1)
 
@@ -126,18 +55,18 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
     sysExit(1)
 
   write("tcpcheck: connected handle=")
-  writeI32(handle)
+  writeSignedI32(handle)
   write("\n")
 
   if portValue == 80:
     let sent = tcpSend(handle, addr httpReq[0], U32(HttpReqLen))
     write("tcpcheck: sent=")
-    writeI32(sent)
+    writeSignedI32(sent)
     write("\n")
 
     let received = tcpReceive(handle, addr rxBuf[0], U32(RxCap))
     write("tcpcheck: received=")
-    writeI32(received)
+    writeSignedI32(received)
     write("\n")
     if received > 0:
       discard sysWrite(addr rxBuf[0], U64(received))

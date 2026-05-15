@@ -1,5 +1,6 @@
 import ../../lib/core/io
 import ../../lib/net/net_dns
+import ../../lib/net/ipaddr
 import ../../lib/core/args
 import ../../lib/core/strutils
 import ../../lib/core/syscall
@@ -12,16 +13,6 @@ const
 var
   nameserverIpBuf: array[NameserverIpBufSize, char]
   parsedArgs: UserArgs
-
-proc writeIp(value: U32) =
-  writeUnsigned(U64((value shr 24) and 0xff'u32))
-  writeChar('.')
-  writeUnsigned(U64((value shr 16) and 0xff'u32))
-  writeChar('.')
-  writeUnsigned(U64((value shr 8) and 0xff'u32))
-  writeChar('.')
-  writeUnsigned(U64(value and 0xff'u32))
-
 
 proc printUsage() =
   write("usage: nslookup <name>\n")
@@ -61,7 +52,7 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   var ip = U32(0)
   if resolveA(name, ip):
     write("Address: ")
-    writeIp(ip)
+    writeIpv4Addr(ip)
     write("\n")
     sysExit(0)
 

@@ -1,4 +1,5 @@
 import ../../lib/core/syscall
+import ../../lib/ipc/packet_data
 import ../lib/service_ready
 
 const
@@ -11,13 +12,7 @@ var
 
 
 proc copyProcessToPacket(packet: ptr SysIpcPacket, entry: ptr SysProcessInfo) =
-  let src = cast[ptr UncheckedArray[char]](entry)
-  var i = 0
-  while i < sizeof(SysProcessInfo):
-    packet.data[i] = src[i]
-    inc i
-
-  packet.len = U32(sizeof(SysProcessInfo))
+  discard copyToPacketData(packet, entry, U32(sizeof(SysProcessInfo)))
 
 
 proc sendListResponse(targetPid: I32, count: I32) =
