@@ -149,11 +149,13 @@ QEMU_DEBUG_ARGS := \
 	-S \
 	-gdb tcp::$(GDB_PORT)
 
-.PHONY: all build appfs clean disasm run qemu-run degraded-run qemu-debug net-host-help
+.PHONY: all build build-bins appfs clean disasm run qemu-run qemu-run-built degraded-run qemu-debug test-apps net-host-help
 
 all: build
 
 build: $(KERNEL_ELF) appfs
+
+build-bins: $(KERNEL_ELF) $(USER_SHELL_BIN) $(USER_APP_BINS) $(USER_SERVER_BINS)
 
 $(KERNEL_ELF): $(NIM_SRCS) $(ASM_OBJS) $(LINKER_SCRIPT) | $(BIN_DIR) $(MAP_DIR) $(NIMCACHE_DIR)
 	$(NIM) c $(NIMFLAGS) $(foreach obj,$(ASM_OBJS),--passL:"$(obj)") -o:$@ $(KERNEL_NIM)
@@ -214,11 +216,17 @@ run: build
 qemu-run: build
 	$(QEMU) $(QEMU_ARGS)
 
+qemu-run-built:
+	$(QEMU) $(QEMU_ARGS)
+
 degraded-run: build
 	$(QEMU) $(QEMU_DEGRADED_ARGS)
 
 qemu-debug: build
 	$(QEMU) $(QEMU_DEBUG_ARGS)
+
+test-apps:
+	python3 scripts/test_apps.py
 
 net-host-help:
 	@echo "Default TAP network:"
