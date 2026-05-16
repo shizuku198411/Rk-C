@@ -40,10 +40,6 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
     write("[blockd] service registration timeout\n")
     sysExit(1)
 
-  #if sysBlockServiceRegister() != 0:
-  #  write("blockd: register failed\n")
-  #  sysExit(1)
-
   notifyServiceReady(SysServiceKindBlock)
 
   while true:

@@ -65,7 +65,6 @@ proc trapHandler*(frame: ptr TrapFrame) {.exportc: "trap_handler", cdecl.} =
 
   let scause = arch.readScause()
   let stval = arch.readStval()
-  #let userPc = arch.readSepc()
   let userPc = frame.sepc
 
   let fromUser = trapFromUser(frame)
@@ -106,7 +105,6 @@ proc trapHandler*(frame: ptr TrapFrame) {.exportc: "trap_handler", cdecl.} =
   of ScauseEnvironmentCallFromUMode:
     inc trapCount.environmentCallFromUMode
     handleSyscall(frame)
-    #arch.writeSepc(userPc + 4)
     frame.sepc = userPc + 4
     maybeYieldOnResched()
   
@@ -135,7 +133,6 @@ proc trapHandler*(frame: ptr TrapFrame) {.exportc: "trap_handler", cdecl.} =
       wakeInputWaiters()
     
     setNextTimer()
-    #arch.writeSepc(userPc)
 
     requestResched()
     if fromUser:
