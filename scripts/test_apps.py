@@ -203,7 +203,7 @@ def base_tests() -> list[TestCase]:
             TestCase("ps", "ps", ["pid", "ppid", "svcmgtd", "shell"]),
             TestCase("svc list", "svc list", ["service", "procmgtd", "blockd", "fsd", "netd"]),
             TestCase("kill invalid pid", "kill 999", ["kill: failed"]),
-            TestCase("ipc invalid send", "ipc send 999 hello", ["usage:"]),
+            TestCase("ipc invalid send", "ipc send 999 hello", ["ipc: send failed"]),
             TestCase("stracectl app", "stracectl ls /bin", ["shell", "curl"], timeout=12.0),
             TestCase("stracectl on", "stracectl on", ["strace on"]),
             TestCase("stracectl off", "stracectl off", ["strace off"]),

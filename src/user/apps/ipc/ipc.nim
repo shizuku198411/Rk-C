@@ -37,11 +37,11 @@ proc printUsage() =
 
 proc sendMessage() =
   var pid = I32(0)
-  if parsedArgs.argc < 4 or not parsePid(argAt(parsedArgs, 2), pid):
+  if parsedArgs.argc < 3 or not parsePid(argAt(parsedArgs, 1), pid):
     printUsage()
     sysExit(1)
 
-  if not copyArgvTail(parsedArgs, 3, addr messageBuf[0], U32(ArgMax)):
+  if not copyArgvTail(parsedArgs, 2, addr messageBuf[0], U32(ArgMax)):
     printUsage()
     sysExit(1)
 
