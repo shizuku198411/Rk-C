@@ -43,11 +43,14 @@ USER_SHELL_RKX := $(BIN_DIR)/shell.rkx
 
 USER_APP_NAMES := ls cat mkdir ps rm rmdir date edit ipc kill svc ping nslookup tcpcheck curl stracectl
 USER_SERVER_NAMES := svcmgtd procmgtd fsd blockd netd
+TEST_APP_NAMES := faultcheck
+APPFS_EXTRA_APPS ?=
 
 USER_PACK_NAMES := $(filter-out tcpcheck curl,$(USER_APP_NAMES)) $(USER_SERVER_NAMES) tcpcheck curl
 
 USER_APP_RKXS := $(foreach app,$(USER_APP_NAMES),$(BIN_DIR)/$(app).rkx)
 USER_SERVER_RKXS := $(foreach server,$(USER_SERVER_NAMES),$(BIN_DIR)/$(server).rkx)
+TEST_APP_RKXS := $(foreach app,$(TEST_APP_NAMES),$(BIN_DIR)/$(app).rkx)
 
 USER_APP_ELFS := $(foreach app,$(USER_APP_NAMES),$(BIN_DIR)/$(app).elf)
 USER_SERVER_ELFS := $(foreach server,$(USER_SERVER_NAMES),$(BIN_DIR)/$(server).elf)
@@ -164,13 +167,15 @@ QEMU_DEBUG_ARGS := \
 	-S \
 	-gdb tcp::$(GDB_PORT)
 
-.PHONY: all build build-bins appfs clean disasm run qemu-run qemu-run-built degraded-run qemu-debug test-apps net-host-help
+.PHONY: all build build-bins build-test-bins appfs clean disasm run qemu-run qemu-run-built degraded-run qemu-debug test-apps net-host-help
 
 all: build
 
 build: $(KERNEL_ELF) appfs
 
 build-bins: $(KERNEL_ELF) $(USER_SHELL_RKX) $(USER_APP_RKXS) $(USER_SERVER_RKXS)
+
+build-test-bins: build-bins $(TEST_APP_RKXS)
 
 $(KERNEL_ELF): $(NIM_SRCS) $(ASM_OBJS) $(LINKER_SCRIPT) | $(BIN_DIR) $(MAP_DIR) $(NIMCACHE_DIR)
 	$(NIM) c $(NIMFLAGS) $(foreach obj,$(ASM_OBJS),--passL:"$(obj)") -o:$@ $(KERNEL_NIM)
@@ -194,7 +199,7 @@ $(USER_SHELL_RKX): $(USER_SHELL_ELF) $(RKX_TOOL) | $(BIN_DIR)
 	python3 $(RKX_TOOL) --elf $< --out $@
 
 appfs: $(DISK_IMG) $(USER_SHELL_RKX) $(USER_APP_RKXS) $(USER_SERVER_RKXS)
-	python3 $(APPFS_TOOL) --disk $(DISK_IMG) --bin-dir $(BIN_DIR) --ext rkx --apps shell $(USER_PACK_NAMES)
+	python3 $(APPFS_TOOL) --disk $(DISK_IMG) --bin-dir $(BIN_DIR) --ext rkx --apps shell $(USER_PACK_NAMES) $(APPFS_EXTRA_APPS)
 
 define USER_APP_template
 $(BIN_DIR)/$(1).elf: $(SRC_DIR)/user/app_main.nim $$(wildcard $(SRC_DIR)/user/apps/$(1)/*.nim) $(SRC_DIR)/user/panicoverride.nim $$(SHARED_LIB_SRCS) $$(USER_LIB_SRCS) $(USER_SYSCALL_OBJ) $(USER_ENTRY_OBJ) $(USER_APP_LINKER_SCRIPT) | $(BIN_DIR)
@@ -205,6 +210,7 @@ $(BIN_DIR)/$(1).rkx: $(BIN_DIR)/$(1).elf $$(RKX_TOOL) | $(BIN_DIR)
 endef
 
 $(foreach app,$(USER_APP_NAMES),$(eval $(call USER_APP_template,$(app))))
+$(foreach app,$(TEST_APP_NAMES),$(eval $(call USER_APP_template,$(app))))
 
 define USER_SERVER_template
 $(BIN_DIR)/$(1).elf: $(SRC_DIR)/user/app_main.nim $$(wildcard $(SRC_DIR)/user/server/$(1)/*.nim) $$(USER_SERVER_LIB_SRCS) $(SRC_DIR)/user/panicoverride.nim $$(SHARED_LIB_SRCS) $$(USER_LIB_SRCS) $(USER_SYSCALL_OBJ) $(USER_ENTRY_OBJ) $(USER_APP_LINKER_SCRIPT) | $(BIN_DIR)

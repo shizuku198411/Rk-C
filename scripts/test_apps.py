@@ -17,6 +17,7 @@ from pathlib import Path
 
 ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
 PROMPT_MARKER = "$ "
+TEST_APP_NAMES = ["faultcheck"]
 
 
 @dataclass
@@ -128,7 +129,7 @@ def strip_ansi(text: str) -> str:
 
 
 def run_build() -> None:
-    subprocess.run(["make", "build-bins"], check=True)
+    subprocess.run(["make", "build-test-bins"], check=True)
 
 
 def prepare_test_disk(test_disk: Path, base_disk: Path, no_build: bool) -> None:
@@ -143,7 +144,10 @@ def prepare_test_disk(test_disk: Path, base_disk: Path, no_build: bool) -> None:
         )
 
     shutil.copyfile(base_disk, test_disk)
-    subprocess.run(["make", f"DISK_IMG={test_disk}", "appfs"], check=True)
+    subprocess.run(
+        ["make", f"DISK_IMG={test_disk}", f"APPFS_EXTRA_APPS={' '.join(TEST_APP_NAMES)}", "appfs"],
+        check=True,
+    )
 
 
 def start_http_server(port: int) -> tuple[ThreadingHTTPServer, tempfile.TemporaryDirectory[str]]:
@@ -222,6 +226,28 @@ def base_tests() -> list[TestCase]:
                 any_of=["reply from", "timeout from"],
                 timeout=12.0,
             ),
+            TestCase("faultcheck --help", "faultcheck --help", ["usage: faultcheck"]),
+            TestCase("faultcheck bad cstring", "faultcheck bad-cstring", ["bad-cstring: rejected"]),
+            TestCase(
+                "faultcheck write text",
+                "faultcheck write-text",
+                ["write-text: touching text"],
+                any_of=[
+                    "PAGE FAULT DETECTED: Store/AMO Page Fault",
+                    "PAGE FAULT DETECTED: Store/AMO Access Fault",
+                ],
+                timeout=10.0,
+            ),
+            TestCase(
+                "faultcheck exec stack",
+                "faultcheck exec-stack",
+                ["exec-stack: jumping to stack"],
+                any_of=[
+                    "PAGE FAULT DETECTED: Instruction Page Fault",
+                    "PAGE FAULT DETECTED: Instruction Access Fault",
+                ],
+                timeout=10.0,
+            ),
         ]
     )
     return tests
@@ -267,8 +293,38 @@ def validate(case: TestCase, output: str) -> list[str]:
     return errors
 
 
+def expected_summary(case: TestCase) -> str:
+    parts = []
+    if case.contains:
+        parts.append("contains=" + repr(case.contains))
+    if case.regex:
+        parts.append("regex=" + repr(case.regex))
+    if case.any_of:
+        parts.append("any_of=" + repr(case.any_of))
+    if not parts:
+        return "prompt returned"
+
+    return "; ".join(parts)
+
+
+def actual_summary(output: str, limit: int = 420) -> str:
+    clean = strip_ansi(output).replace("\r", "")
+    lines = [line.rstrip() for line in clean.splitlines()]
+    lines = [line for line in lines if line.strip()]
+    text = " | ".join(lines)
+    if len(text) > limit:
+        text = "..." + text[-limit:]
+    return text
+
+
+def print_result(status: str, case: TestCase, output: str) -> None:
+    print(f"[{status}] {case.name}")
+    print(f"       expected: {expected_summary(case)}")
+    print(f"       actual  : {actual_summary(output)}")
+
+
 def print_failure(case: TestCase, output: str, errors: list[str]) -> None:
-    print(f"[FAIL] {case.name}")
+    print_result("FAIL", case, output)
     for error in errors:
       print(f"       {error}")
     clean = strip_ansi(output)
@@ -323,7 +379,16 @@ def main() -> int:
             print_failure(TestCase("boot", ""), boot, boot_errors)
             failures += 1
         else:
-            print("[PASS] boot")
+            print_result(
+                "PASS",
+                TestCase(
+                    "boot",
+                    "",
+                    ["service ready procmgtd", "service ready blockd", "service ready fsd"],
+                    any_of=["service ready netd"] if args.qemu_net == "user" else [],
+                ),
+                boot,
+            )
 
         qemu.buffer = ""
         tests = base_tests()
@@ -342,7 +407,7 @@ def main() -> int:
                 print_failure(case, out, errors)
                 failures += 1
             else:
-                print(f"[PASS] {case.name}")
+                print_result("PASS", case, out)
     finally:
         qemu.close()
         if http_server is not None:

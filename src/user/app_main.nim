@@ -50,5 +50,7 @@ elif defined(userApp_netd):
   import server/netd/netd
 elif defined(userApp_stracectl):
   import apps/stracectl/stracectl
+elif defined(userApp_faultcheck):
+  import apps/faultcheck/faultcheck
 else:
   {.error: "missing user app define".}
