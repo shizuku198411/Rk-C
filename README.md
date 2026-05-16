@@ -325,6 +325,9 @@ Run the QEMU app smoke test suite:
 make test-apps
 ```
 
+The default test network is TAP. Set up `tap0` as shown in the networking
+section before running the full network smoke tests.
+
 The test runner:
 
 - builds normal and test-only rkx images
@@ -343,6 +346,7 @@ Useful variants:
 python3 scripts/test_apps.py --no-build
 python3 scripts/test_apps.py --skip-network-smoke
 python3 scripts/test_apps.py --keep-test-disk
+python3 scripts/test_apps.py --tap-if tap0 --host-ip 10.0.1.1
 ```
 
 ## Networking
@@ -358,8 +362,8 @@ The guest creates default static network settings if `/etc/interface.conf` and
 `/etc/resolve.conf` are missing:
 
 ```text
-guest IP:    10.0.2.15
-gateway:     10.0.2.2
+guest IP:    10.0.1.10
+gateway:     10.0.1.1
 netmask:     255.255.255.0
 DNS server:  8.8.8.8
 ```
@@ -369,9 +373,9 @@ Host setup example:
 ```bash
 sudo ip tuntap add dev tap0 mode tap user "$USER"
 sudo ip link set tap0 up
-sudo ip addr add 10.0.2.2/24 dev tap0
+sudo ip addr add 10.0.1.1/24 dev tap0
 sudo sysctl -w net.ipv4.ip_forward=1
-sudo iptables -t nat -A POSTROUTING -s 10.0.2.0/24 -j MASQUERADE
+sudo iptables -t nat -A POSTROUTING -s 10.0.1.0/24 -j MASQUERADE
 ```
 
 QEMU user networking is also available:
@@ -379,6 +383,9 @@ QEMU user networking is also available:
 ```bash
 make run QEMU_NET=user
 ```
+
+The user-mode network is configured as `10.0.1.0/24` with host address
+`10.0.1.1` by default.
 
 External ICMP may timeout with QEMU user networking, so TAP is the recommended
 mode for `ping` and general network testing.
@@ -416,7 +423,7 @@ Rk-C:/$ mkdir /tmp/demo
 Rk-C:/$ date > /tmp/now.txt
 Rk-C:/$ cat /tmp/now.txt | cat
 Rk-C:/$ edit /tmp/hello.txt
-Rk-C:/$ ping 10.0.2.2
+Rk-C:/$ ping 10.0.1.1
 Rk-C:/$ nslookup example.com
 Rk-C:/$ curl http://example.com/
 Rk-C:/$ curl https://example.com/

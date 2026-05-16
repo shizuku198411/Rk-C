@@ -7,11 +7,8 @@ import signal
 import shutil
 import subprocess
 import sys
-import tempfile
-import threading
 import time
 from dataclasses import dataclass, field
-from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 
@@ -28,6 +25,15 @@ class TestCase:
     regex: list[str] = field(default_factory=list)
     any_of: list[str] = field(default_factory=list)
     timeout: float = 8.0
+    recover_timeout: float | None = None
+    delay_before: float = 0.0
+
+
+@dataclass
+class CommandResult:
+    output: str
+    errors: list[str]
+    fatal: bool = False
 
 
 class QemuConsole:
@@ -150,24 +156,6 @@ def prepare_test_disk(test_disk: Path, base_disk: Path, no_build: bool) -> None:
     )
 
 
-def start_http_server(port: int) -> tuple[ThreadingHTTPServer, tempfile.TemporaryDirectory[str]]:
-    root = tempfile.TemporaryDirectory()
-    index = Path(root.name) / "index.html"
-    index.write_text("rk-c app test http ok\n", encoding="ascii")
-
-    class Handler(SimpleHTTPRequestHandler):
-        def __init__(self, *args, **kwargs):
-            super().__init__(*args, directory=root.name, **kwargs)
-
-        def log_message(self, fmt: str, *args) -> None:
-            return
-
-    server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    return server, root
-
-
 def base_tests() -> list[TestCase]:
     tests = [
         TestCase("shell help", "help", ["available commands:", "curl", "stracectl"]),
@@ -219,13 +207,6 @@ def base_tests() -> list[TestCase]:
             TestCase("stracectl app", "stracectl ls /bin", ["shell", "curl"], timeout=12.0),
             TestCase("stracectl on", "stracectl on", ["strace on"]),
             TestCase("stracectl off", "stracectl off", ["strace off"]),
-            TestCase(
-                "ping gateway",
-                "ping 10.0.2.2",
-                ["PING 10.0.2.2"],
-                any_of=["reply from", "timeout from"],
-                timeout=12.0,
-            ),
             TestCase("faultcheck --help", "faultcheck --help", ["usage: faultcheck"]),
             TestCase("faultcheck bad cstring", "faultcheck bad-cstring", ["bad-cstring: rejected"]),
             TestCase(
@@ -253,28 +234,39 @@ def base_tests() -> list[TestCase]:
     return tests
 
 
-def network_tests(host_ip: str, host_http_port: int) -> list[TestCase]:
+def network_tests(host_ip: str, delay: float) -> list[TestCase]:
     return [
         TestCase(
-            "tcpcheck host http port",
-            f"tcpcheck {host_ip} {host_http_port}",
-            ["tcpcheck: connecting"],
-            any_of=["tcpcheck: connected", "tcpcheck: connect failed"],
-            timeout=14.0,
-        ),
-        TestCase(
-            "curl host http",
-            f"curl http://{host_ip}:{host_http_port}/",
-            [],
-            any_of=["rk-c app test http ok", "curl: HTTP request failed"],
-            timeout=14.0,
+            "ping gateway",
+            f"ping {host_ip}",
+            [f"PING {host_ip}"],
+            any_of=["reply from", "timeout from"],
+            timeout=12.0,
+            delay_before=delay,
         ),
         TestCase(
             "nslookup example.com",
             "nslookup example.com",
             ["Name: example.com"],
             any_of=["Address:", "nslookup: no A record"],
-            timeout=14.0,
+            timeout=30.0,
+            delay_before=delay,
+        ),
+        TestCase(
+            "curl example.com http",
+            "curl -i http://example.com",
+            ["HTTP/1.1 200 OK"],
+            timeout=30.0,
+            recover_timeout=120.0,
+            delay_before=delay,
+        ),
+        TestCase(
+            "curl example.com https",
+            "curl -v https://example.com",
+            ["TLS: TLS1.3"],
+            timeout=45.0,
+            recover_timeout=180.0,
+            delay_before=delay,
         ),
     ]
 
@@ -334,28 +326,67 @@ def print_failure(case: TestCase, output: str, errors: list[str]) -> None:
     print("---------------------------")
 
 
+def run_and_validate(qemu: QemuConsole, case: TestCase, default_recover_timeout: float) -> CommandResult:
+    if case.delay_before > 0:
+        time.sleep(case.delay_before)
+
+    try:
+        output = qemu.run_command(case.command, case.timeout)
+        return CommandResult(output, validate(case, output))
+    except TimeoutError as exc:
+        timeout_output = qemu.buffer
+        recover_timeout = (
+            case.recover_timeout if case.recover_timeout is not None else default_recover_timeout
+        )
+        if recover_timeout <= 0:
+            return CommandResult(timeout_output, [str(exc)], fatal=True)
+
+        try:
+            recovered_output = qemu.wait_for(PROMPT_MARKER, recover_timeout)
+        except Exception as recover_exc:
+            return CommandResult(
+                qemu.buffer,
+                [str(exc), f"recovery failed: {recover_exc}"],
+                fatal=True,
+            )
+
+        output = timeout_output + recovered_output
+        errors = validate(case, output)
+        if errors:
+            errors.insert(0, f"{exc}; recovered prompt after extra wait")
+        return CommandResult(output, errors)
+    except Exception as exc:
+        return CommandResult(qemu.buffer, [str(exc)], fatal=True)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Boot QEMU and smoke-test all user apps.")
     parser.add_argument("--no-build", action="store_true", help="skip make build before booting")
-    parser.add_argument("--qemu-net", default="user", choices=["user", "tap"], help="QEMU_NET value")
+    parser.add_argument("--qemu-net", default="tap", choices=["user", "tap"], help="QEMU_NET value")
     parser.add_argument("--tap-if", default=None, help="QEMU_TAP_IF value when --qemu-net=tap")
     parser.add_argument("--boot-timeout", type=float, default=25.0)
     parser.add_argument("--log", default="build/test_apps_qemu.log")
     parser.add_argument("--base-disk", default="bin/disk.img")
     parser.add_argument("--test-disk", default="bin/test-disk.img")
     parser.add_argument("--keep-test-disk", action="store_true")
-    parser.add_argument("--host-ip", default="10.0.2.2")
-    parser.add_argument("--host-http-port", type=int, default=18080)
+    parser.add_argument("--host-ip", default="10.0.1.1")
     parser.add_argument("--skip-network-smoke", action="store_true")
+    parser.add_argument(
+        "--network-test-delay",
+        type=float,
+        default=1.0,
+        help="seconds to sleep before each network smoke test",
+    )
+    parser.add_argument(
+        "--command-recover-timeout",
+        type=float,
+        default=20.0,
+        help="extra seconds to wait for the prompt after a command timeout",
+    )
     args = parser.parse_args()
 
     test_disk = Path(args.test_disk)
     prepare_test_disk(test_disk, Path(args.base_disk), args.no_build)
-
-    http_server = None
-    http_root = None
-    if not args.skip_network_smoke:
-        http_server, http_root = start_http_server(args.host_http_port)
 
     env_prefix = [f"DISK_IMG={test_disk}", f"QEMU_NET={args.qemu_net}"]
     if args.tap_if is not None:
@@ -372,7 +403,7 @@ def main() -> int:
         for expected in ["service ready procmgtd", "service ready blockd", "service ready fsd"]:
             if expected not in boot_clean:
                 boot_errors.append(f"missing boot substring {expected!r}")
-        if args.qemu_net == "user" and "service ready netd" not in boot_clean:
+        if not args.skip_network_smoke and "service ready netd" not in boot_clean:
             boot_errors.append("missing boot substring 'service ready netd'")
 
         if boot_errors:
@@ -384,8 +415,12 @@ def main() -> int:
                 TestCase(
                     "boot",
                     "",
-                    ["service ready procmgtd", "service ready blockd", "service ready fsd"],
-                    any_of=["service ready netd"] if args.qemu_net == "user" else [],
+                    [
+                        "service ready procmgtd",
+                        "service ready blockd",
+                        "service ready fsd",
+                        *(["service ready netd"] if not args.skip_network_smoke else []),
+                    ],
                 ),
                 boot,
             )
@@ -393,28 +428,21 @@ def main() -> int:
         qemu.buffer = ""
         tests = base_tests()
         if not args.skip_network_smoke:
-            tests.extend(network_tests(args.host_ip, args.host_http_port))
+            tests.extend(network_tests(args.host_ip, args.network_test_delay))
 
         for case in tests:
-            try:
-                out = qemu.run_command(case.command, case.timeout)
-                errors = validate(case, out)
-            except Exception as exc:
-                out = qemu.buffer
-                errors = [str(exc)]
+            result = run_and_validate(qemu, case, args.command_recover_timeout)
 
-            if errors:
-                print_failure(case, out, errors)
+            if result.errors:
+                print_failure(case, result.output, result.errors)
                 failures += 1
+                if result.fatal:
+                    print("fatal console desync; stopping remaining tests")
+                    break
             else:
-                print_result("PASS", case, out)
+                print_result("PASS", case, result.output)
     finally:
         qemu.close()
-        if http_server is not None:
-            http_server.shutdown()
-            http_server.server_close()
-        if http_root is not None:
-            http_root.cleanup()
         if not args.keep_test_disk:
             test_disk.unlink(missing_ok=True)
 

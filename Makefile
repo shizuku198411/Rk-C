@@ -66,6 +66,8 @@ APPFS_TOOL := scripts/pack_appfs.py
 
 OPENSBI_FW ?= opensbi/build/platform/generic/firmware/fw_jump.bin
 QEMU_NET ?= tap
+QEMU_USER_NET ?= 10.0.1.0/24
+QEMU_USER_HOST ?= 10.0.1.1
 QEMU_HOSTFWD ?= tcp::10080-:80
 QEMU_TAP_IF ?= tap0
 
@@ -133,7 +135,7 @@ USER_NIMFLAGS := \
 ifeq ($(QEMU_NET),tap)
 QEMU_NETDEV_ARGS := -netdev tap,id=net0,ifname=$(QEMU_TAP_IF),script=no,downscript=no
 else
-QEMU_NETDEV_ARGS := -netdev user,id=net0,hostfwd=$(QEMU_HOSTFWD)
+QEMU_NETDEV_ARGS := -netdev user,id=net0,net=$(QEMU_USER_NET),host=$(QEMU_USER_HOST),hostfwd=$(QEMU_HOSTFWD)
 endif
 
 QEMU_NET_DEVICE_ARGS := -device virtio-net-device,netdev=net0,bus=virtio-mmio-bus.1
@@ -252,19 +254,20 @@ test-apps:
 net-host-help:
 	@echo "Default TAP network:"
 	@echo "  make run"
-	@echo "  guest ip: 10.0.2.15, gateway/host: 10.0.2.2"
+	@echo "  guest ip: 10.0.1.10, gateway/host: 10.0.1.1"
 	@echo ""
 	@echo "User network:"
 	@echo "  make run QEMU_NET=user"
-	@echo "  guest ip: 10.0.2.15, gateway/host: 10.0.2.2"
+	@echo "  guest ip: 10.0.1.10, gateway/host: 10.0.1.1"
+	@echo "  qemu user net: QEMU_USER_NET=10.0.1.0/24 QEMU_USER_HOST=10.0.1.1"
 	@echo "  note: external ICMP may timeout with QEMU user networking"
 	@echo ""
 	@echo "TAP host setup:"
 	@echo "  sudo ip tuntap add dev tap0 mode tap user $$USER"
 	@echo "  sudo ip link set tap0 up"
-	@echo "  sudo ip addr add 10.0.2.2/24 dev tap0"
+	@echo "  sudo ip addr add 10.0.1.1/24 dev tap0"
 	@echo "  sudo sysctl -w net.ipv4.ip_forward=1"
-	@echo "  sudo iptables -t nat -A POSTROUTING -s 10.0.2.0/24 -j MASQUERADE"
+	@echo "  sudo iptables -t nat -A POSTROUTING -s 10.0.1.0/24 -j MASQUERADE"
 	@echo "  make run QEMU_TAP_IF=tap0"
 
 clean:

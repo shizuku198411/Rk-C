@@ -268,7 +268,7 @@ proc checkInterfaceConf(): bool =
 
 
 proc createInterfaceConf() =
-  let contents: cstring = "address 10.0.2.15\nsubnet 255.255.255.0\ngateway 10.0.2.2"
+  let contents: cstring = "address 10.0.1.10\nsubnet 255.255.255.0\ngateway 10.0.1.1"
   if sysWriteFile(cstring(InterfaceConfPath), addr contents[0], cstrlen(contents)) != 0:
     write("failed to create ")
     write(cstring(InterfaceConfPath))

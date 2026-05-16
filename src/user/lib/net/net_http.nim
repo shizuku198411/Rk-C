@@ -14,6 +14,7 @@ type
     host*: array[HttpHostMax, char]
     path*: array[HttpPathMax, char]
     port*: U16
+    portSpecified*: bool
     tls*: bool
 
 
@@ -29,6 +30,7 @@ proc clearUrl*(url: var HttpUrl) =
     inc i
 
   url.port = HttpDefaultPort
+  url.portSpecified = false
   url.tls = false
 
 
@@ -42,6 +44,9 @@ proc parsePort(s: cstring, pos: var int, port: var U16): bool =
     if value > 65535:
       return false
     inc pos
+
+  if value == 0:
+    return false
 
   port = U16(value)
   true
@@ -89,6 +94,7 @@ proc parseHttpUrl*(arg: cstring, url: var HttpUrl): bool =
     inc pos
     if not parsePort(arg, pos, url.port):
       return false
+    url.portSpecified = true
 
   if arg[pos] == '\0':
     url.path[0] = '/'
@@ -120,7 +126,29 @@ proc appendCString(buf: pointer, capacity: U32, pos: var U32, s: cstring): bool 
   true
 
 
-proc buildHttpGetRequest*(host, path: cstring, outBuf: pointer, capacity: U32): I32 =
+proc appendU16Decimal(buf: pointer, capacity: U32, pos: var U32, value: U16): bool =
+  var
+    digits: array[5, char]
+    n = 0
+    v = value
+
+  while true:
+    digits[n] = char(ord('0') + int(v mod U16(10)))
+    inc n
+    v = v div U16(10)
+    if v == 0:
+      break
+
+  while n > 0:
+    dec n
+    if not appendChar(buf, capacity, pos, digits[n]):
+      return false
+
+  true
+
+
+proc buildHttpGetRequestWithPort*(host, path: cstring, port: U16, includePort: bool,
+                                  outBuf: pointer, capacity: U32): I32 =
   if host == nil or path == nil or outBuf == nil or capacity == 0:
     return -1
 
@@ -133,15 +161,26 @@ proc buildHttpGetRequest*(host, path: cstring, outBuf: pointer, capacity: U32): 
     return -1
   if not appendCString(outBuf, capacity, pos, host):
     return -1
+  if includePort:
+    if not appendChar(outBuf, capacity, pos, ':'):
+      return -1
+    if not appendU16Decimal(outBuf, capacity, pos, port):
+      return -1
   if not appendCString(outBuf, capacity, pos, "\r\nConnection: close\r\n\r\n"):
     return -1
 
   I32(pos)
 
 
-proc httpTcpGetStart*(ip: U32, port: U16, host, path: cstring): I32 =
+proc buildHttpGetRequest*(host, path: cstring, outBuf: pointer, capacity: U32): I32 =
+  buildHttpGetRequestWithPort(host, path, HttpDefaultPort, false, outBuf, capacity)
+
+
+proc httpTcpGetStart*(ip: U32, port: U16, host, path: cstring,
+                      includePortInHost: bool = false): I32 =
   var reqBuf: array[HttpRequestMax, U8]
-  let reqLen = buildHttpGetRequest(host, path, addr reqBuf[0], U32(HttpRequestMax))
+  let reqLen = buildHttpGetRequestWithPort(host, path, port, includePortInHost,
+                                           addr reqBuf[0], U32(HttpRequestMax))
   if reqLen <= 0:
     return -1
 
@@ -156,9 +195,11 @@ proc httpTcpGetStart*(ip: U32, port: U16, host, path: cstring): I32 =
   handle
 
 
-proc httpTlsGetStart*(ip: U32, port: U16, host, path: cstring): I32 =
+proc httpTlsGetStart*(ip: U32, port: U16, host, path: cstring,
+                      includePortInHost: bool = false): I32 =
   var reqBuf: array[HttpRequestMax, U8]
-  let reqLen = buildHttpGetRequest(host, path, addr reqBuf[0], U32(HttpRequestMax))
+  let reqLen = buildHttpGetRequestWithPort(host, path, port, includePortInHost,
+                                           addr reqBuf[0], U32(HttpRequestMax))
   if reqLen <= 0:
     return -1
 
@@ -173,11 +214,12 @@ proc httpTlsGetStart*(ip: U32, port: U16, host, path: cstring): I32 =
   handle
 
 
-proc httpGetStart*(ip: U32, port: U16, host, path: cstring, tls: bool): I32 =
+proc httpGetStart*(ip: U32, port: U16, host, path: cstring, tls: bool,
+                   includePortInHost: bool = false): I32 =
   if tls:
-    return httpTlsGetStart(ip, port, host, path)
+    return httpTlsGetStart(ip, port, host, path, includePortInHost)
 
-  httpTcpGetStart(ip, port, host, path)
+  httpTcpGetStart(ip, port, host, path, includePortInHost)
 
 
 proc httpRead*(handle: I32, buf: pointer, capacity: U32): I32 =

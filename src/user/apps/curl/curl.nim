@@ -135,7 +135,7 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
       write("curl: could not resolve host\n")
       sysExit(1)
 
-  let handle = httpGetStart(ip, url.port, host, path, url.tls)
+  let handle = httpGetStart(ip, url.port, host, path, url.tls, url.portSpecified)
   if handle <= 0:
     if url.tls:
       write("curl: HTTPS/TLS request failed: ")
@@ -169,4 +169,8 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
     writeHttpChunk(addr rxBuf[0], U32(n), includeHeaders, headerDone, headerMatchLen)
 
   discard httpClose(handle)
+  if not receivedAny:
+    write("curl: HTTP request failed\n")
+    sysExit(1)
+
   sysExit(0)

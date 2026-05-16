@@ -14,7 +14,7 @@ var
 
 proc printUsage() =
   write("usage: ping [ip]\n")
-  write("default: ping 10.0.2.2\n")
+  write("default: ping 10.0.1.1\n")
 
 
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
@@ -26,7 +26,7 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
     printUsage()
     sysExit(0)
 
-  var ip = U32(0x0a000202'u32)
+  var ip = U32(0x0a000101'u32)
   if parsedArgs.argc > 1:
     printUsage()
     sysExit(1)

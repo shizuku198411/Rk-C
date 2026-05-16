@@ -13,6 +13,7 @@ curl --help
 ## Behavior
 
 - Parses HTTP and HTTPS URLs with `parseHttpUrl`
+- Supports explicit URL ports such as `http://10.0.1.1:18080/index.html`
 - Resolves host names with DNS when the host is not already an IPv4 address
 - Starts the request with `httpGetStart`
 - Streams response data in 512-byte chunks
