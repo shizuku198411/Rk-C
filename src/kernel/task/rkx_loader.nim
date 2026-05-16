@@ -1,4 +1,5 @@
 import ../../lib/mem
+import ../../lib/calc
 import ../../lib/rkx
 import ../../lib/types
 import ../dev/console
@@ -36,13 +37,6 @@ proc rangeWithin(start, size, base, limit: U64): bool =
     return false
 
   endExclusive <= limit
-
-
-proc minU64(a, b: U64): U64 =
-  if a < b:
-    a
-  else:
-    b
 
 
 proc segmentPages(memSize: U64): U64 =

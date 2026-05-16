@@ -1,6 +1,7 @@
 import ../../arch/riscv64/arch
 import ../../lib/mem
 import ../../lib/types
+import ../../lib/calc
 import ../mm/paging
 import ../task/process
 
@@ -45,6 +46,10 @@ proc isCurrentUserVaRange(userAddr, size: U64): bool =
     return true
 
   false
+
+
+proc pageRemaining(va: U64): U64 = 
+  PageSize - (va and (PageSize - U64(1)))
 
 
 proc userAccessEnable(): U64 =
@@ -118,26 +123,54 @@ proc copyToUser*(dst: U64, src: pointer, size: U64): int =
   0
 
 
+proc copyCStringChunk(
+  dst: ptr UncheckedArray[char],
+  src: U64,
+  dstOff: U64,
+  chunk: U64,
+  copiedEnd: var U64
+): bool =
+  let old = userAccessEnable()
+
+  var j = 0.U64
+  while j < chunk:
+    let ch = cast[ptr char](src + j)[]
+    dst[dstOff + j] = ch
+
+    if ch == '\0':
+      copiedEnd = dstOff + j
+      userAccessRestore(old)
+      return true
+
+    j += 1.U64
+
+  userAccessRestore(old)
+  false
+
+
 proc copyUserCString*(dst: pointer, src: U64, capacity: U64): int =
-  if dst == nil or src == 0 or capacity == 0:
+  if dst == nil or src == 0.U64 or capacity == 0.U64:
     return -1
 
-  let outBuf = cast[ptr UncheckedArray[char]](dst)
-  var i = U64(0)
-  while i + 1 < capacity:
-    if src + i < src:
+  let d = cast[ptr UncheckedArray[char]](dst)
+  var copied = 0.U64
+
+  while copied < capacity - 1.U64:
+    let cur = src + copied
+    if cur < src:
       return -1
-    if not validateUserRange(src + i, 1, false):
+
+    let remainDst = (capacity - 1.U64) - copied
+    let chunk = minU64(remainDst, pageRemaining(cur))
+
+    if not validateUserRange(cur, chunk, false):
       return -1
 
-    let old = userAccessEnable()
-    let ch = cast[ptr UncheckedArray[char]](src)[i]
-    userAccessRestore(old)
+    var copiedEnd = 0.U64
+    if copyCStringChunk(d, cur, copied, chunk, copiedEnd):
+      return int(copiedEnd)
 
-    outBuf[i] = ch
-    if ch == '\0':
-      return int(i)
-    inc i
+    copied += chunk
 
-  outBuf[i] = '\0'
+  d[copied] = '\0'
   -1
