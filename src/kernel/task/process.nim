@@ -678,6 +678,44 @@ proc reapDetachedZombies() =
     inc i
 
 
+proc hasLiveParane*(p: ptr Process): bool =
+  if p == nil or p.parentPid <= 0:
+    return false
+
+  let parent = findProcessByPid(p.parentPid)
+  parent != nil and parent.state != procUnused and parent.state != procZombie
+
+
+proc detachChildrenOf*(parentPid: I32) =
+  if parentPid <= 0:
+    return
+
+  var i = 0
+  while i < MaxProcs:
+    let child = addr procs[i]
+    if child.state != procUnused and child.parentPid == parentPid:
+      child.parentPid = 0
+      child.detached = true
+    inc i
+
+
+proc markProcessZombie*(p: ptr Process, status: U64) =
+  if p == nil:
+    return
+
+  let pid = p.pid
+
+  detachChildrenOf(pid)
+
+  p.exitStatus = status
+  clearWait(p)
+  p.state = procZombie
+
+  if not p.detached and not hasLiveParane(p):
+    p.detached = true
+  wakePidWaiters(p.pid)
+
+
 proc maybeYieldOnResched*() =
   if not needResched:
     return
@@ -688,9 +726,7 @@ proc maybeYieldOnResched*() =
 
 proc killCurrentUserProcess*(status: U64) =
   if currentProc != nil and currentProc.user.active:
-    currentProc.exitStatus = status
-    currentProc.state = procZombie
-    wakePidWaiters(currentProc.pid)
+    markProcessZombie(currentProc, status)
     schedule()
 
 

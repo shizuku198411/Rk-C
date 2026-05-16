@@ -170,10 +170,7 @@ proc syscallKill*(pidVal: U64): U64 =
   if target == nil or target.state == procUnused or target.state == procZombie:
     return U64(-1'i64)
 
-  target.exitStatus = U64(255)
-  clearWait(target)
-  target.state = procZombie
-  wakePidWaiters(pid)
+  markProcessZombie(target, U64(255))
 
   if currentProc == target:
     schedule()

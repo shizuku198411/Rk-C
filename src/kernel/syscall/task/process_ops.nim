@@ -60,9 +60,7 @@ proc syscallExit*(status: U64): U64 =
   if currentProc == nil:
     panic("exit without current process")
 
-  currentProc.exitStatus = status
-  currentProc.state = procZombie
-  wakePidWaiters(currentProc.pid)
+  markProcessZombie(currentProc, status)
   schedule()
   0
 
@@ -77,9 +75,15 @@ proc findProcByPid(pid: int32): ptr Process =
 
 
 proc syscallWait*(pidVal: U64): U64 =
+  if currentProc == nil:
+    return U64(-1'i64)
+
   let pid = int32(pidVal)
   var target = findProcByPid(pid)
   if target == nil:
+    return U64(-1'i64)
+
+  if target.parentPid != currentProc.pid:
     return U64(-1'i64)
 
   while target.state != procZombie:
