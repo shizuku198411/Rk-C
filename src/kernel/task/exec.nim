@@ -1,4 +1,5 @@
 import ../../lib/fixed_string
+import ../../lib/syscall_types
 import ../../lib/types
 import ../dev/console
 import ../mm/memory
@@ -164,7 +165,10 @@ proc createBlockServerUserProcess*(): int32 =
 
 proc execUserApp*(path: cstring, arg: cstring, detached: bool = false): int32 =
   let parent = currentProc
-  let child = allocUserProcessFromParent(parent)
+  if not hasFreeProcessSlot():
+    return SysExecNoProcess
+
+  let child = allocUserProcessFromParent(parent, false)
   if child == nil:
     return -1
 
@@ -183,4 +187,5 @@ proc execUserApp*(path: cstring, arg: cstring, detached: bool = false): int32 =
     discardProcess(child)
     return -1
 
+  inheritProcessMetadata(child, parent)
   child.pid

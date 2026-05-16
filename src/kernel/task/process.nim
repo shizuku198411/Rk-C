@@ -7,7 +7,7 @@ import ../mm/memory
 import ../mm/paging
 
 const
-  MaxProcs* = 16
+  MaxProcs* = 32
   KernelStackPages* = U64(4)
 
 type
@@ -366,6 +366,10 @@ proc findUnusedProc(): ptr Process =
   nil
 
 
+proc hasFreeProcessSlot*(): bool =
+  findUnusedProc() != nil
+
+
 proc idleTask() {.cdecl.} =
   while true:
     maybeYieldOnResched()
@@ -466,7 +470,9 @@ proc findProcessByPid*(pid: int32): ptr Process =
   nil
 
 
-proc inheritProcessMetadata(child, parent: ptr Process) =
+proc inheritProcessMetadata*(child, parent: ptr Process) =
+  clearFileState(child)
+
   if parent == nil:
     child.parentPid = 0
     setRootCwd(child)
@@ -479,7 +485,7 @@ proc inheritProcessMetadata(child, parent: ptr Process) =
   # Future per-process attributes such as rootfs should be copied here.
 
 
-proc allocUserProcessFromParent*(parent: ptr Process): ptr Process =
+proc allocUserProcessFromParent*(parent: ptr Process, inheritMetadata: bool = true): ptr Process =
   let pid = createKernelProcessInternal(userProcessBootstrap, false, "user_proc")
   if pid < 0:
     return nil
@@ -490,7 +496,8 @@ proc allocUserProcessFromParent*(parent: ptr Process): ptr Process =
 
   p.state = procSleeping
   p.user.active = true
-  inheritProcessMetadata(p, parent)
+  if inheritMetadata:
+    inheritProcessMetadata(p, parent)
   p
 
 
@@ -709,6 +716,7 @@ proc markProcessZombie*(p: ptr Process, status: U64) =
 
   p.exitStatus = status
   clearWait(p)
+  clearFileState(p)
   p.state = procZombie
 
   if not p.detached and not hasLiveParane(p):
@@ -767,7 +775,7 @@ proc schedule*() =
     next = idleProc
 
   if next == nil:
-    if prev != nil:
+    if prev != nil and (prev.state == procRunning or prev.state == procRunnable):
       prev.state = procRunning
       currentProc = prev
       return

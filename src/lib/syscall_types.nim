@@ -71,6 +71,7 @@ const
   SysProcessRunning* = U32(2)
   SysProcessSleeping* = U32(3)
   SysProcessZombie* = U32(4)
+  SysExecNoProcess* = I32(-2)
 
 type
   SysProcessInfo* {.packed.} = object

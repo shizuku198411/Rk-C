@@ -219,6 +219,20 @@ proc restoreFd(savedFd, targetFd: I32) =
     discard sysClose(savedFd)
 
 
+proc reportExecFailure(path: cstring) =
+  write("command not found: ")
+  write(path)
+  write("\n")
+
+
+proc reportExecFailure(path: cstring, rc: I32) =
+  if rc == SysExecNoProcess:
+    write("exec: process table full\n")
+    return
+
+  reportExecFailure(path)
+
+
 proc runRedirection*(line: cstring): bool =
   copyRedirectLine(line)
   let background = stripBackgroundMarkerFrom(redirectLineBuf)
@@ -264,9 +278,7 @@ proc runRedirection*(line: cstring): bool =
   let pid = sysExec(buildBinPathInto(cstr(leftCmdBuf), leftPathBuf), cstr(leftArgBuf), background)
   restoreFd(savedStdout, 1)
   if pid < 0:
-    write("command not found: ")
-    write(cstr(leftPathBuf))
-    write("\n")
+    reportExecFailure(cstr(leftPathBuf), pid)
     return true
 
   if background:
@@ -316,9 +328,7 @@ proc runPipeline*(line: cstring): bool =
   restoreFd(savedStdout, 1)
   if leftPid < 0:
     discard sysClose(fds[0])
-    write("command not found: ")
-    write(cstr(leftPathBuf))
-    write("\n")
+    reportExecFailure(cstr(leftPathBuf), leftPid)
     return true
 
   let savedStdin = sysOpen("/dev/stdin", SysOpenRead)
@@ -341,9 +351,7 @@ proc runPipeline*(line: cstring): bool =
   restoreFd(savedStdin, 0)
   if rightPid < 0:
     discard sysWait(leftPid)
-    write("command not found: ")
-    write(cstr(rightPathBuf))
-    write("\n")
+    reportExecFailure(cstr(rightPathBuf), rightPid)
     return true
 
   if background:
@@ -362,9 +370,7 @@ proc runPipeline*(line: cstring): bool =
 proc runApp*(path: cstring, arg: cstring, background: bool) =
   let pid = sysExec(path, arg, background)
   if pid < 0:
-    write("command not found: ")
-    write(path)
-    write("\n")
+    reportExecFailure(path, pid)
     return
 
   if background:
