@@ -6,6 +6,7 @@ import ../fs/fs
 import ../mm/memory
 import ../mm/paging
 import ../task/process
+import ../task/rkx_loader
 
 const
   ShellBase* = VAddr(0x01000000)
@@ -159,9 +160,15 @@ proc installExecImage(p: ptr Process, root: PageTable, path: cstring, base, stac
   if root == nil:
     panic("missing process page table")
 
-  var imagePages = U64(0)
-  if replaceUserImage(root, path, base, imagePages) != 0:
+  var
+    imagePages = U64(0)
+    entryVa = VAddr(0)
+  
+  if loadRkxImage(root, path, base, imagePages, entryVa) != 0:
     return -1
+
+  #if replaceUserImage(root, path, base, imagePages) != 0:
+  #  return -1
 
   var userSp = VAddr(0)
   var argVa = VAddr(0)
@@ -169,7 +176,8 @@ proc installExecImage(p: ptr Process, root: PageTable, path: cstring, base, stac
     return -1
 
   flushTlb()
-  configureUserProcess(p, root, path, base, base, stackTop, userSp, imagePages, UserStackPages, argVa, 0)
+  #configureUserProcess(p, root, path, base, base, stackTop, userSp, imagePages, UserStackPages, argVa, 0)
+  configureUserProcess(p, root, path, base, entryVa, stackTop, userSp, imagePages, UserStackPages, argVa, 0)
   0
 
 

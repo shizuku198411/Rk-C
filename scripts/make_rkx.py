@@ -1,0 +1,141 @@
+#!/usr/bin/env python3
+import argparse
+import os
+import struct
+import subprocess
+import tempfile
+
+RKX_MAGIC = 0x31584B52  # "RKX1"
+RKX_VERSION = 1
+HEADER_SIZE = 4 * 4 + 1 * 8 + 3 * 4 * 8 + 2 * 8
+# magic, version, headerSize, reserved
+# entryVa
+# text/rodata/data: va, off, fileSize, memSize
+# bss: va, memSize
+
+def read_symbols(elf):
+    out = subprocess.check_output(["llvm-nm", "-n", elf], text=True)
+    syms = {}
+    for line in out.splitlines():
+        parts = line.split()
+        if len(parts) >= 3:
+            try:
+                addr = int(parts[0], 16)
+            except ValueError:
+                continue
+            name = parts[2]
+            syms[name] = addr
+    return syms
+
+def dump_section(elf, section, out_path):
+    subprocess.run([
+        "llvm-objcopy",
+        "-O", "binary",
+        f"--only-section={section}",
+        elf,
+        out_path,
+    ], check=True)
+
+    if not os.path.exists(out_path):
+        return b""
+
+    with open(out_path, "rb") as f:
+        return f.read()
+
+def need(syms, name):
+    if name not in syms:
+        raise RuntimeError(f"missing symbol: {name}")
+    return syms[name]
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--elf", required=True)
+    parser.add_argument("--out", required=True)
+    args = parser.parse_args()
+
+    syms = read_symbols(args.elf)
+
+    entry = need(syms, "user_entry")
+
+    text_va = need(syms, "__user_text_start")
+    text_end = need(syms, "__user_text_end")
+    ro_va = need(syms, "__user_rodata_start")
+    ro_end = need(syms, "__user_rodata_end")
+    data_va = need(syms, "__user_data_start")
+    data_end = need(syms, "__user_data_end")
+    bss_va = need(syms, "__user_bss_start")
+    bss_end = need(syms, "__user_bss_end")
+
+    with tempfile.TemporaryDirectory() as td:
+        text = os.path.join(td, "text.bin")
+        rodata = os.path.join(td, "rodata.bin")
+        data = os.path.join(td, "data.bin")
+
+        dump_section(args.elf, ".text", text)
+        dump_section(args.elf, ".rodata", rodata)
+        dump_section(args.elf, ".data", data)
+
+        with open(text, "rb") as f:
+            text_blob = f.read()
+        with open(rodata, "rb") as f:
+            ro_blob = f.read()
+        with open(data, "rb") as f:
+            data_blob = f.read()
+
+    off = HEADER_SIZE
+    text_off = off
+    off += len(text_blob)
+
+    ro_off = off
+    off += len(ro_blob)
+
+    data_off = off
+    off += len(data_blob)
+
+    header = struct.pack(
+        "<IIII"
+        "Q"
+        "QQQQ"
+        "QQQQ"
+        "QQQQ"
+        "QQ",
+        RKX_MAGIC,
+        RKX_VERSION,
+        HEADER_SIZE,
+        0,
+        entry,
+
+        text_va,
+        text_off,
+        len(text_blob),
+        text_end - text_va,
+
+        ro_va,
+        ro_off,
+        len(ro_blob),
+        ro_end - ro_va,
+
+        data_va,
+        data_off,
+        len(data_blob),
+        data_end - data_va,
+
+        bss_va,
+        bss_end - bss_va,
+    )
+
+    assert len(header) == HEADER_SIZE
+
+    image = bytearray()
+    image.extend(header)
+    image.extend(text_blob)
+    image.extend(ro_blob)
+    image.extend(data_blob)
+
+    with open(args.out, "wb") as f:
+        f.write(image)
+
+    print(f"[rkx] {args.out}: text={len(text_blob)} rodata={len(ro_blob)} data={len(data_blob)} bss={bss_end - bss_va}")
+
+if __name__ == "__main__":
+    main()
