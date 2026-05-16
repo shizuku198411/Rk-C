@@ -9,7 +9,7 @@ import ../trap/syscall
 import ../trap/trap_types
 
 const
-  ScauseInstructionAddressMMisaligned   = U64(0x00)
+  ScauseInstructionAddressMisaligned   = U64(0x00)
   ScauseInstructionAccessFault          = U64(0x01)
   ScauseIllegalInstruction              = U64(0x02)
   ScauseBreakpoint                      = U64(0x03)
@@ -70,13 +70,13 @@ proc trapHandler*(frame: ptr TrapFrame) {.exportc: "trap_handler", cdecl.} =
   let fromUser = trapFromUser(frame)
 
   case scause
-  of ScauseInstructionAddressMMisaligned:
+  of ScauseInstructionAddressMisaligned:
     inc trapCount.instructionAddressMissaligned
-    panicMsg("Instruction Address Misaligned", scause, stval, userPc)
+    faultOrPanic("Instruction Address Misaligned", scause, stval, userPc, fromUser)
 
   of ScauseInstructionAccessFault:
     inc trapCount.instructionAccessFault
-    panicMsg("Instruction Access Fault", scause, stval, userPc)
+    faultOrPanic("Instruction Access Fault", scause, stval, userPc, fromUser)
 
   of ScauseIllegalInstruction:
     inc trapCount.illegalInstruction
@@ -84,23 +84,23 @@ proc trapHandler*(frame: ptr TrapFrame) {.exportc: "trap_handler", cdecl.} =
   
   of ScauseBreakpoint:
     inc trapCount.breakpoint
-    panicMsg("Breakpoint", scause, stval, userPc)
+    faultOrPanic("Breakpoint", scause, stval, userPc, fromUser)
   
   of ScauseLoadAddressMisaligned:
     inc trapCount.loadAddressMisaligned
-    panicMsg("Load Address Misaligned", scause, stval, userPc)
+    faultOrPanic("Load Address Misaligned", scause, stval, userPc, fromUser)
   
   of ScauseLoadAccessFault:
     inc trapCount.loadAccessFault
-    panicMsg("Load Access Fault", scause, stval, userPc)
+    faultOrPanic("Load Access Fault", scause, stval, userPc, fromUser)
   
   of ScauseStoreAMOAddressMisaligned:
     inc trapCount.storeAMOAddressMisaligned
-    panicMsg("Store/AMO Address Misaligned", scause, stval, userPc)
+    faultOrPanic("Store/AMO Address Misaligned", scause, stval, userPc, fromUser)
   
   of ScauseStoreAMOAccessFault:
     inc trapCount.storeAMOAccessFault
-    panicMsg("Store/AMO Access Fault", scause, stval, userPc)
+    faultOrPanic("Store/AMO Access Fault", scause, stval, userPc, fromUser)
   
   of ScauseEnvironmentCallFromUMode:
     inc trapCount.environmentCallFromUMode
@@ -114,7 +114,7 @@ proc trapHandler*(frame: ptr TrapFrame) {.exportc: "trap_handler", cdecl.} =
   
   of ScauseInstructionPageFault:
     inc trapCount.instructionPageFault
-    panicMsg("Instruction Page Fault", scause, stval, userPc)
+    faultOrPanic("Instruction Page Fault", scause, stval, userPc, fromUser)
   
   of ScauseLoadPageFault:
     inc trapCount.loadPageFault
