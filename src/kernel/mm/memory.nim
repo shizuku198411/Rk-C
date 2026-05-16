@@ -135,7 +135,7 @@ proc pfree*(paddr: PAddr, n: U64): int =
     return -1
 
   let start = (paddr - managedRegionStart) div PageSize
-  if start >= managedPageCount or start + n > managedPageCount:
+  if start >= managedPageCount or n > managedPageCount - start:
     return -1
 
   var i = U64(0)
