@@ -92,8 +92,8 @@ proc sysRmdir*(path: cstring): I32 =
   I32(rawSyscall3(SysRmdir, cast[U64](path), 0, 0))
 
 
-proc sysShutdown*() =
-  discard rawSyscall3(SysShutdown, 0, 0, 0)
+proc sysShutdown*(): I32 =
+  I32(rawSyscall3(SysShutdown, 0, 0, 0))
 
 
 proc sysGetDateTime*(dt: ptr SysDateTime): I32 =

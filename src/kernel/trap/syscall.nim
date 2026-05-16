@@ -55,7 +55,7 @@ proc handleSyscall*(frame: ptr TrapFrame) =
     frame.a0 = syscallRmdir(frame.a0)
 
   of SysShutdown:
-    syscallShutdown()
+    frame.a0 = syscallShutdown()
 
   of SysYield:
     frame.a0 = syscallYield()

@@ -58,7 +58,7 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
 
     elif streq(cstr(cmdBuf), "shutdown"):
       saveHistory()
-      sysShutdown()
+      discard sysShutdown()
 
     else:
       runApp(buildBinPath(cstr(cmdBuf)), cstr(argBuf), background)

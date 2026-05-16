@@ -39,8 +39,9 @@ proc syscallTicks*(): U64 =
   timerTickCount
 
 
-proc syscallShutdown*() =
+proc syscallShutdown*(): U64 =
   sbiShutdown()
+  0
 
 
 proc syscallYield*(): U64 =
