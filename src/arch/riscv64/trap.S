@@ -12,7 +12,7 @@ trap_entry:
 2:
     csrc sstatus, 2
 
-    addi sp, sp, -8 * 32
+    addi sp, sp, -8 * 34
     sd ra,  8 * 0(sp)
     sd gp,  8 * 1(sp)
     sd tp,  8 * 2(sp)
@@ -47,11 +47,29 @@ trap_entry:
     csrr a0, sscratch
     sd a0, 8 * 30(sp)
 
-    addi a0, sp, 8 * 32
+    csrr a0, sepc
+    sd a0, 8 * 31(sp)
+
+    csrr a0, sstatus
+    sd a0, 8 * 32(sp)
+
+    addi a0, sp, 8 * 34
     csrw sscratch, a0
+
+    # from here, run kernel code with kernel gp.
+.option push
+.option norelax
+    lla gp, __global_pointer$
+.option pop
 
     mv a0, sp
     call trap_handler
+
+    ld a0, 8 * 31(sp)
+    csrw sepc, a0
+
+    ld a0, 8 * 32(sp)
+    csrw sstatus, a0
 
     ld ra,  8 * 0(sp)
     ld gp,  8 * 1(sp)

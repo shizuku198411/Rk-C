@@ -91,7 +91,9 @@ proc rawReadFileKernel(path: cstring, buf: pointer, capacity: U64): int =
 proc syscallFsServiceRegister*(): U64 =
   if currentProc == nil or not currentProc.user.active:
     return U64(-1'i64)
-  if serviceRegistered(serviceManager) and not currentIsService(serviceFs):
+  if currentIsService(serviceFs):
+    return 0
+  if serviceRegistered(serviceManager):
     return U64(-1'i64)
 
   registerService(serviceFs, currentProc.pid)

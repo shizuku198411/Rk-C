@@ -286,6 +286,10 @@ proc setupConfigFile() =
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   discard arg
 
+  if not waitUntilServiceRegistered(SysServiceKindNet):
+    write("[netd] service registration timeout\n")
+    sysExit(1)
+
   setupConfigFile()
   initNetDevice()
   net.tcpNextHandle = 1

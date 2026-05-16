@@ -36,9 +36,13 @@ proc handleRequest() =
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   discard arg
 
-  if sysBlockServiceRegister() != 0:
-    write("blockd: register failed\n")
+  if not waitUntilServiceRegistered(SysServiceKindBlock):
+    write("[blockd] service registration timeout\n")
     sysExit(1)
+
+  #if sysBlockServiceRegister() != 0:
+  #  write("blockd: register failed\n")
+  #  sysExit(1)
 
   notifyServiceReady(SysServiceKindBlock)
 

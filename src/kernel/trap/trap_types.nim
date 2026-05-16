@@ -33,4 +33,6 @@ type
     s10*: U64
     s11*: U64
     sp*: U64
+    sepc*: U64
+    sstatus*: U64
     reserved0*: U64

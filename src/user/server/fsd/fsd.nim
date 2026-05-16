@@ -69,9 +69,13 @@ proc handleRequest() =
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   discard arg
 
-  if sysFsServiceRegister() != 0:
-    write("fsd: register failed\n")
+  if not waitUntilServiceRegistered(SysServiceKindFs):
+    write("[fsd] service registration timeout\n")
     sysExit(1)
+
+  #if sysFsServiceRegister() != 0:
+  #  write("fsd: register failed\n")
+  #  sysExit(1)
 
   notifyServiceReady(SysServiceKindFs)
 

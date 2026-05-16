@@ -26,6 +26,10 @@ const
   ScauseSupervisorTimer                 = ScauseInterruptFlag or U64(0x05)
 
 
+proc trapFromUser(frame: ptr TrapFrame): bool =
+  (frame.sstatus and SstatusSpp) == U64(0)
+
+
 proc panicMsg(scauseType: cstring, scause: U64, stval: U64, userPc: U64) =
   print("PANIC: ")
   print(scauseType)
@@ -40,8 +44,8 @@ proc panicMsg(scauseType: cstring, scause: U64, stval: U64, userPc: U64) =
     arch.wfi()
 
 
-proc faultOrPanic(scauseType: cstring, scause: U64, stval: U64, userPc: U64) =
-  if currentProc != nil and currentProc.user.active:
+proc faultOrPanic(scauseType: cstring, scause: U64, stval: U64, userPc: U64, fromUser: bool) =
+  if fromUser and currentProc != nil:
     print("PAGE FAULT DETECTED: ")
     print(scauseType)
     print(". scause=")
@@ -61,7 +65,10 @@ proc trapHandler*(frame: ptr TrapFrame) {.exportc: "trap_handler", cdecl.} =
 
   let scause = arch.readScause()
   let stval = arch.readStval()
-  let userPc = arch.readSepc()
+  #let userPc = arch.readSepc()
+  let userPc = frame.sepc
+
+  let fromUser = trapFromUser(frame)
 
   case scause
   of ScauseInstructionAddressMMisaligned:
@@ -74,7 +81,7 @@ proc trapHandler*(frame: ptr TrapFrame) {.exportc: "trap_handler", cdecl.} =
 
   of ScauseIllegalInstruction:
     inc trapCount.illegalInstruction
-    faultOrPanic("Illegal Instruction", scause, stval, userPc)
+    faultOrPanic("Illegal Instruction", scause, stval, userPc, fromUser)
   
   of ScauseBreakpoint:
     inc trapCount.breakpoint
@@ -99,7 +106,9 @@ proc trapHandler*(frame: ptr TrapFrame) {.exportc: "trap_handler", cdecl.} =
   of ScauseEnvironmentCallFromUMode:
     inc trapCount.environmentCallFromUMode
     handleSyscall(frame)
-    arch.writeSepc(userPc + 4)
+    #arch.writeSepc(userPc + 4)
+    frame.sepc = userPc + 4
+    maybeYieldOnResched()
   
   of ScauseEnvironmentCallFromSMode:
     inc trapCount.environmentCallFromSMode
@@ -111,21 +120,26 @@ proc trapHandler*(frame: ptr TrapFrame) {.exportc: "trap_handler", cdecl.} =
   
   of ScauseLoadPageFault:
     inc trapCount.loadPageFault
-    faultOrPanic("Load Page Fault", scause, stval, userPc)
+    faultOrPanic("Load Page Fault", scause, stval, userPc, fromUser)
   
   of ScauseStoreAMOPageFault:
     inc trapCount.storeAMOPageFault
-    faultOrPanic("Store/AMO Page Fault", scause, stval, userPc)
+    faultOrPanic("Store/AMO Page Fault", scause, stval, userPc, fromUser)
   
   of ScauseSupervisorTimer:
     inc trapCount.supervisorTimer
     countUpTimerTick()
     wakeTimerWaiters(timerTickCount)
+
     if pollInput():
       wakeInputWaiters()
+    
     setNextTimer()
+    #arch.writeSepc(userPc)
+
     requestResched()
-    arch.writeSepc(userPc)
+    if fromUser:
+      maybeYieldOnResched()
   
   else:
     panicMsg("Unexpected Trap", scause, stval, userPc)

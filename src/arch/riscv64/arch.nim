@@ -4,6 +4,7 @@ const
   SieStie* = U64(1 shl 5)
   SstatusSie* = U64(1 shl 1)
   SstatusSum* = U64(1 shl 18)
+  SstatusSpp* = U64(1 shl 8)
 
 
 proc wfi*() {.importc: "arch_wfi", cdecl.}
