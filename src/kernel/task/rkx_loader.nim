@@ -88,6 +88,37 @@ proc validateSegment(
   true
 
 
+proc rangesOverlap(aStart, aSize, bStart, bSize: U64): bool =
+  if aSize == 0.U64 or bSize == 0.U64:
+    return false
+
+  var aEnd = U64(0)
+  var bEnd = U64(0)
+  if not checkedRange(aStart, aSize, aEnd):
+    return true
+  if not checkedRange(bStart, bSize, bEnd):
+    return true
+
+  aStart < bEnd and bStart < aEnd
+
+
+proc validateSegmentLayout(hdr: ptr RkxHeader): bool =
+  if rangesOverlap(hdr.textVa, hdr.textMemSize, hdr.rodataVa, hdr.rodataMemSize):
+    return false
+  if rangesOverlap(hdr.textVa, hdr.textMemSize, hdr.dataVa, hdr.dataMemSize):
+    return false
+  if rangesOverlap(hdr.textVa, hdr.textMemSize, hdr.bssVa, hdr.bssMemSize):
+    return false
+  if rangesOverlap(hdr.rodataVa, hdr.rodataMemSize, hdr.dataVa, hdr.dataMemSize):
+    return false
+  if rangesOverlap(hdr.rodataVa, hdr.rodataMemSize, hdr.bssVa, hdr.bssMemSize):
+    return false
+  if rangesOverlap(hdr.dataVa, hdr.dataMemSize, hdr.bssVa, hdr.bssMemSize):
+    return false
+
+  true
+
+
 proc validateRkxHeader(hdr: ptr RkxHeader, imageSize: U64, expectedBase: VAddr): bool =
   if hdr == nil:
     return false
@@ -141,6 +172,9 @@ proc validateRkxHeader(hdr: ptr RkxHeader, imageSize: U64, expectedBase: VAddr):
     let imageLimit = expectedBase + UserImageVaSizeLimit
     if not rangeWithin(hdr.bssVa, hdr.bssMemSize, expectedBase, imageLimit):
       return false
+
+  if not validateSegmentLayout(hdr):
+    return false
 
   # entry は text 内にある必要がある。
   if hdr.textMemSize == 0.U64:

@@ -1,5 +1,4 @@
 import ../../lib/fixed_string
-import ../../lib/mem
 import ../../lib/types
 import ../dev/console
 import ../mm/memory
@@ -30,7 +29,6 @@ var
   rodataEndSym {.importc: "__rodata_end".}: char
   dataStartSym {.importc: "__data_start".}: char
   freeRamEndSym {.importc: "__free_ram_end".}: char
-  kernelRootPageTable: PageTable
 
 
 proc copyArg(dst: PAddr, src: cstring, maxLen: U64) =
@@ -55,68 +53,6 @@ proc execStackTopForPath(path: cstring): VAddr =
     return ShellStackTop
 
   AppStackTop
-
-
-proc copyPage(dstPa, srcPa: PAddr) =
-  discard copyMem(cast[pointer](dstPa), cast[pointer](srcPa), PageSize)
-
-
-proc cloneMappedRange(srcRoot, dstRoot: PageTable, srcBase, dstBase: VAddr, pages: U64, flags: U64): int =
-  if pages == 0:
-    return 0
-  if srcBase == 0 or dstBase == 0:
-    return 0
-
-  var page = U64(0)
-  while page < pages:
-    let off = page * PageSize
-    let srcPa = mappedPagePa(srcRoot, srcBase + off)
-    if srcPa == NilPAddr:
-      return -1
-
-    let dstPa = palloc(1)
-    if dstPa == NilPAddr:
-      return -1
-
-    copyPage(dstPa, srcPa)
-    if mapPageReplace(dstRoot, dstBase + off, dstPa, flags) != 0:
-      discard pfree(dstPa, 1)
-      return -1
-
-    inc page
-
-  0
-
-
-proc getKernelRootPageTable(): PageTable =
-  kernelRootPageTable
-
-
-proc cloneParentUserMemory(childRoot: PageTable, parent: ptr Process, childBase, childStackTop: VAddr): int =
-  if parent == nil or not parent.user.active:
-    return 0
-
-  let parentRoot =
-    if parent.rootPageTable != nil:
-      parent.rootPageTable
-    else:
-      getKernelRootPageTable()
-
-  if parentRoot == nil:
-    return -1
-
-  if cloneMappedRange(parentRoot, childRoot, parent.user.base, childBase, parent.user.imagePages,
-                      PteU or PteR or PteW or PteX) != 0:
-    return -1
-
-  let parentStackBase = parent.user.stackTop - parent.user.stackPages * PageSize
-  let childStackBase = childStackTop - parent.user.stackPages * PageSize
-  if cloneMappedRange(parentRoot, childRoot, parentStackBase, childStackBase, parent.user.stackPages,
-                      PteU or PteR or PteW) != 0:
-    return -1
-
-  flushTlb()
-  0
 
 
 proc replaceUserStack(root: PageTable, stackTop: VAddr, arg: cstring, userSp, argVa: var VAddr): int =
@@ -242,15 +178,6 @@ proc execUserApp*(path: cstring, arg: cstring, detached: bool = false): int32 =
   let childBase = execBaseForPath(path)
   let childStackTop = execStackTopForPath(path)
   child.rootPageTable = root
-  if parent != nil and parent.user.active:
-    child.user.base = childBase
-    child.user.stackTop = childStackTop
-    child.user.imagePages = parent.user.imagePages
-    child.user.stackPages = parent.user.stackPages
-
-  if cloneParentUserMemory(root, parent, childBase, childStackTop) != 0:
-    discardProcess(child)
-    return -1
 
   if installExecImage(child, root, path, childBase, childStackTop, arg) != 0:
     discardProcess(child)

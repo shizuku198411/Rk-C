@@ -123,23 +123,21 @@ proc copyUserCString*(dst: pointer, src: U64, capacity: U64): int =
     return -1
 
   let outBuf = cast[ptr UncheckedArray[char]](dst)
-  let old = userAccessEnable()
   var i = U64(0)
   while i + 1 < capacity:
-    #if not validateUserRange(src + i, 1, false):
-    #  userAccessRestore(old)
-    #  return -1
     if src + i < src:
-      userAccessRestore(old)
+      return -1
+    if not validateUserRange(src + i, 1, false):
       return -1
 
+    let old = userAccessEnable()
     let ch = cast[ptr UncheckedArray[char]](src)[i]
+    userAccessRestore(old)
+
     outBuf[i] = ch
     if ch == '\0':
-      userAccessRestore(old)
       return int(i)
     inc i
 
   outBuf[i] = '\0'
-  userAccessRestore(old)
   -1
