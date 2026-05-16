@@ -3,7 +3,8 @@ import ../../lib/ipc/packet_data
 import ../lib/service_ready
 
 const
-  ProcessCap = 16
+  ProcessCap = int(SysProcessMaxSlots)
+  SendRetries = 64
 
 var
   requestPacket: SysIpcPacket
@@ -15,37 +16,52 @@ proc copyProcessToPacket(packet: ptr SysIpcPacket, entry: ptr SysProcessInfo) =
   discard copyToPacketData(packet, entry, U32(sizeof(SysProcessInfo)))
 
 
-proc sendListResponse(targetPid: I32, count: I32) =
+proc sendPacketWithRetry(targetPid: I32, packet: ptr SysIpcPacket): bool =
+  var tries = 0
+  while tries < SendRetries:
+    if sysIpcSendPacket(targetPid, packet) == 0:
+      discard sysYield()
+      return true
+
+    discard sysYield()
+    inc tries
+
+  false
+
+
+proc sendListResponse(targetPid: I32, count: I32): bool =
   replyPacket = SysIpcPacket()
   replyPacket.op = SysIpcOpProcListResponse
   replyPacket.arg0 = U64(count)
-  discard sysIpcSendPacket(targetPid, addr replyPacket)
+  sendPacketWithRetry(targetPid, addr replyPacket)
 
 
-proc sendProcessEntry(targetPid: I32, index: I32, count: I32) =
+proc sendProcessEntry(targetPid: I32, index: I32, count: I32): bool =
   replyPacket = SysIpcPacket()
   replyPacket.op = SysIpcOpProcListEntry
   replyPacket.arg0 = U64(index)
   replyPacket.arg1 = U64(count)
   copyProcessToPacket(addr replyPacket, addr processes[index])
-  discard sysIpcSendPacket(targetPid, addr replyPacket)
+  sendPacketWithRetry(targetPid, addr replyPacket)
 
 
-proc handleListRequest(senderPid: I32, maxEntries: I32) =
+proc handleListRequest(senderPid: I32, maxEntries: I32, flags: U64) =
   var limit = maxEntries
-  if limit <= 0 or limit > ProcessCap:
-    limit = ProcessCap
+  if limit <= 0 or limit > I32(ProcessCap):
+    limit = I32(ProcessCap)
 
-  let count = sysPs(addr processes[0], U64(limit))
+  let count = sysPs(addr processes[0], U64(limit), flags)
   if count < 0:
-    sendListResponse(senderPid, -1)
+    discard sendListResponse(senderPid, -1)
     return
 
-  sendListResponse(senderPid, count)
+  if not sendListResponse(senderPid, count):
+    return
 
   var i = I32(0)
   while i < count:
-    sendProcessEntry(senderPid, i, count)
+    if not sendProcessEntry(senderPid, i, count):
+      return
     inc i
 
 
@@ -53,7 +69,7 @@ proc sendKillResponse(targetPid: I32, result: I32) =
   replyPacket = SysIpcPacket()
   replyPacket.op = SysIpcOpProcKillResponse
   replyPacket.arg0 = U64(result)
-  discard sysIpcSendPacket(targetPid, addr replyPacket)
+  discard sendPacketWithRetry(targetPid, addr replyPacket)
 
 
 proc handleKillRequest(senderPid: I32, targetPid: I32) =
@@ -63,7 +79,7 @@ proc handleKillRequest(senderPid: I32, targetPid: I32) =
 
 proc handlePacket(packet: ptr SysIpcPacket) =
   if packet.op == SysIpcOpProcListRequest:
-    handleListRequest(packet.senderPid, I32(packet.arg0))
+    handleListRequest(packet.senderPid, I32(packet.arg0), packet.arg1)
     return
 
   if packet.op == SysIpcOpProcKillRequest:

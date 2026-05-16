@@ -7,7 +7,7 @@ import ../mm/memory
 import ../mm/paging
 
 const
-  MaxProcs* = 32
+  MaxProcs* = int(SysProcessMaxSlots)
   KernelStackPages* = U64(4)
 
 type

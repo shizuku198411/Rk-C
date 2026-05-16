@@ -91,7 +91,7 @@ alive.
 
 ## Boundaries and Notes
 
-- The process snapshot buffer is capped by `ProcessCap = 16`
+- The process snapshot buffer is capped by `SysProcessMaxSlots`
 - Ready timeout is controlled by `ServiceReadyTimeoutTicks`
 - Optional services are not automatically retried after entering degraded state
 - `startInitialService` currently starts `services[0]` through `services[3]`

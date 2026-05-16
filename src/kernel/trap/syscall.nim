@@ -25,7 +25,7 @@ proc handleSyscall*(frame: ptr TrapFrame) =
     frame.a0 = syscallReadFd(0, frame.a0, frame.a1)
 
   of SysPs:
-    frame.a0 = syscallPs(frame.a0, frame.a1)
+    frame.a0 = syscallPs(frame.a0, frame.a1, frame.a2)
 
   of SysTicks:
     frame.a0 = syscallTicks()

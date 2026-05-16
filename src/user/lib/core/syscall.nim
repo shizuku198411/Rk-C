@@ -46,8 +46,8 @@ proc sysRead*(buf: pointer, len: U64): U64 =
   rawSyscall3(SysRead, cast[U64](buf), len, 0)
 
 
-proc sysPs*(entries: ptr SysProcessInfo, maxEntries: U64): I32 =
-  I32(rawSyscall3(SysPs, cast[U64](entries), maxEntries, 0))
+proc sysPs*(entries: ptr SysProcessInfo, maxEntries: U64, flags: U64 = 0): I32 =
+  I32(rawSyscall3(SysPs, cast[U64](entries), maxEntries, flags))
 
 
 proc sysTicks*(): U64 =

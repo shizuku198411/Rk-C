@@ -4,7 +4,7 @@ import ../../lib/core/syscall
 import ../../../lib/service_catalog
 
 const
-  ProcessCap = 16
+  ProcessCap = int(SysProcessMaxSlots)
   MonitorSleepTicks = U64(10)
   ServiceReadyTimeoutTicks = U64(200)
 

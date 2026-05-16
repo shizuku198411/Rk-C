@@ -20,6 +20,7 @@ curl --help
 - Omits HTTP response headers by default
 - Prints headers when `-i` or `--include` is used
 - Prints TLS version and cipher when `-v` or `--tls-info` is used
+- Short options can be combined, for example `curl -vi https://example.com`
 
 ## Boundaries and Notes
 

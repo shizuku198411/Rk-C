@@ -3,7 +3,7 @@ import ../../lib/net/net_dns
 import ../../lib/net/net_http
 import ../../lib/net/ipaddr
 import ../../lib/core/args
-import ../../lib/core/strutils
+import ../../lib/core/options
 import ../../lib/core/syscall
 
 const
@@ -11,11 +11,17 @@ const
   ArgCap = 256
   HeaderSepLen = 4
 
+let optionSpecs = [
+  OptionSpec(short: 'v', long: cstring("tls-info")),
+  OptionSpec(short: 'i', long: cstring("include")),
+]
+
 var
   url: HttpUrl
   rxBuf: array[RxCap, U8]
   targetArg: array[ArgCap, char]
   parsedArgs: UserArgs
+  parsedOptions: ParsedOptions
 
 
 proc printUsage() =
@@ -50,28 +56,15 @@ proc parseCurlArgs(arg: cstring, verbose: var bool, includeHeaders: var bool,
   if not parseUserArgs(arg, parsedArgs):
     return false
 
-  var target: cstring = nil
-  var i = U32(0)
-  while i < parsedArgs.argc:
-    let item = argAt(parsedArgs, i)
-    if streq(item, "-v") or streq(item, "--tls-info"):
-      verbose = true
-    elif streq(item, "-i") or streq(item, "--include"):
-      includeHeaders = true
-    elif item[0] == '-':
-      return false
-    else:
-      if target != nil:
-        return false
-
-      target = item
-
-    inc i
-
-  if target == nil:
+  if not parseOptions(parsedArgs, optionSpecs, parsedOptions):
     return false
 
-  copyArg(outTarget, target)
+  if parsedOptions.help or parsedOptions.positionalCount != 1:
+    return false
+
+  verbose = hasOption(parsedOptions, 'v')
+  includeHeaders = hasOption(parsedOptions, 'i')
+  copyArg(outTarget, positionalAt(parsedOptions, 0))
 
 
 proc printTlsInfo(handle: I32) =
@@ -112,16 +105,14 @@ proc writeHttpChunk(buf: pointer, len: U32, includeHeaders: bool,
 
 
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
-  if parseUserArgs(arg, parsedArgs) and parsedArgs.argc == 1 and
-      streq(argAt(parsedArgs, 0), "--help"):
-    printUsage()
-    sysExit(0)
-
   var verbose = false
   var includeHeaders = false
   if not parseCurlArgs(arg, verbose, includeHeaders, targetArg):
     printUsage()
-    sysExit(1)
+    if parsedOptions.help:
+      sysExit(0)
+    else:
+      sysExit(1)
 
   if not parseHttpUrl(cast[cstring](addr targetArg[0]), url):
     printUsage()

@@ -284,6 +284,8 @@ proc printSyscallArgs(frame: ptr TrapFrame) =
     printNamedPtr("entries", frame.a0)
     print(", ")
     printNamedU64("max", frame.a1)
+    print(", ")
+    printNamedU64("flags", frame.a2)
   of SysTraps:
     printNamedPtr("out", frame.a0)
   of SysGetBitMap:

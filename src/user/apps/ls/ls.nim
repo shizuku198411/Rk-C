@@ -1,40 +1,36 @@
 import ../../lib/core/io
 import ../../lib/core/args
+import ../../lib/core/options
 import ../../lib/core/pathutils
-import ../../lib/core/strutils
 import ../../lib/core/syscall
 
 const
   LsMaxEntries = 32
 
-var parsedArgs: UserArgs
+let optionSpecs = [
+  OptionSpec(short: 'l', long: cstring(nil)),
+]
+
+var
+  parsedArgs: UserArgs
+  parsedOptions: ParsedOptions
 
 proc parseLsArgs(arg: cstring, longFormat: var bool): cstring =
   longFormat = false
   if not parseUserArgs(arg, parsedArgs):
     return nil
 
-  var path = resolvePath("")
-  var foundPath = false
-  var i = U32(0)
-  while i < parsedArgs.argc:
-    let item = argAt(parsedArgs, i)
-    if streq(item, "-l"):
-      longFormat = true
-    elif item[0] == '-':
-      return nil
-    else:
-      if foundPath:
-        return nil
+  if not parseOptions(parsedArgs, optionSpecs, parsedOptions):
+    return nil
 
-      path = resolvePath(item)
-      foundPath = true
-      if path == nil:
-        return nil
+  if parsedOptions.help or parsedOptions.positionalCount > 1:
+    return nil
 
-    inc i
+  longFormat = hasOption(parsedOptions, 'l')
+  if parsedOptions.positionalCount == 0:
+    return resolvePath("")
 
-  path
+  resolvePath(positionalAt(parsedOptions, 0))
 
 
 proc printLongEntry(entry: ptr DirEntry) =
@@ -79,16 +75,14 @@ proc printUsage() =
 
 
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
-  if parseUserArgs(arg, parsedArgs) and parsedArgs.argc == 1 and
-      streq(argAt(parsedArgs, 0), "--help"):
-    printUsage()
-    sysExit(0)
-
   var longFormat: bool
   let path = parseLsArgs(arg, longFormat)
   if path == nil:
     printUsage()
-    sysExit(1)
+    if parsedOptions.help:
+      sysExit(0)
+    else:
+      sysExit(1)
 
   var entries: array[LsMaxEntries, DirEntry]
   let count = sysLs(path, addr entries[0], U64(LsMaxEntries))

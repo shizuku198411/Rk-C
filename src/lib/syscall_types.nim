@@ -66,11 +66,13 @@ const
   SysFdKindConsole* = U32(4)
   SysFdKindPipe* = U32(5)
 
+  SysProcessMaxSlots* = U32(32)
   SysProcessUnused* = U32(0)
   SysProcessRunnable* = U32(1)
   SysProcessRunning* = U32(2)
   SysProcessSleeping* = U32(3)
   SysProcessZombie* = U32(4)
+  SysProcListAllSlots* = U64(1)
   SysExecNoProcess* = I32(-2)
 
 type

@@ -16,6 +16,7 @@ ls --help
 - Prints names in compact form by default
 - Prints one entry per line with size information when `-l` is used
 - Appends `/` to directory names
+- Uses the shared option parser for short options and `--help`
 
 ## Boundaries and Notes
 

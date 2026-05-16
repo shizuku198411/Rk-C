@@ -37,7 +37,7 @@ Process entries are copied into IPC packet data with `copyToPacketData`.
 
 ## Boundaries and Notes
 
-- The local process list buffer is capped by `ProcessCap = 16`
+- The local process list buffer is capped by `SysProcessMaxSlots`
 - `SysProcessInfo` is copied directly into IPC packet data, so ABI changes must
   stay in sync with clients
 - Permission checks and kill policy are delegated to the kernel

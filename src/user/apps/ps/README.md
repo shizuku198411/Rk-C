@@ -5,7 +5,7 @@
 ## Usage
 
 ```text
-ps
+ps [-f] [-e]
 ps --help
 ```
 
@@ -14,7 +14,12 @@ ps --help
 - Sends `SysIpcOpProcListRequest` to `procmgtd`
 - Receives the process count response
 - Receives one process entry packet per process
-- Prints PID, parent PID, process state, mode, and executable path
+- Without options, prints PID and executable path for the parent shell and
+  processes spawned from that shell
+- `-f` prints PID, parent PID, process state, mode, and executable path
+- `-e` lists every active process instead of only the parent shell subtree
+- `-f` and `-e` can be combined, for example `ps -ef`
+- Split options also work, for example `ps -e -f`
 
 ## Boundaries and Notes
 

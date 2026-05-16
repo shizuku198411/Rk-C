@@ -28,24 +28,30 @@ proc currentCanUseRawProcessOps(): bool =
   currentIsService(serviceManager) or currentIsService(serviceProcess)
 
 
-proc syscallPs*(outEntries: U64, maxEntries: U64): U64 =
+proc fillProcessInfo(entry: var SysProcessInfo, p: ptr Process) =
+  entry = SysProcessInfo()
+  entry.pid = p.pid
+  entry.ppid = p.parentPid
+  entry.state = processStateValue(p.state)
+  if p.user.active:
+    entry.isUser = 1
+  else:
+    entry.isUser = 0
+  discard copyCString(entry.exePath, p.exePath)
+
+
+proc syscallPs*(outEntries: U64, maxEntries: U64, flags: U64 = 0): U64 =
   if not currentCanUseRawProcessOps():
     return U64(-1'i64)
   if outEntries == 0 or maxEntries == 0:
     return U64(-1'i64)
 
+  let includeUnused = (flags and SysProcListAllSlots) != 0
   var count = U64(0)
   var i = 0
   while i < MaxProcs and count < maxEntries:
-    if procs[i].state != procUnused:
-      processEntries[count].pid = procs[i].pid
-      processEntries[count].ppid = procs[i].parentPid
-      processEntries[count].state = processStateValue(procs[i].state)
-      if procs[i].user.active:
-        processEntries[count].isUser = 1
-      else:
-        processEntries[count].isUser = 0
-      discard copyCString(processEntries[count].exePath, procs[i].exePath)
+    if includeUnused or procs[i].state != procUnused:
+      fillProcessInfo(processEntries[count], addr procs[i])
       inc count
     inc i
 
