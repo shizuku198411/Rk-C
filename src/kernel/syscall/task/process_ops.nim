@@ -162,6 +162,13 @@ proc syscallSetCwd*(pathVal: U64): U64 =
 
 proc syscallGetPid*(): U64 =
   if currentProc == nil:
-    panic("getpid without current process")
+    return U64(-1'i64)
   
   U64(currentProc.pid)
+
+
+proc syscallGetPpid*(): U64 =
+  if currentProc == nil:
+    return U64(-1'i64)
+
+  U64(currentProc.parentPid)

@@ -264,6 +264,10 @@ proc sysGetPid*(): I32 =
   I32(rawSyscall3(SysGetPid, 0, 0, 0))
 
 
+proc sysGetPpid*(): I32 =
+  I32(rawSyscall3(SysGetPpid, 0, 0, 0))
+
+
 proc sysRawNetInfo*(info: ptr SysNetDeviceInfo): I32 =
   I32(rawSyscall3(SysRawNetInfo, cast[U64](info), 0, 0))
 

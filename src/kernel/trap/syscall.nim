@@ -203,6 +203,9 @@ proc handleSyscall*(frame: ptr TrapFrame) =
 
   of SysEntropy:
     frame.a0 = syscallEntropy(frame.a0, frame.a1)
+  
+  of SysGetPpid:
+    frame.a0 = syscallGetPpid()
 
   else:
     frame.a0 = U64(-1'i64)

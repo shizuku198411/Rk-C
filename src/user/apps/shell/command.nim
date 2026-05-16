@@ -261,7 +261,7 @@ proc runRedirection*(line: cstring): bool =
 
   discard sysClose(outFd)
 
-  let pid = sysExec(buildBinPathInto(cstr(leftCmdBuf), leftPathBuf), cstr(leftArgBuf), true)
+  let pid = sysExec(buildBinPathInto(cstr(leftCmdBuf), leftPathBuf), cstr(leftArgBuf), background)
   restoreFd(savedStdout, 1)
   if pid < 0:
     write("command not found: ")
@@ -312,7 +312,7 @@ proc runPipeline*(line: cstring): bool =
 
   discard sysClose(fds[1])
 
-  let leftPid = sysExec(buildBinPathInto(cstr(leftCmdBuf), leftPathBuf), cstr(leftArgBuf), true)
+  let leftPid = sysExec(buildBinPathInto(cstr(leftCmdBuf), leftPathBuf), cstr(leftArgBuf), background)
   restoreFd(savedStdout, 1)
   if leftPid < 0:
     discard sysClose(fds[0])
@@ -337,7 +337,7 @@ proc runPipeline*(line: cstring): bool =
 
   discard sysClose(fds[0])
 
-  let rightPid = sysExec(buildBinPathInto(cstr(rightCmdBuf), rightPathBuf), cstr(rightArgBuf), true)
+  let rightPid = sysExec(buildBinPathInto(cstr(rightCmdBuf), rightPathBuf), cstr(rightArgBuf), background)
   restoreFd(savedStdin, 0)
   if rightPid < 0:
     discard sysWait(leftPid)

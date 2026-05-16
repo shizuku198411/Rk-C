@@ -63,3 +63,4 @@ const
   SysPipe* = U64(62)
   SysDup2* = U64(63)
   SysServiceReady* = U64(64)
+  SysGetPpid* = U64(65)

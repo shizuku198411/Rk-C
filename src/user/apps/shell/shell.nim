@@ -54,7 +54,11 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
       printHistory()
 
     elif streq(cstr(cmdBuf), "exit"):
+      if sysGetPpid() == 0:
+        write("if you want to leave Rk-C, use \"shutdown\".\n")
+        continue
       sysExit(0)
+      
 
     elif streq(cstr(cmdBuf), "shutdown"):
       saveHistory()
