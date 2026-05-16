@@ -50,8 +50,15 @@ trap_entry:
     csrr a0, sepc
     sd a0, 8 * 31(sp)
 
+    # save original sstatus before hardening handler state.
+    # this preserves SUM/SPIE/SPP for the interrupted context.
     csrr a0, sstatus
     sd a0, 8 * 32(sp)
+
+    # do not run kernel trap handler with SUM enabled.
+    #   SUM = 1 << 18 (0x40000)
+    li t0, 1 << 18
+    csrc sstatus, t0
 
     addi a0, sp, 8 * 34
     csrw sscratch, a0
