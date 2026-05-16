@@ -17,6 +17,11 @@ const
   PteA* = U64(1 shl 6)
   PteD* = U64(1 shl 7)
   SatpModeSv39* = U64(8) shl 60
+  
+  Sv39SignBit = U64(1) shl 38
+  Sv39LowTop = U64(1) shl 38
+  Sv39HighBase = not ((U64(1) shl 39) - U64(1))
+
 
 func sv39Vpn0(va: VAddr): U64 {.inline.} = (va shr 12) and VpnMask
 func sv39Vpn1(va: VAddr): U64 {.inline.} = (va shr 21) and VpnMask
@@ -25,6 +30,13 @@ func pteIsValid(pte: Pte): bool {.inline.} = (pte and PteV) != 0
 func pteIsLeaf(pte: Pte): bool {.inline.} = (pte and (PteR or PteW or PteX)) != 0
 func pteToPa(pte: Pte): PAddr {.inline.} = (pte shr 10) shl PageShift
 func paToPte(pa: PAddr): Pte {.inline.} = (pa shr PageShift) shl 10
+
+
+proc isSv39Canonical(va: VAddr): bool =
+  if (va and Sv39SignBit) == U64(0):
+    return va < Sv39LowTop
+
+  (va and Sv39HighBase) == Sv39HighBase
 
 
 proc allocPageTable*(): PageTable =
@@ -38,6 +50,9 @@ proc walkPageTable*(root: PageTable, va: VAddr, create: bool): ptr Pte =
   let indexes = [sv39Vpn0(va), sv39Vpn1(va), sv39Vpn2(va)]
   var table = root
   var level = 2
+
+  if not isSv39Canonical(va):
+    return nil
 
   while level > 0:
     let entry = addr table[indexes[level]]
