@@ -2,7 +2,6 @@ import ../../lib/fixed_string
 import ../../lib/mem
 import ../../lib/types
 import ../dev/console
-import ../fs/fs
 import ../mm/memory
 import ../mm/paging
 import ../task/process
@@ -13,8 +12,6 @@ const
   ShellStackTop* = VAddr(0x01100000)
   AppBase* = VAddr(0x01200000)
   AppStackTop* = VAddr(0x01300000)
-  UserImageMaxPages = U64(64)
-  UserImageMaxSize = UserImageMaxPages * PageSize
   UserStackPages = U64(4)
   UserArgMax = U64(128)
 
@@ -122,24 +119,6 @@ proc cloneParentUserMemory(childRoot: PageTable, parent: ptr Process, childBase,
   0
 
 
-proc replaceUserImage(root: PageTable, path: cstring, base: VAddr, imagePages: var U64): int =
-  let imagePa = palloc(UserImageMaxPages)
-  if imagePa == NilPAddr:
-    panic("failed to allocate user image")
-
-  let loaded = fsReadFile(path, cast[pointer](imagePa), UserImageMaxSize)
-  if loaded <= 0:
-    discard pfree(imagePa, UserImageMaxPages)
-    return -1
-
-  imagePages = UserImageMaxPages
-
-  if mapRangeReplaceFree(root, base, imagePa, imagePages * PageSize, PteU or PteR or PteW or PteX) != 0:
-    panic("failed to map user image")
-
-  0
-
-
 proc replaceUserStack(root: PageTable, stackTop: VAddr, arg: cstring, userSp, argVa: var VAddr): int =
   let stackPa = palloc(UserStackPages)
   if stackPa == NilPAddr:
@@ -167,16 +146,12 @@ proc installExecImage(p: ptr Process, root: PageTable, path: cstring, base, stac
   if loadRkxImage(root, path, base, imagePages, entryVa) != 0:
     return -1
 
-  #if replaceUserImage(root, path, base, imagePages) != 0:
-  #  return -1
-
   var userSp = VAddr(0)
   var argVa = VAddr(0)
   if replaceUserStack(root, stackTop, arg, userSp, argVa) != 0:
     return -1
 
   flushTlb()
-  #configureUserProcess(p, root, path, base, base, stackTop, userSp, imagePages, UserStackPages, argVa, 0)
   configureUserProcess(p, root, path, base, entryVa, stackTop, userSp, imagePages, UserStackPages, argVa, 0)
   0
 
