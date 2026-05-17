@@ -6,6 +6,7 @@ import ../../fs/fs
 import ../../lib/syscall_out
 import ../../mm/usercopy
 import ../../service/registry
+import ../../dev/timer
 import ../../task/exec
 import ../../task/process
 
@@ -34,6 +35,19 @@ proc fillProcessInfo(entry: var SysProcessInfo, p: ptr Process) =
   entry.pid = p.pid
   entry.ppid = p.parentPid
   entry.state = processStateValue(p.state)
+  entry.cpuTicks = p.cpuTicks
+  entry.memoryPages =
+    if p.user.active:
+      p.user.imagePages + p.user.stackPages + KernelStackPages
+    elif p.kernelStack != NilPAddr:
+      KernelStackPages
+    else:
+      U64(0)
+  entry.cpuPercent =
+    if timerTickCount == 0:
+      U32(0)
+    else:
+      U32((p.cpuTicks * U64(100)) div timerTickCount)
   if p.user.active:
     entry.isUser = 1
   else:

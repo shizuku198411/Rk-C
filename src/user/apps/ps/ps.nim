@@ -12,6 +12,7 @@ const
 let optionSpecs = [
   OptionSpec(short: 'f', long: cstring(nil)),
   OptionSpec(short: 'e', long: cstring(nil)),
+  OptionSpec(short: 'l', long: cstring(nil)),
 ]
 
 var
@@ -50,9 +51,19 @@ proc printPid(pid: I32) =
     writeUnsigned(U64(pid))
 
 
-proc printProcess(entry: ptr SysProcessInfo, full: bool) =
+proc printCpuPercent(value: U32) =
+  writeUnsigned(U64(value))
+  write("%")
+
+
+proc printMemoryPages(value: U64) =
+  writeUnsigned(value)
+  write("p")
+
+
+proc printProcess(entry: ptr SysProcessInfo, full, longFormat: bool) =
   printPid(entry.pid)
-  if not full:
+  if not full and not longFormat:
     write("\t")
     write(cast[cstring](addr entry.exePath[0]))
     write("\n")
@@ -64,6 +75,11 @@ proc printProcess(entry: ptr SysProcessInfo, full: bool) =
   write(stateName(entry.state))
   write("\t")
   write(modeName(entry.isUser))
+  if longFormat:
+    write("\t")
+    printCpuPercent(entry.cpuPercent)
+    write("\t")
+    printMemoryPages(entry.memoryPages)
   write("\t")
   write(cast[cstring](addr entry.exePath[0]))
   write("\n")
@@ -131,22 +147,25 @@ proc shouldPrintProcess(entry: ptr SysProcessInfo, count: I32, fullList: bool): 
   entry.pid == rootPid or isDescendantOf(entry.pid, rootPid, count)
 
 
-proc printHeader(full: bool) =
-  if full:
-    write("pid\tppid\tstate\t\tmode\texe\n")
+proc printHeader(full, longFormat: bool) =
+  if full or longFormat:
+    write("pid\tppid\tstate\t\tmode")
+    if longFormat:
+      write("\tcpu\tmem")
+    write("\texe\n")
   else:
     write("pid\texe\n")
 
 
-proc printProcesses(count: I32, full, every: bool) =
+proc printProcesses(count: I32, full, every, longFormat: bool) =
   if not every:
     sortProcessByPid(entries, count)
 
-  printHeader(full)
+  printHeader(full, longFormat)
   var i = I32(0)
   while i < count:
     if shouldPrintProcess(addr entries[i], count, every):
-      printProcess(addr entries[i], full)
+      printProcess(addr entries[i], full, longFormat)
     inc i
 
 
@@ -188,9 +207,10 @@ proc requestProcessList(maxEntries: I32, flags: U64): I32 =
 
 
 proc printUsage() =
-  write("usage: ps [-f] [-e]\n")
+  write("usage: ps [-f] [-e] [-l]\n")
   write("  -f    show pid, ppid, state, mode, and exe\n")
   write("  -e    show all process slots\n")
+  write("  -l    show cpu and memory usage\n")
 
 
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
@@ -212,12 +232,13 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
 
   let full = hasOption(parsedOptions, 'f')
   let every = hasOption(parsedOptions, 'e')
+  let longFormat = hasOption(parsedOptions, 'l')
 
   let count = requestProcessList(I32(PsMaxEntries), U64(0))
   if count < 0:
     write("ps: failed\n")
     sysExit(1)
 
-  printProcesses(count, full, every)
+  printProcesses(count, full, every, longFormat)
 
   sysExit(0)

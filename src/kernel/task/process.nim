@@ -104,6 +104,7 @@ type
     wait*: WaitTarget
     detached*: bool
     exitStatus*: U64
+    cpuTicks*: U64
     ipc*: IpcState
     files*: FileState
 
@@ -370,6 +371,15 @@ proc hasFreeProcessSlot*(): bool =
   findUnusedProc() != nil
 
 
+proc currentIsIdleProcess*(): bool =
+  currentProc != nil and currentProc == idleProc
+
+
+proc countCurrentProcessCpuTick*() =
+  if currentProc != nil:
+    inc currentProc.cpuTicks
+
+
 proc idleTask() {.cdecl.} =
   while true:
     maybeYieldOnResched()
@@ -572,6 +582,7 @@ proc discardProcess*(p: ptr Process) =
   clearWait(p)
   p.detached = false
   p.exitStatus = 0
+  p.cpuTicks = 0
   clearIpcQueue(p)
   clearFileState(p)
 

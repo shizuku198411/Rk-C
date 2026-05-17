@@ -39,6 +39,36 @@ proc syscallTicks*(): U64 =
   timerTickCount
 
 
+proc syscallCpuInfo*(outInfo: U64): U64 =
+  if outInfo == 0:
+    return U64(-1'i64)
+
+  let total = timerTickCount
+  let idle = idleTickCount
+  let busy =
+    if total >= idle:
+      total - idle
+    else:
+      U64(0)
+  let usage =
+    if total == 0:
+      U32(0)
+    else:
+      U32((busy * U64(100)) div total)
+
+  var info = SysCpuInfo(
+    totalTicks: total,
+    idleTicks: idle,
+    busyTicks: busy,
+    usagePercent: usage,
+  )
+
+  if copyToUser(outInfo, addr info, U64(sizeof(SysCpuInfo))) != 0:
+    return U64(-1'i64)
+
+  0
+
+
 proc syscallShutdown*(): U64 =
   sbiShutdown()
   0

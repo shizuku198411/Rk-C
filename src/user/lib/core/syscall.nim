@@ -54,6 +54,10 @@ proc sysTicks*(): U64 =
   rawSyscall3(SysTicks, 0, 0, 0)
 
 
+proc sysCpuInfo*(info: ptr SysCpuInfo): I32 =
+  I32(rawSyscall3(SysCpuInfo, cast[U64](info), 0, 0))
+
+
 proc sysTraps*(entries: ptr SysTrapCount): U64 =
   rawSyscall3(SysTraps, cast[U64](entries), 0, 0)
 

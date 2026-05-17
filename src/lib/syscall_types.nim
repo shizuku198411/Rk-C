@@ -89,6 +89,9 @@ type
     ppid*: I32
     state*: U32
     isUser*: U32
+    cpuTicks*: U64
+    memoryPages*: U64
+    cpuPercent*: U32
     exePath*: array[SysProcessNameMax, char]
 
   SysDateTime* {.packed.} = object
@@ -119,6 +122,12 @@ type
     total*: U64
     used*: U64
     free*: U64
+
+  SysCpuInfo* {.packed.} = object
+    totalTicks*: U64
+    idleTicks*: U64
+    busyTicks*: U64
+    usagePercent*: U32
 
   SysNetDeviceInfo* {.packed.} = object
     found*: U32

@@ -79,28 +79,19 @@ proc writeDirEntry(entry: ptr DirEntry, name: cstring, typ: U32) =
   entry.name[i] = '\0'
 
 
-proc writeDirName(entry: ptr DirEntry, name: cstring) =
-  writeDirEntry(entry, name, DirEntryTypeFile)
-
-
 proc handleProcLs() =
-  let maxEntries = req.capacity div U64(sizeof(DirEntry))
-  var count = 0.U64
-  let outBuf = cast[ptr UncheckedArray[DirEntry]](addr resp.data[0])
+  let count = requestProcFs(SysIpcOpProcFsLsRequest, reqPath(), req.capacity)
+  if count < 0:
+    resp.result = -1
+    return
 
-  template add(name: cstring) =
-    if count < maxEntries:
-      writeDirName(addr outBuf[count], name)
-      count += 1.U64
+  resp.result = count
+  resp.size = procResp.len
 
-  add(cstring"uptime")
-  add(cstring"meminfo")
-  add(cstring"processes")
-  add(cstring"services")
-  add(cstring"traps")
-
-  resp.result = I32(count)
-  resp.size = count * U64(sizeof(DirEntry))
+  var i = U32(0)
+  while i < procResp.len and i < SysFsDataMax:
+    resp.data[i] = U8(procResp.data[i])
+    inc i
 
 
 proc handleLs() =

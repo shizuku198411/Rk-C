@@ -5,7 +5,7 @@
 ## Usage
 
 ```text
-ps [-f] [-e]
+ps [-f] [-e] [-l]
 ps --help
 ```
 
@@ -18,6 +18,7 @@ ps --help
   processes spawned from that shell
 - `-f` prints PID, parent PID, process state, mode, and executable path
 - `-e` lists every active process instead of only the parent shell subtree
+- `-l` adds CPU percentage and memory page count columns
 - `-f` and `-e` can be combined, for example `ps -ef`
 - Split options also work, for example `ps -e -f`
 

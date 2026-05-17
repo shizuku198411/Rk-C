@@ -4,7 +4,9 @@ import ../../lib/types
 const
   TimerInterval* = U64(200000)
 
-var timerTickCount* {.volatile.}: U64
+var
+  timerTickCount* {.volatile.}: U64
+  idleTickCount* {.volatile.}: U64
 
 
 proc setNextTimer*() =
@@ -14,3 +16,7 @@ proc setNextTimer*() =
 
 proc countUpTimerTick*() =
   inc timerTickCount
+
+
+proc countUpIdleTick*() =
+  inc idleTickCount

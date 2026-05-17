@@ -29,6 +29,9 @@ proc handleSyscall*(frame: ptr TrapFrame) =
 
   of SysTicks:
     frame.a0 = syscallTicks()
+
+  of SysCpuInfo:
+    frame.a0 = syscallCpuInfo(frame.a0)
   
   of SysTraps:
     frame.a0 = syscallTrapCount(frame.a0)

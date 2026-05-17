@@ -127,6 +127,9 @@ proc trapHandler*(frame: ptr TrapFrame) {.exportc: "trap_handler", cdecl.} =
   of ScauseSupervisorTimer:
     inc trapCount.supervisorTimer
     countUpTimerTick()
+    countCurrentProcessCpuTick()
+    if currentIsIdleProcess():
+      countUpIdleTick()
     wakeTimerWaiters(timerTickCount)
 
     if pollInput():
