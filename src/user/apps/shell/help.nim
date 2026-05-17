@@ -21,6 +21,7 @@ proc printHelp*() =
   write("  curl\n")
   write("  tcpcheck\n")
   write("  stracectl\n")
+  write("  dmesg\n")
   write("  ticks\n")
   write("  traps\n")
   write("  bitmap\n")

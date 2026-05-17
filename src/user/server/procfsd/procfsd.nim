@@ -6,7 +6,7 @@ import ../lib/service_ready
 
 const
   ProcFsBufSize = U32(SysIpcMessageMax)
-  ProcFsEntryCount = 6
+  ProcFsEntryCount = 7
   ProcFsPageSize = U64(4096)
   ProcFsTickMillis = U64(20)
 
@@ -18,6 +18,7 @@ let procEntries = [
   cstring("processes"),
   cstring("services"),
   cstring("traps"),
+  cstring("kmsg"),
 ]
 
 var
@@ -533,6 +534,21 @@ proc renderTraps(): U32 =
   pos
 
 
+proc renderKmsg(): U32 =
+  clearOut()
+  let capacity = U64(ProcFsBufSize - U32(1))
+  let n = sysKmsg(addr outBuf[0], capacity)
+  if n < 0:
+    var pos = U32(0)
+    appendStr(pos, cstring("error\n"))
+    return pos
+
+  if U32(n) < ProcFsBufSize:
+    outBuf[U32(n)] = '\0'
+
+  U32(n)
+
+
 proc procLsEntryLimit(): U32 =
   var capacity = packet.arg0
   if capacity > U64(SysIpcMessageMax):
@@ -629,6 +645,9 @@ proc renderRead(path: cstring): U32 =
 
   if streq(path, cstring"/proc/traps"):
     return renderTraps()
+
+  if streq(path, cstring"/proc/kmsg"):
+    return renderKmsg()
 
   clearOut()
   U32(0)

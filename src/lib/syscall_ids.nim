@@ -65,3 +65,4 @@ const
   SysServiceReady* = U64(64)
   SysGetPpid* = U64(65)
   SysCpuInfo* = U64(66)
+  SysKmsg* = U64(67)

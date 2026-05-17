@@ -158,7 +158,7 @@ def prepare_test_disk(test_disk: Path, base_disk: Path, no_build: bool) -> None:
 
 def base_tests() -> list[TestCase]:
     tests = [
-        TestCase("shell help", "help", ["available commands:", "curl", "stracectl"]),
+        TestCase("shell help", "help", ["available commands:", "curl", "stracectl", "dmesg"]),
         TestCase("shell ticks", "ticks", regex=[r"\d+"]),
         TestCase("shell traps", "traps", ["trap count:", "supervisor timer"]),
         TestCase("shell bitmap", "bitmap", ["bitmap:", "free"]),
@@ -184,13 +184,14 @@ def base_tests() -> list[TestCase]:
         "tcpcheck": "usage: tcpcheck",
         "curl": "usage: curl",
         "stracectl": "usage:",
+        "dmesg": "usage: dmesg",
     }
     for app, expected in help_cases.items():
         tests.append(TestCase(f"{app} --help", f"{app} --help", [expected]))
 
     tests.extend(
         [
-            TestCase("ls /bin", "ls /bin", ["shell", "svcmgtd", "curl"]),
+            TestCase("ls /bin", "ls /bin", ["shell", "svcmgtd", "curl", "dmesg"]),
             TestCase("ls -l /bin", "ls -l /bin", ["shell", "bytes"]),
             TestCase("mkdir /tmp/appsmoke", "mkdir /tmp/appsmoke", []),
             TestCase("ls /tmp after mkdir", "ls /tmp", ["appsmoke/"]),
@@ -205,7 +206,9 @@ def base_tests() -> list[TestCase]:
             TestCase("ps -l", "ps -l", ["pid", "ppid", "cpu", "mem", "shell"]),
             TestCase("ps -ef", "ps -ef", ["pid", "ppid", "state", "mode", "svcmgtd"]),
             TestCase("ps -e -f", "ps -e -f", ["pid", "ppid", "state", "mode", "svcmgtd"]),
-            TestCase("ls /proc", "ls /proc", ["uptime", "cpuinfo"], regex=[r"\d+/"]),
+            TestCase("ls /proc", "ls /proc", ["uptime", "cpuinfo", "kmsg"], regex=[r"\d+/"]),
+            TestCase("dmesg", "dmesg", ["[boot]", "set trap vector"]),
+            TestCase("cat /proc/kmsg", "cat /proc/kmsg", ["[boot]"]),
             TestCase("cat /proc/uptime", "cat /proc/uptime", ["ticks:"], regex=[r"uptime: \d{2}:\d{2}:\d{2}"]),
             TestCase("ls /proc/1", "ls /proc/1", ["status", "rkx_map"]),
             TestCase("cat /proc/1/status", "cat /proc/1/status", ["pid: 1", "cpu:", "mem:", "exe: init"]),

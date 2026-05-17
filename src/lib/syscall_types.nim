@@ -10,6 +10,7 @@ const
   SysBlockDataSize* = 512
   SysNetMacLen* = 6
   SysNetPacketMax* = 1514
+  SysKmsgMax* = U32(16384)
 
   SysFsOpLs* = U32(1)
   SysFsOpMkdir* = U32(2)

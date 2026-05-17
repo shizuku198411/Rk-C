@@ -52,6 +52,8 @@ elif defined(userApp_netd):
   import server/netd/netd
 elif defined(userApp_stracectl):
   import apps/stracectl/stracectl
+elif defined(userApp_dmesg):
+  import apps/dmesg/dmesg
 elif defined(userApp_faultcheck):
   import apps/faultcheck/faultcheck
 else:

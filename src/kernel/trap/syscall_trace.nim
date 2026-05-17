@@ -24,6 +24,7 @@ proc syscallName*(num: U64): cstring =
   of SysPs: cstring("ps")
   of SysTicks: cstring("ticks")
   of SysCpuInfo: cstring("cpu_info")
+  of SysKmsg: cstring("kmsg")
   of SysExit: cstring("exit")
   of SysLs: cstring("ls")
   of SysTraps: cstring("traps")
@@ -345,6 +346,10 @@ proc printSyscallArgs(frame: ptr TrapFrame) =
     printNamedU64("ticks", frame.a0)
   of SysCpuInfo:
     printNamedPtr("info", frame.a0)
+  of SysKmsg:
+    printNamedPtr("buf", frame.a0)
+    print(", ")
+    printNamedU64("capacity", frame.a1)
   of SysRawNetMac:
     printNamedPtr("mac", frame.a0)
   of SysRawNetRecv:

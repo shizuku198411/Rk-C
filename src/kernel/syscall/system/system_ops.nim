@@ -4,6 +4,7 @@ import ../../../lib/syscall_types
 import ../../../lib/types
 import ../../dev/rtc
 import ../../dev/timer
+import ../../dev/klog
 import ../../mm/usercopy
 import ../../task/process
 
@@ -13,6 +14,7 @@ const
 
 var
   entropyState {.volatile.}: U64 = U64(0x726b635f656e7472'u64)
+  kmsgReadBuf: array[SysKmsgMax, char]
 
 
 proc sbiShutdown() {.importc: "sbi_shutdown", cdecl.}
@@ -81,6 +83,20 @@ proc syscallCpuInfo*(outInfo: U64): U64 =
     return U64(-1'i64)
 
   0
+
+
+proc syscallKmsg*(outBuf, capacity: U64): U64 =
+  if outBuf == U64(0) or capacity == U64(0) or capacity > U64(SysKmsgMax):
+    return U64(-1'i64)
+
+  let size = readKlog(cast[ptr UncheckedArray[char]](addr kmsgReadBuf[0]), capacity)
+  if size == U64(0):
+    return U64(0)
+
+  if copyToUser(outBuf, addr kmsgReadBuf[0], size) != 0:
+    return U64(-1'i64)
+
+  size
 
 
 proc syscallShutdown*(): U64 =

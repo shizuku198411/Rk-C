@@ -1,5 +1,6 @@
 import ../../arch/riscv64/arch
 import ../../lib/types
+import ./klog
 
 const
   Uart0Base = U64(0x10000000)
@@ -65,6 +66,11 @@ proc putChar*(ch: char) =
   sbiPutchar(ch)
 
 
+proc printChar(ch: char) =
+  pushKlogChar(ch)
+  putChar(ch)
+
+
 proc tryGetChar*(): int =
   let buffered = popInput()
   if buffered >= 0:
@@ -93,12 +99,28 @@ proc print*(s: cstring) =
 
   var i = 0
   while s[i] != '\0':
-    putChar(s[i])
+    printChar(s[i])
     inc i
 
 
 proc println*(s: cstring) =
   print(s)
+  printChar('\n')
+
+
+proc printConsoleOnly*(s: cstring) =
+  if s == nil:
+    printConsoleOnly("(null)")
+    return
+
+  var i = 0
+  while s[i] != '\0':
+    putChar(s[i])
+    inc i
+
+
+proc printlnConsoleOnly*(s: cstring) =
+  printConsoleOnly(s)
   putChar('\n')
 
 
@@ -113,7 +135,7 @@ proc printUnsigned*(value: U64) =
   var v = value
 
   if v == 0:
-    putChar('0')
+    printChar('0')
     return
 
   while v > 0:
@@ -123,12 +145,12 @@ proc printUnsigned*(value: U64) =
 
   while i > 0:
     dec i
-    putChar(digits[i])
+    printChar(digits[i])
 
 
 proc printSigned*(value: int64) =
   if value < 0:
-    putChar('-')
+    printChar('-')
     printUnsigned(U64(-value))
   else:
     printUnsigned(U64(value))
@@ -141,7 +163,7 @@ proc printHex*(value: U64) =
   var v = value
 
   if v == 0:
-    putChar('0')
+    printChar('0')
     return
 
   while v > 0:
@@ -151,7 +173,7 @@ proc printHex*(value: U64) =
 
   while i > 0:
     dec i
-    putChar(digits[i])
+    printChar(digits[i])
 
 
 proc printPtr*(value: U64) =
