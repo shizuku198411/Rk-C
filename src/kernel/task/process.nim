@@ -377,6 +377,20 @@ proc idleTask() {.cdecl.} =
     arch.wfi()
 
 
+proc assignPid(): I32 =
+  var i = 0
+  while i < MaxProcs:
+    if procs[i].state == procUnused:
+      inc i
+      continue
+    if procs[i].pid == nextPid:
+      inc nextPid
+      i = 0
+      continue
+    inc i
+  nextPid
+
+
 proc createKernelProcessInternal(entry: KernelTask, isIdle: bool, name: cstring): int32 =
   let p = findUnusedProc()
   if p == nil or entry == nil:
@@ -386,7 +400,7 @@ proc createKernelProcessInternal(entry: KernelTask, isIdle: bool, name: cstring)
   if stack == NilPAddr:
     return -1
 
-  p.pid = nextPid
+  p.pid = assignPid()
   inc nextPid
   p.parentPid = 0
   setExePath(p, name)
