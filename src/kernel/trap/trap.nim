@@ -130,6 +130,9 @@ proc trapHandler*(frame: ptr TrapFrame) {.exportc: "trap_handler", cdecl.} =
     countCurrentProcessCpuTick()
     if currentIsIdleProcess():
       countUpIdleTick()
+    if cpuWindowReady():
+      snapshotProcessCpuWindow(cpuWindowTickCount)
+      snapshotCpuWindow()
     wakeTimerWaiters(timerTickCount)
 
     if pollInput():

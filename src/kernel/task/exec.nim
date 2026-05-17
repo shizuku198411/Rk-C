@@ -1,4 +1,5 @@
 import ../../lib/fixed_string
+import ../../lib/rkx
 import ../../lib/syscall_types
 import ../../lib/types
 import ../dev/console
@@ -79,8 +80,9 @@ proc installExecImage(p: ptr Process, root: PageTable, path: cstring, base, stac
   var
     imagePages = U64(0)
     entryVa = VAddr(0)
+    rkxHeader = RkxHeader()
   
-  if loadRkxImage(root, path, base, imagePages, entryVa) != 0:
+  if loadRkxImage(root, path, base, imagePages, entryVa, addr rkxHeader) != 0:
     return -1
 
   var userSp = VAddr(0)
@@ -90,6 +92,17 @@ proc installExecImage(p: ptr Process, root: PageTable, path: cstring, base, stac
 
   flushTlb()
   configureUserProcess(p, root, path, base, entryVa, stackTop, userSp, imagePages, UserStackPages, argVa, 0)
+  setUserRkxMap(
+    p,
+    rkxHeader.textVa,
+    rkxHeader.textMemSize,
+    rkxHeader.rodataVa,
+    rkxHeader.rodataMemSize,
+    rkxHeader.dataVa,
+    rkxHeader.dataMemSize,
+    rkxHeader.bssVa,
+    rkxHeader.bssMemSize,
+  )
   0
 
 

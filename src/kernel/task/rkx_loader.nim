@@ -319,7 +319,8 @@ proc loadRkxImage*(
   path: cstring,
   expectedBase: VAddr,
   imagePages: var U64,
-  entryVa: var VAddr
+  entryVa: var VAddr,
+  outHeader: ptr RkxHeader = nil
 ): int =
   if root == nil or path == nil:
     return -1
@@ -405,6 +406,8 @@ proc loadRkxImage*(
     return -1
 
   entryVa = hdr.entryVa
+  if outHeader != nil:
+    outHeader[] = hdr[]
 
   discard pfree(imagePa, RkxImageMaxPages)
   flushTlb()

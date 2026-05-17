@@ -6,7 +6,6 @@ import ../../fs/fs
 import ../../lib/syscall_out
 import ../../mm/usercopy
 import ../../service/registry
-import ../../dev/timer
 import ../../task/exec
 import ../../task/process
 
@@ -43,11 +42,17 @@ proc fillProcessInfo(entry: var SysProcessInfo, p: ptr Process) =
       KernelStackPages
     else:
       U64(0)
-  entry.cpuPercent =
-    if timerTickCount == 0:
-      U32(0)
-    else:
-      U32((p.cpuTicks * U64(100)) div timerTickCount)
+  entry.cpuPercent = p.cpuPercent
+  entry.textVa = p.user.textVa
+  entry.textMemSize = p.user.textMemSize
+  entry.rodataVa = p.user.rodataVa
+  entry.rodataMemSize = p.user.rodataMemSize
+  entry.dataVa = p.user.dataVa
+  entry.dataMemSize = p.user.dataMemSize
+  entry.bssVa = p.user.bssVa
+  entry.bssMemSize = p.user.bssMemSize
+  entry.stackTop = p.user.stackTop
+  entry.stackPages = p.user.stackPages
   if p.user.active:
     entry.isUser = 1
   else:

@@ -1,4 +1,5 @@
 import ../../arch/riscv64/arch
+import ../../lib/calc
 import ../../lib/fixed_string
 import ../../lib/syscall_types
 import ../../lib/types
@@ -47,6 +48,14 @@ type
     sp*: VAddr
     imagePages*: U64
     stackPages*: U64
+    textVa*: VAddr
+    textMemSize*: U64
+    rodataVa*: VAddr
+    rodataMemSize*: U64
+    dataVa*: VAddr
+    dataMemSize*: U64
+    bssVa*: VAddr
+    bssMemSize*: U64
     arg0*: U64
     arg1*: U64
 
@@ -105,6 +114,8 @@ type
     detached*: bool
     exitStatus*: U64
     cpuTicks*: U64
+    cpuWindowTicks*: U64
+    cpuPercent*: U32
     ipc*: IpcState
     files*: FileState
 
@@ -377,7 +388,21 @@ proc currentIsIdleProcess*(): bool =
 
 proc countCurrentProcessCpuTick*() =
   if currentProc != nil:
-    inc currentProc.cpuTicks
+    saturatingIncU64(currentProc.cpuTicks)
+    saturatingIncU64(currentProc.cpuWindowTicks)
+
+
+proc snapshotProcessCpuWindow*(windowTicks: U64) =
+  var i = 0
+  while i < MaxProcs:
+    if procs[i].state != procUnused:
+      procs[i].cpuPercent =
+        if windowTicks == U64(0):
+          U32(0)
+        else:
+          U32((procs[i].cpuWindowTicks * U64(100)) div windowTicks)
+      procs[i].cpuWindowTicks = U64(0)
+    inc i
 
 
 proc idleTask() {.cdecl.} =
@@ -544,6 +569,21 @@ proc configureUserProcess*(p: ptr Process, root: PageTable, path: cstring,
   p.state = procRunnable
 
 
+proc setUserRkxMap*(p: ptr Process, textVa, textMemSize, rodataVa, rodataMemSize,
+                    dataVa, dataMemSize, bssVa, bssMemSize: U64) =
+  if p == nil:
+    return
+
+  p.user.textVa = textVa
+  p.user.textMemSize = textMemSize
+  p.user.rodataVa = rodataVa
+  p.user.rodataMemSize = rodataMemSize
+  p.user.dataVa = dataVa
+  p.user.dataMemSize = dataMemSize
+  p.user.bssVa = bssVa
+  p.user.bssMemSize = bssMemSize
+
+
 proc releaseUserAddressSpace(p: ptr Process) =
   if p.rootPageTable == nil or p.rootPageTable == kernelPageTable:
     return
@@ -583,6 +623,8 @@ proc discardProcess*(p: ptr Process) =
   p.detached = false
   p.exitStatus = 0
   p.cpuTicks = 0
+  p.cpuWindowTicks = 0
+  p.cpuPercent = 0
   clearIpcQueue(p)
   clearFileState(p)
 

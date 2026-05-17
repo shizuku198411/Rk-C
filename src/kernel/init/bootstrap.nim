@@ -1,4 +1,5 @@
 import ../../arch/riscv64/arch
+import ../../lib/calc
 import ../../lib/mem
 import ../../lib/types
 import ../dev/console
@@ -74,7 +75,7 @@ proc kernelBanner() =
 
 
 proc waitForInitialServices() =
-  let deadline = timerTickCount + ServiceWaitTimeoutTicks
+  let deadline = saturatingAddU64(timerTickCount, ServiceWaitTimeoutTicks)
 
   while not allServicesReady():
     if timerTickCount >= deadline:
@@ -85,7 +86,7 @@ proc waitForInitialServices() =
       printBootMsg("  optional service wait timeout; degraded boot\n")
       return
 
-    sleepCurrentUntilTick(timerTickCount + 1)
+    sleepCurrentUntilTick(saturatingAddU64(timerTickCount, U64(1)))
 
 
 proc bootTask() {.cdecl.} =

@@ -92,6 +92,16 @@ type
     cpuTicks*: U64
     memoryPages*: U64
     cpuPercent*: U32
+    textVa*: U64
+    textMemSize*: U64
+    rodataVa*: U64
+    rodataMemSize*: U64
+    dataVa*: U64
+    dataMemSize*: U64
+    bssVa*: U64
+    bssMemSize*: U64
+    stackTop*: U64
+    stackPages*: U64
     exePath*: array[SysProcessNameMax, char]
 
   SysDateTime* {.packed.} = object
@@ -125,6 +135,7 @@ type
 
   SysCpuInfo* {.packed.} = object
     totalTicks*: U64
+    windowTicks*: U64
     idleTicks*: U64
     busyTicks*: U64
     usagePercent*: U32

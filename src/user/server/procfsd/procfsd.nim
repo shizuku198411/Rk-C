@@ -7,6 +7,8 @@ import ../lib/service_ready
 const
   ProcFsBufSize = U32(SysIpcMessageMax)
   ProcFsEntryCount = 6
+  ProcFsPageSize = U64(4096)
+  ProcFsTickMillis = U64(20)
 
 
 let procEntries = [
@@ -88,6 +90,55 @@ proc appendPages(pos: var U32, value: U64) =
   appendChar(pos, 'p')
 
 
+proc appendTwoDigits(pos: var U32, value: U64) =
+  appendChar(pos, char(ord('0') + int((value div U64(10)) mod U64(10))))
+  appendChar(pos, char(ord('0') + int(value mod U64(10))))
+
+
+proc appendDuration(pos: var U32, ticks: U64) =
+  let ticksPerSecond = U64(1000) div ProcFsTickMillis
+  let totalSeconds = ticks div ticksPerSecond
+  let hours = totalSeconds div U64(3600)
+  let minutes = (totalSeconds div U64(60)) mod U64(60)
+  let seconds = totalSeconds mod U64(60)
+
+  appendTwoDigits(pos, hours)
+  appendChar(pos, ':')
+  appendTwoDigits(pos, minutes)
+  appendChar(pos, ':')
+  appendTwoDigits(pos, seconds)
+
+
+proc appendHex64(pos: var U32, value: U64) =
+  appendStr(pos, cstring("0x"))
+
+  var shift = 60
+  var started = false
+  while shift >= 0:
+    let nibble = int((value shr U64(shift)) and U64(0xf))
+    if nibble != 0 or started or shift == 0:
+      started = true
+      if nibble < 10:
+        appendChar(pos, char(ord('0') + nibble))
+      else:
+        appendChar(pos, char(ord('a') + nibble - 10))
+    shift -= 4
+
+
+proc appendRkxMapLine(pos: var U32, start, size: U64, perms, name: cstring) =
+  if size == 0:
+    return
+
+  appendHex64(pos, start)
+  appendChar(pos, '-')
+  appendHex64(pos, start + size)
+  appendChar(pos, ' ')
+  appendStr(pos, perms)
+  appendChar(pos, ' ')
+  appendStr(pos, name)
+  appendChar(pos, '\n')
+
+
 proc clearResponseData() =
   var i = U32(0)
   while i < SysIpcMessageMax:
@@ -141,8 +192,14 @@ proc reqPath(): cstring =
 proc renderUptime(): U32 =
   clearOut()
   var pos = U32(0)
+  let ticks = sysTicks()
+
+  appendStr(pos, cstring("uptime: "))
+  appendDuration(pos, ticks)
+  appendChar(pos, '\n')
+
   appendStr(pos, cstring("ticks: "))
-  appendU64(pos, sysTicks())
+  appendU64(pos, ticks)
   appendChar(pos, '\n')
   pos
 
@@ -182,15 +239,19 @@ proc renderCpuinfo(): U32 =
   appendU64(pos, cpuInfo.totalTicks)
   appendChar(pos, '\n')
 
-  appendStr(pos, cstring("idle_ticks : "))
+  appendStr(pos, cstring("window_ticks: "))
+  appendU64(pos, cpuInfo.windowTicks)
+  appendChar(pos, '\n')
+
+  appendStr(pos, cstring("idle_ticks  : "))
   appendU64(pos, cpuInfo.idleTicks)
   appendChar(pos, '\n')
 
-  appendStr(pos, cstring("busy_ticks : "))
+  appendStr(pos, cstring("busy_ticks  : "))
   appendU64(pos, cpuInfo.busyTicks)
   appendChar(pos, '\n')
 
-  appendStr(pos, cstring("usage      : "))
+  appendStr(pos, cstring("usage       : "))
   appendU64(pos, U64(cpuInfo.usagePercent))
   appendStr(pos, cstring("%\n"))
 
@@ -250,7 +311,7 @@ proc renderProcesses(): U32 =
   pos
 
 
-proc parseStatusPath(path: cstring, pid: var I32): bool =
+proc parseProcChildPath(path: cstring, child: cstring, pid: var I32): bool =
   if not (path[0] == '/' and path[1] == 'p' and path[2] == 'r' and
       path[3] == 'o' and path[4] == 'c' and path[5] == '/'):
     return false
@@ -264,13 +325,29 @@ proc parseStatusPath(path: cstring, pid: var I32): bool =
     value = value * I32(10) + I32(ord(path[i]) - ord('0'))
     inc i
 
-  if not (path[i] == '/' and path[i + 1] == 's' and path[i + 2] == 't' and
-      path[i + 3] == 'a' and path[i + 4] == 't' and path[i + 5] == 'u' and
-      path[i + 6] == 's' and path[i + 7] == '\0'):
+  if path[i] != '/':
+    return false
+
+  inc i
+  var j = 0
+  while child[j] != '\0':
+    if path[i + j] != child[j]:
+      return false
+    inc j
+
+  if path[i + j] != '\0':
     return false
 
   pid = value
   true
+
+
+proc parseStatusPath(path: cstring, pid: var I32): bool =
+  parseProcChildPath(path, cstring"status", pid)
+
+
+proc parseRkxMapPath(path: cstring, pid: var I32): bool =
+  parseProcChildPath(path, cstring"rkx_map", pid)
 
 
 proc parseProcPidPath(path: cstring, pid: var I32): bool =
@@ -351,6 +428,40 @@ proc renderStatus(pid: I32): U32 =
       appendStr(pos, cstring("exe: "))
       appendStr(pos, cast[cstring](addr procInfos[i].exePath[0]))
       appendChar(pos, '\n')
+      return pos
+    inc i
+
+  appendStr(pos, cstring("not found\n"))
+  pos
+
+
+proc renderRkxMap(pid: I32): U32 =
+  clearOut()
+  var pos = U32(0)
+
+  let count = sysPs(addr procInfos[0], U64(SysProcessMaxSlots), SysProcListAllSlots)
+  if count < 0:
+    appendStr(pos, cstring("error\n"))
+    return pos
+
+  var i = I32(0)
+  while i < count:
+    if procInfos[i].state != SysProcessUnused and procInfos[i].pid == pid:
+      if procInfos[i].isUser == 0:
+        appendStr(pos, cstring("not rkx user process\n"))
+        return pos
+
+      appendRkxMapLine(pos, procInfos[i].textVa, procInfos[i].textMemSize, cstring"r-x", cstring"text")
+      appendRkxMapLine(pos, procInfos[i].rodataVa, procInfos[i].rodataMemSize, cstring"r--", cstring"rodata")
+      appendRkxMapLine(pos, procInfos[i].dataVa, procInfos[i].dataMemSize, cstring"rw-", cstring"data")
+      appendRkxMapLine(pos, procInfos[i].bssVa, procInfos[i].bssMemSize, cstring"rw-", cstring"bss")
+      appendRkxMapLine(
+        pos,
+        procInfos[i].stackTop - procInfos[i].stackPages * ProcFsPageSize,
+        procInfos[i].stackPages * ProcFsPageSize,
+        cstring"rw-",
+        cstring"stack",
+      )
       return pos
     inc i
 
@@ -473,6 +584,11 @@ proc renderLsProcPid(pid: I32): I32 =
 
   let entries = cast[ptr UncheckedArray[DirEntry]](addr response.data[0])
   writeDirEntry(addr entries[0], cstring"status", DirEntryTypeFile)
+  if procLsEntryLimit() > U32(1):
+    writeDirEntry(addr entries[1], cstring"rkx_map", DirEntryTypeFile)
+    response.len = U32(2 * sizeof(DirEntry))
+    return 2
+
   response.len = U32(sizeof(DirEntry))
   1
 
@@ -492,6 +608,9 @@ proc renderRead(path: cstring): U32 =
   var pid = I32(0)
   if parseStatusPath(path, pid):
     return renderStatus(pid)
+
+  if parseRkxMapPath(path, pid):
+    return renderRkxMap(pid)
 
   if streq(path, cstring"/proc/uptime"):
     return renderUptime()

@@ -1,4 +1,5 @@
 import ../../../arch/riscv64/arch
+import ../../../lib/calc
 import ../../../lib/syscall_types
 import ../../../lib/types
 import ../../dev/rtc
@@ -43,23 +44,36 @@ proc syscallCpuInfo*(outInfo: U64): U64 =
   if outInfo == 0:
     return U64(-1'i64)
 
-  let total = timerTickCount
-  let idle = idleTickCount
-  let busy =
-    if total >= idle:
-      total - idle
+  let windowTotal =
+    if lastCpuWindowTicks != U64(0):
+      lastCpuWindowTicks
+    else:
+      cpuWindowTickCount
+  let windowIdle =
+    if lastCpuWindowTicks != U64(0):
+      lastIdleWindowTicks
+    else:
+      idleWindowTickCount
+  let windowBusy =
+    if lastCpuWindowTicks != U64(0):
+      lastBusyWindowTicks
+    elif windowTotal >= windowIdle:
+      windowTotal - windowIdle
     else:
       U64(0)
   let usage =
-    if total == 0:
+    if lastCpuWindowTicks != U64(0):
+      lastCpuUsagePercent
+    elif windowTotal == U64(0):
       U32(0)
     else:
-      U32((busy * U64(100)) div total)
+      U32((windowBusy * U64(100)) div windowTotal)
 
   var info = SysCpuInfo(
-    totalTicks: total,
-    idleTicks: idle,
-    busyTicks: busy,
+    totalTicks: timerTickCount,
+    windowTicks: windowTotal,
+    idleTicks: windowIdle,
+    busyTicks: windowBusy,
     usagePercent: usage,
   )
 
@@ -83,7 +97,7 @@ proc syscallSleep*(ticks: U64): U64 =
   if ticks == 0:
     return 0
 
-  sleepCurrentUntilTick(timerTickCount + ticks)
+  sleepCurrentUntilTick(saturatingAddU64(timerTickCount, ticks))
   0
 
 
