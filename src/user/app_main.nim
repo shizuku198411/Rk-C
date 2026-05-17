@@ -46,6 +46,8 @@ elif defined(userApp_fsd):
   import server/fsd/fsd
 elif defined(userApp_blockd):
   import server/blockd/blockd
+elif defined(userApp_procfsd):
+  import server/procfsd/procfsd
 elif defined(userApp_netd):
   import server/netd/netd
 elif defined(userApp_stracectl):

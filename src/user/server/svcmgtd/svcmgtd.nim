@@ -294,10 +294,10 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
     sysExit(1)
 
   initServices()
-  startInitialService(addr services[0])
-  startInitialService(addr services[1])
-  startInitialService(addr services[2])
-  startInitialService(addr services[3])
+  var i = 0
+  while i < len(services):
+    startInitialService(addr services[i])
+    inc i
 
   while true:
     pollControlMessages()

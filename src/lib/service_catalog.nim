@@ -11,13 +11,14 @@ type
 
 
 const
-  SysManagedServiceCount* = 4
+  SysManagedServiceCount* = 5
 
 
 let managedServices*: array[SysManagedServiceCount, SysServiceSpec] = [
   SysServiceSpec(kind: SysServiceKindProcess, name: "procmgtd", path: "/bin/procmgtd", required: true),
   SysServiceSpec(kind: SysServiceKindBlock, name: "blockd", path: "/bin/blockd", required: true),
   SysServiceSpec(kind: SysServiceKindFs, name: "fsd", path: "/bin/fsd", required: true),
+  SysServiceSpec(kind: SysServiceKindProcFs, name: "procfsd", path: "/bin/procfsd", required: false),
   SysServiceSpec(kind: SysServiceKindNet, name: "netd", path: "/bin/netd", required: false),
 ]
 
@@ -25,7 +26,7 @@ let managedServices*: array[SysManagedServiceCount, SysServiceSpec] = [
 proc serviceKindKnown*(kind: U32): bool =
   kind == SysServiceKindManager or kind == SysServiceKindBlock or
     kind == SysServiceKindFs or kind == SysServiceKindProcess or
-    kind == SysServiceKindNet
+    kind == SysServiceKindNet or kind == SysServiceKindProcFs
 
 
 proc serviceNameByKind*(kind: U32): cstring =

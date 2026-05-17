@@ -19,6 +19,7 @@ const
   SysFsOpWriteFile* = U32(6)
   SysBlockOpRead* = U32(1)
   SysBlockOpWrite* = U32(2)
+
   SysIpcOpText* = U32(0)
   SysIpcOpSvcRestart* = U32(1)
   SysIpcOpProcListRequest* = U32(2)
@@ -41,12 +42,11 @@ const
   SysIpcOpNetTcpReceiveResponse* = U32(20)
   SysIpcOpNetTcpCloseRequest* = U32(21)
   SysIpcOpNetTcpCloseResponse* = U32(22)
-  SysServiceKindBlock* = U32(0)
-  SysServiceKindFs* = U32(1)
-  SysServiceKindManager* = U32(2)
-  SysServiceKindProcess* = U32(3)
-  SysServiceKindNet* = U32(4)
-  SysServiceNameMax* = U32(16)
+  SysIpcOpProcFsReadRequest* = U32(23)
+  SysIpcOpProcFsReadResponse* = U32(24)
+  SysIpcOpProcFsLsRequest* = U32(25)
+  SysIpcOpProcFsLsResponse* = U32(26)
+
   SysFdMax* = U32(8)
   SysFdPathMax* = U32(128)
   SysPipeMax* = U32(8)
@@ -74,6 +74,14 @@ const
   SysProcessZombie* = U32(4)
   SysProcListAllSlots* = U64(1)
   SysExecNoProcess* = I32(-2)
+
+  SysServiceKindBlock* = U32(0)
+  SysServiceKindFs* = U32(1)
+  SysServiceKindManager* = U32(2)
+  SysServiceKindProcess* = U32(3)
+  SysServiceKindNet* = U32(4)
+  SysServiceKindProcFs* = U32(5)
+  SysServiceNameMax* = U32(16)
 
 type
   SysProcessInfo* {.packed.} = object

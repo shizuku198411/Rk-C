@@ -10,6 +10,7 @@ type
     serviceFs
     serviceProcess
     serviceNet
+    serviceProcFs
     serviceMax
 
   ServiceEntry = object
@@ -91,6 +92,8 @@ proc sysServiceKindValue(kind: ServiceKind): U32 =
     SysServiceKindProcess
   of serviceNet:
     SysServiceKindNet
+  of serviceProcFs:
+    SysServiceKindProcFs
   of serviceMax:
     U32(0xffffffff'u32)
 

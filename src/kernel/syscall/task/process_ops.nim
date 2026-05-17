@@ -25,7 +25,8 @@ proc processStateValue(state: ProcessState): U32 =
 
 
 proc currentCanUseRawProcessOps(): bool =
-  currentIsService(serviceManager) or currentIsService(serviceProcess)
+  currentIsService(serviceManager) or currentIsService(serviceProcess) or
+    currentIsService(serviceProcFs)
 
 
 proc fillProcessInfo(entry: var SysProcessInfo, p: ptr Process) =
