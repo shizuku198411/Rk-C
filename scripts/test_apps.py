@@ -14,7 +14,7 @@ from pathlib import Path
 
 ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
 PROMPT_MARKER = "$ "
-TEST_APP_NAMES = ["faultcheck", "capcheck"]
+TEST_APP_NAMES = ["faultcheck", "capcheck", "pollcheck"]
 
 
 @dataclass
@@ -192,6 +192,7 @@ def normal_tests() -> list[TestCase]:
         "stracectl": "usage:",
         "dmesg": "usage: dmesg",
         "capcheck": "usage: capcheck",
+        "pollcheck": "usage: pollcheck",
     }
     for app, expected in help_cases.items():
         tests.append(TestCase(f"{app} --help", f"{app} --help", [expected]))
@@ -232,10 +233,24 @@ def normal_tests() -> list[TestCase]:
 def abnormal_tests() -> list[TestCase]:
     return [
         TestCase("kill invalid pid", "kill 999", ["kill: failed"]),
-        TestCase("ipc invalid send", "ipc send 999 hello", ["ipc: send failed"]),
-        TestCase(
-            "capcheck unauthorized rkx caps",
-            "capcheck",
+            TestCase("ipc invalid send", "ipc send 999 hello", ["ipc: send failed"]),
+            TestCase(
+                "pollcheck event wait",
+                "pollcheck",
+                [
+                    "pollcheck: ipc empty ok",
+                    "pollcheck: timer ok",
+                    "pollcheck: pipe read empty ok",
+                    "pollcheck: pipe write ready ok",
+                    "pollcheck: pipe read ready ok",
+                    "pollcheck: invalid fd error ok",
+                    "pollcheck: ok",
+                ],
+                timeout=12.0,
+            ),
+            TestCase(
+                "capcheck unauthorized rkx caps",
+                "capcheck",
             [
                 "capcheck: requested caps visible",
                 "capcheck: requested cap names visible",

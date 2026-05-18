@@ -66,3 +66,4 @@ const
   SysGetPpid* = U64(65)
   SysCpuInfo* = U64(66)
   SysKmsg* = U64(67)
+  SysPoll* = U64(68)

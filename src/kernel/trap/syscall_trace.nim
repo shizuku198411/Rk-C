@@ -25,6 +25,7 @@ proc syscallName*(num: U64): cstring =
   of SysTicks: cstring("ticks")
   of SysCpuInfo: cstring("cpu_info")
   of SysKmsg: cstring("kmsg")
+  of SysPoll: cstring("poll")
   of SysExit: cstring("exit")
   of SysLs: cstring("ls")
   of SysTraps: cstring("traps")
@@ -270,6 +271,12 @@ proc printSyscallArgs(frame: ptr TrapFrame) =
     printNamedI64("oldfd", frame.a0)
     print(", ")
     printNamedI64("newfd", frame.a1)
+  of SysPoll:
+    printNamedPtr("events", frame.a0)
+    print(", ")
+    printNamedU64("count", frame.a1)
+    print(", ")
+    printNamedU64("timeout_ticks", frame.a2)
   of SysExec:
     printNamedCString("path", frame.a0)
     print(", ")

@@ -66,6 +66,13 @@ const
   SysFdKindStderr* = U32(3)
   SysFdKindConsole* = U32(4)
   SysFdKindPipe* = U32(5)
+  SysPollMaxEvents* = U32(16)
+  SysPollFdRead* = U32(1)
+  SysPollFdWrite* = U32(2)
+  SysPollIpcRead* = U32(4)
+  SysPollPidExit* = U32(8)
+  SysPollTimer* = U32(16)
+  SysPollError* = U32(0x80000000'u32)
 
   SysProcessMaxSlots* = U32(32)
   SysProcessUnused* = U32(0)
@@ -142,6 +149,11 @@ type
     idleTicks*: U64
     busyTicks*: U64
     usagePercent*: U32
+
+  SysPollEvent* {.packed.} = object
+    target*: I32
+    events*: U32
+    revents*: U32
 
   SysNetDeviceInfo* {.packed.} = object
     found*: U32

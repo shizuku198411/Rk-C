@@ -179,8 +179,26 @@ proc appfsReadBytes(absOff: U64, outBuf: pointer, n: U64): int =
   0
 
 
-proc appfsNameEq(entry: AppfsEntry, name: cstring): bool =
-  fixedCStringEq(entry.name, name)
+proc fixedNameEq(nameBuf: ptr UncheckedArray[char], capacity: int, expected: cstring): bool =
+  if expected == nil:
+    return false
+
+  var i = 0
+  while i < capacity:
+    if nameBuf[i] != expected[i]:
+      return false
+    if nameBuf[i] == '\0':
+      return true
+    inc i
+
+  expected[capacity] == '\0'
+
+
+proc appfsNameEq(entry: ptr AppfsEntry, name: cstring): bool =
+  if entry == nil:
+    return false
+
+  fixedNameEq(cast[ptr UncheckedArray[char]](addr entry.name[0]), FsNameMax, name)
 
 
 proc resolveAppfsPath(path: cstring): int =
@@ -202,7 +220,7 @@ proc resolveAppfsPath(path: cstring): int =
 
   var i = 0
   while i < int(appfsEntryCount):
-    if appfsNameEq(appfsEntries[i], name):
+    if appfsNameEq(addr appfsEntries[i], name):
       return i
     inc i
   -1
@@ -233,8 +251,11 @@ proc clearBlock() =
     inc i
 
 
-proc nameEq(node: FsNode, name: cstring): bool =
-  fixedCStringEq(node.name, name)
+proc nameEq(node: ptr FsNode, name: cstring): bool =
+  if node == nil:
+    return false
+
+  fixedNameEq(cast[ptr UncheckedArray[char]](addr node.name[0]), FsNameMax, name)
 
 
 proc findChild(parent: int, name: cstring): int =
@@ -242,7 +263,7 @@ proc findChild(parent: int, name: cstring): int =
   while i < FsMaxNodes:
     if superBlock.nodes[i].used != 0 and
         superBlock.nodes[i].parent == U32(parent) and
-        nameEq(superBlock.nodes[i], name):
+        nameEq(addr superBlock.nodes[i], name):
       return i
     inc i
   -1

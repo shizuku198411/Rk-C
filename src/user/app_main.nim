@@ -58,5 +58,7 @@ elif defined(userApp_faultcheck):
   import apps/faultcheck/faultcheck
 elif defined(userApp_capcheck):
   import apps/capcheck/capcheck
+elif defined(userApp_pollcheck):
+  import apps/pollcheck/pollcheck
 else:
   {.error: "missing user app define".}

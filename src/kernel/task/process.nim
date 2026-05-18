@@ -29,6 +29,7 @@ type
     waitTimer
     waitPipeRead
     waitPipeWrite
+    waitPoll
 
   WaitTarget* {.bycopy.} = object
     kind*: WaitKind
@@ -147,6 +148,7 @@ proc sleepCurrentForPid*(pid: int32)
 proc sleepCurrentUntilTick*(tick: U64)
 proc sleepCurrentForPipeRead*(pipeId: I32)
 proc sleepCurrentForPipeWrite*(pipeId: I32)
+proc sleepCurrentForPoll*(deadlineTick: U64)
 proc wakeInputWaiters*()
 proc wakeIpcWaiter*(pid: int32)
 proc wakeFsWaiter*(reqId: U64)
@@ -155,6 +157,7 @@ proc wakePidWaiters*(pid: int32)
 proc wakeTimerWaiters*(tick: U64)
 proc wakePipeReaders*(pipeId: I32)
 proc wakePipeWriters*(pipeId: I32)
+proc wakePollWaiters*()
 proc clearWait*(p: ptr Process)
 
 
@@ -286,6 +289,22 @@ proc pipeWriteKernel*(pipeId: I32, src: ptr UncheckedArray[U8], len: U64): I32 =
     wakePipeReaders(pipeId)
 
   I32(written)
+
+
+proc pipeReadable*(pipeId: I32): bool =
+  if not validPipeId(pipeId):
+    return false
+
+  let pipe = addr pipes[U32(pipeId)]
+  pipe.count > 0 or pipe.writers == 0
+
+
+proc pipeWritable*(pipeId: I32): bool =
+  if not validPipeId(pipeId):
+    return false
+
+  let pipe = addr pipes[U32(pipeId)]
+  pipe.readers > 0 and pipe.count < SysPipeBufSize
 
 
 proc clearFileState*(p: ptr Process) =
@@ -705,8 +724,22 @@ proc sleepCurrentForPipeWrite*(pipeId: I32) =
   sleepCurrentFor(waitPipeWrite, U64(pipeId))
 
 
+proc sleepCurrentForPoll*(deadlineTick: U64) =
+  sleepCurrentFor(waitPoll, deadlineTick)
+
+
+proc wakePollWaiters*() =
+  var i = 0
+  while i < MaxProcs:
+    if procs[i].state == procSleeping and procs[i].wait.kind == waitPoll:
+      clearWait(addr procs[i])
+      procs[i].state = procRunnable
+    inc i
+
+
 proc wakeInputWaiters*() =
   wakeWaiters(waitInput, 1, true)
+  wakePollWaiters()
 
 
 proc wakeIpcWaiter*(pid: int32) =
@@ -715,8 +748,11 @@ proc wakeIpcWaiter*(pid: int32) =
     if procs[i].state == procSleeping and procs[i].pid == pid and procs[i].wait.kind == waitIpc:
       clearWait(addr procs[i])
       procs[i].state = procRunnable
+      wakePollWaiters()
       return
     inc i
+
+  wakePollWaiters()
 
 
 proc wakeFsWaiter*(reqId: U64) =
@@ -729,12 +765,14 @@ proc wakeBlockWaiter*(reqId: U64) =
 
 proc wakePidWaiters*(pid: int32) =
   wakeWaiters(waitPid, U64(pid), true)
+  wakePollWaiters()
 
 
 proc wakeTimerWaiters*(tick: U64) =
   var i = 0
   while i < MaxProcs:
-    if procs[i].state == procSleeping and procs[i].wait.kind == waitTimer and
+    if procs[i].state == procSleeping and
+        (procs[i].wait.kind == waitTimer or procs[i].wait.kind == waitPoll) and
         procs[i].wait.value <= tick:
       clearWait(addr procs[i])
       procs[i].state = procRunnable
@@ -743,10 +781,12 @@ proc wakeTimerWaiters*(tick: U64) =
 
 proc wakePipeReaders*(pipeId: I32) =
   wakeWaiters(waitPipeRead, U64(pipeId), true)
+  wakePollWaiters()
 
 
 proc wakePipeWriters*(pipeId: I32) =
   wakeWaiters(waitPipeWrite, U64(pipeId), true)
+  wakePollWaiters()
 
 
 proc reapDetachedZombies() =

@@ -144,6 +144,10 @@ proc sysDup2*(oldFd, newFd: I32): I32 =
   I32(rawSyscall3(SysDup2, U64(oldFd), U64(newFd), 0))
 
 
+proc sysPoll*(events: ptr SysPollEvent, count: U64, timeoutTicks: U64): I32 =
+  I32(rawSyscall3(SysPoll, cast[U64](events), count, timeoutTicks))
+
+
 proc sysGetCwd*(buf: pointer, capacity: U64): I32 =
   I32(rawSyscall3(SysGetCwd, cast[U64](buf), capacity, 0))
 

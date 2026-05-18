@@ -99,6 +99,9 @@ proc handleSyscall*(frame: ptr TrapFrame) =
   of SysDup2:
     frame.a0 = syscallDup2(frame.a0, frame.a1)
 
+  of SysPoll:
+    frame.a0 = syscallPoll(frame.a0, frame.a1, frame.a2)
+
   of SysGetCwd:
     frame.a0 = syscallGetCwd(frame.a0, frame.a1)
 
