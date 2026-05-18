@@ -72,19 +72,6 @@ proc buildStatusPath(pid: I32) =
   appendCString(pathBuf, pos, cstring("/status"))
 
 
-proc contains(buf: ptr UncheckedArray[char], needle: cstring): bool =
-  var i = U32(0)
-  while buf[i] != '\0':
-    var j = U32(0)
-    while needle[j] != '\0' and buf[i + j] == needle[j]:
-      inc j
-    if needle[j] == '\0':
-      return true
-    inc i
-
-  false
-
-
 proc fail(msg: cstring) {.noreturn.} =
   write("capcheck: FAIL ")
   write(msg)
@@ -135,15 +122,15 @@ proc runCheck() =
     fail(cstring("read status"))
   statusBuf[U64(readLen)] = '\0'
 
-  if not contains(cast[ptr UncheckedArray[char]](addr statusBuf[0]), cstring("requested_caps: 0x3f")):
+  if not cstringContains(cast[ptr UncheckedArray[char]](addr statusBuf[0]), cstring("requested_caps: 0x3f")):
     fail(cstring("requested caps missing"))
   write("capcheck: requested caps visible\n")
 
-  if not contains(cast[ptr UncheckedArray[char]](addr statusBuf[0]), cstring("sys_raw_fs")):
+  if not cstringContains(cast[ptr UncheckedArray[char]](addr statusBuf[0]), cstring("sys_raw_fs")):
     fail(cstring("requested cap names missing"))
   write("capcheck: requested cap names visible\n")
 
-  if not contains(cast[ptr UncheckedArray[char]](addr statusBuf[0]), cstring("caps: 0x0 (none)")):
+  if not cstringContains(cast[ptr UncheckedArray[char]](addr statusBuf[0]), cstring("caps: 0x0 (none)")):
     fail(cstring("granted caps not stripped"))
   write("capcheck: granted caps stripped\n")
 
@@ -160,7 +147,7 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
     printUsage()
     sysExit(1)
 
-  if parsedArgs.argc == 1 and streq(argAt(parsedArgs, 0), "--help"):
+  if parsedArgs.argc == 1 and cstringEq(argAt(parsedArgs, 0), "--help"):
     printUsage()
     sysExit(0)
 

@@ -79,15 +79,15 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
     printUsage()
     sysExit(1)
 
-  if parsedArgs.argc == 1 and streq(argAt(parsedArgs, 0), "--help"):
+  if parsedArgs.argc == 1 and cstringEq(argAt(parsedArgs, 0), "--help"):
     printUsage()
     sysExit(0)
 
-  if parsedArgs.argc == 1 and streq(argAt(parsedArgs, 0), "list"):
+  if parsedArgs.argc == 1 and cstringEq(argAt(parsedArgs, 0), "list"):
     listServices()
     sysExit(0)
 
-  if parsedArgs.argc >= 1 and streq(argAt(parsedArgs, 0), "restart"):
+  if parsedArgs.argc >= 1 and cstringEq(argAt(parsedArgs, 0), "restart"):
     restartService()
     sysExit(0)
 

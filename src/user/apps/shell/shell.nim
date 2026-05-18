@@ -34,33 +34,33 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
 
     let background = stripBackgroundMarker()
 
-    if streq(cstr(cmdBuf), "help"):
+    if cstringEq(cstr(cmdBuf), "help"):
       printHelp()
 
-    elif streq(cstr(cmdBuf), "cd"):
+    elif cstringEq(cstr(cmdBuf), "cd"):
       changeDirectory(cstr(argBuf))
 
-    elif streq(cstr(cmdBuf), "ticks"):
+    elif cstringEq(cstr(cmdBuf), "ticks"):
       writeUnsigned(sysTicks())
       write("\n")
 
-    elif streq(cstr(cmdBuf), "traps"):
+    elif cstringEq(cstr(cmdBuf), "traps"):
       printTrapCount()
 
-    elif streq(cstr(cmdBuf), "bitmap"):
+    elif cstringEq(cstr(cmdBuf), "bitmap"):
       printBitmapInfo()
 
-    elif streq(cstr(cmdBuf), "history"):
+    elif cstringEq(cstr(cmdBuf), "history"):
       printHistory()
 
-    elif streq(cstr(cmdBuf), "exit"):
+    elif cstringEq(cstr(cmdBuf), "exit"):
       if sysGetPpid() == 0:
         write("if you want to leave Rk-C, use \"shutdown\".\n")
         continue
       sysExit(0)
       
 
-    elif streq(cstr(cmdBuf), "shutdown"):
+    elif cstringEq(cstr(cmdBuf), "shutdown"):
       saveHistory()
       if sysShutdown() != 0:
         write("failed to shutdown\n")

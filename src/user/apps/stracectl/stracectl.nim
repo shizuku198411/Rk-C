@@ -131,7 +131,7 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   var pid: U64
   var targetIndex = U32(0)
   var verbose = false
-  if streq(argAt(parsedArgs, 0), "-v"):
+  if cstringEq(argAt(parsedArgs, 0), "-v"):
     verbose = true
     targetIndex = 1
 
@@ -141,12 +141,12 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
 
   let targetArg = argAt(parsedArgs, targetIndex)
 
-  if streq(targetArg, "--help") and parsedArgs.argc == targetIndex + 1:
+  if cstringEq(targetArg, "--help") and parsedArgs.argc == targetIndex + 1:
     printUsage()
     sysExit(0)
 
     
-  if streq(targetArg, "on") and parsedArgs.argc == targetIndex + 1:
+  if cstringEq(targetArg, "on") and parsedArgs.argc == targetIndex + 1:
     if verbose:
       discard sysTraceCtl(TraceVerbose, 1)
     if sysTraceCtl(TraceOn, 0) < 0:
@@ -154,7 +154,7 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
       sysExit(1)
     write("strace on\n")
 
-  elif streq(targetArg, "off") and parsedArgs.argc == targetIndex + 1:
+  elif cstringEq(targetArg, "off") and parsedArgs.argc == targetIndex + 1:
     if sysTraceCtl(TraceOff, 0) < 0:
       write("trace off failed\n")
       sysExit(1)

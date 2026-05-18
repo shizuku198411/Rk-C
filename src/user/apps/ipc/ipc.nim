@@ -69,7 +69,7 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
     printUsage()
     sysExit(1)
 
-  if parsedArgs.argc == 1 and streq(argAt(parsedArgs, 0), "--help"):
+  if parsedArgs.argc == 1 and cstringEq(argAt(parsedArgs, 0), "--help"):
     printUsage()
     sysExit(0)
 
@@ -77,11 +77,11 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
     printUsage()
     sysExit(1)
 
-  if streq(argAt(parsedArgs, 0), "send"):
+  if cstringEq(argAt(parsedArgs, 0), "send"):
     sendMessage()
     sysExit(0)
 
-  if streq(argAt(parsedArgs, 0), "receive") and parsedArgs.argc == 1:
+  if cstringEq(argAt(parsedArgs, 0), "receive") and parsedArgs.argc == 1:
     receiveMessage()
     sysExit(0)
 

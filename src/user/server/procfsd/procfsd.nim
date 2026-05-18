@@ -656,7 +656,7 @@ proc renderLsProcPid(pid: I32): I32 =
 
 
 proc renderLsProc(path: cstring): I32 =
-  if streq(path, cstring("/proc")) or streq(path, cstring("/proc/")):
+  if cstringEq(path, cstring("/proc")) or cstringEq(path, cstring("/proc/")):
     return renderLsProcRoot()
 
   var pid = I32(0)
@@ -674,25 +674,25 @@ proc renderRead(path: cstring): U32 =
   if parseRkxMapPath(path, pid):
     return renderRkxMap(pid)
 
-  if streq(path, cstring"/proc/uptime"):
+  if cstringEq(path, cstring"/proc/uptime"):
     return renderUptime()
 
-  if streq(path, cstring"/proc/meminfo"):
+  if cstringEq(path, cstring"/proc/meminfo"):
     return renderMeminfo()
 
-  if streq(path, cstring"/proc/cpuinfo"):
+  if cstringEq(path, cstring"/proc/cpuinfo"):
     return renderCpuinfo()
 
-  if streq(path, cstring"/proc/processes"):
+  if cstringEq(path, cstring"/proc/processes"):
     return renderProcesses()
 
-  if streq(path, cstring"/proc/services"):
+  if cstringEq(path, cstring"/proc/services"):
     return renderServices()
 
-  if streq(path, cstring"/proc/traps"):
+  if cstringEq(path, cstring"/proc/traps"):
     return renderTraps()
 
-  if streq(path, cstring"/proc/kmsg"):
+  if cstringEq(path, cstring"/proc/kmsg"):
     return renderKmsg()
 
   clearOut()

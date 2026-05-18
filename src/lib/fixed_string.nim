@@ -59,6 +59,21 @@ proc fixedCStringEq*(src: openArray[char], expected: cstring): bool =
   expected[src.len] == '\0'
 
 
+proc fixedCStringEq*(src: ptr UncheckedArray[char], capacity: int, expected: cstring): bool =
+  if src == nil or expected == nil:
+    return false
+
+  var i = 0
+  while i < capacity:
+    if src[i] != expected[i]:
+      return false
+    if src[i] == '\0':
+      return true
+    inc i
+
+  expected[capacity] == '\0'
+
+
 proc cstrlen*(s: cstring): U64 =
   if s == nil:
     return 0

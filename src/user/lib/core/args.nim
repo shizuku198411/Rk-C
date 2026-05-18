@@ -71,7 +71,7 @@ proc argAt*(args: var UserArgs, index: U32): cstring =
 proc hasArg*(args: var UserArgs, value: cstring): bool =
   var i = U32(0)
   while i < args.argc:
-    if streq(args.argv[i], value):
+    if cstringEq(args.argv[i], value):
       return true
 
     inc i

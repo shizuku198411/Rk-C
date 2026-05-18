@@ -45,7 +45,7 @@ proc findShort(specs: openArray[OptionSpec], ch: char): int =
 proc findLong(specs: openArray[OptionSpec], name: cstring): int =
   var i = 0
   while i < len(specs):
-    if specs[i].long != nil and streq(specs[i].long, name):
+    if specs[i].long != nil and cstringEq(specs[i].long, name):
       return i
     inc i
 
@@ -110,7 +110,7 @@ proc parseOptions*(args: var UserArgs, specs: openArray[OptionSpec],
         continue
 
       let longName = cast[cstring](unsafeAddr item[2])
-      if streq(longName, "help"):
+      if cstringEq(longName, "help"):
         parsed.help = true
         inc i
         continue

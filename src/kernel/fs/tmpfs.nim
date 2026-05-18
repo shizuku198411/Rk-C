@@ -39,14 +39,11 @@ proc hasChildren(idx: int): bool =
   false
 
 
-proc nameEq(node: TmpfsNode, name: cstring): bool =
-  fixedCStringEq(node.name, name)
-
-
 proc findChild(parent: int, name: cstring): int =
   var i = 0
   while i < TmpfsMaxNodes:
-    if nodes[i].used != 0 and nodes[i].parent == U32(parent) and nameEq(nodes[i], name):
+    if nodes[i].used != 0 and nodes[i].parent == U32(parent) and
+        fixedCStringEq(nodes[i].name, name):
       return i
     inc i
   -1

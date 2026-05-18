@@ -175,7 +175,7 @@ proc restartService(entry: ptr ServiceEntry) =
 proc findServiceByName(name: cstring): ptr ServiceEntry =
   var i = 0
   while i < len(services):
-    if streq(services[i].name, name):
+    if cstringEq(services[i].name, name):
       return addr services[i]
     inc i
 

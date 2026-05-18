@@ -30,7 +30,7 @@ proc catStdin() =
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   discard parseUserArgs(arg, parsedArgs)
 
-  if parsedArgs.argc == 1 and streq(argAt(parsedArgs, 0), "--help"):
+  if parsedArgs.argc == 1 and cstringEq(argAt(parsedArgs, 0), "--help"):
     printUsage()
     sysExit(0)
 

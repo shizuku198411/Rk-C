@@ -1,24 +1,7 @@
+import ../../../lib/fixed_string
 import ../../../lib/types
 
-
-proc cstrlen*(s: cstring): U64 =
-  if s == nil:
-    return 0
-  var n = U64(0)
-  while s[n] != '\0':
-    inc n
-  n
-
-
-proc streq*(a, b: cstring): bool =
-  if a == nil or b == nil:
-    return false
-  var i = U64(0)
-  while a[i] == b[i]:
-    if a[i] == '\0':
-      return true
-    inc i
-  false
+export fixed_string
 
 
 proc startsWith2*(s: cstring, a, b: char): bool =
@@ -37,6 +20,22 @@ proc startsWithPrefix*(s: cstring, prefix: cstring): bool =
       return false
     inc i
   true
+
+
+proc cstringContains*(s: ptr UncheckedArray[char], needle: cstring): bool =
+  if s == nil or needle == nil:
+    return false
+
+  var i = U32(0)
+  while s[i] != '\0':
+    var j = U32(0)
+    while needle[j] != '\0' and s[i + j] == needle[j]:
+      inc j
+    if needle[j] == '\0':
+      return true
+    inc i
+
+  false
 
 
 proc isSpace*(ch: char): bool =
