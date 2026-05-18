@@ -135,6 +135,10 @@ proc canSyscallServiceKindMutation*(kind: ServiceKind): bool =
   canSyscallServiceMutation() and kind != serviceManager
 
 
+proc canSyscallTraceCtl*(): bool =
+  currentHasCap(SysCapTrace)
+
+
 proc canSyscallByNumber*(num: U64): bool =
   case num
   of SysPs:
@@ -165,5 +169,7 @@ proc canSyscallByNumber*(num: U64): bool =
   of SysRawNetInfo, SysRawNetInit, SysRawNetMac, SysRawNetRecv,
       SysRawNetSend:
     canSyscallRawNet()
+  of SysTraceCtl:
+    canSyscallTraceCtl()
   else:
     true

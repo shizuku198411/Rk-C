@@ -29,6 +29,7 @@ CAPABILITY_BITS = {
     "sys_raw_net": 1 << 3,
     "sys_process_list": 1 << 4,
     "sys_process_kill": 1 << 5,
+    "sys_trace_ctl": 1 << 6,
 }
 
 CAP_SERVICE_MANAGER = CAPABILITY_BITS["sys_service_manager"]
@@ -37,6 +38,7 @@ CAP_RAW_BLOCK = CAPABILITY_BITS["sys_raw_block"]
 CAP_RAW_NET = CAPABILITY_BITS["sys_raw_net"]
 CAP_PROCESS_LIST = CAPABILITY_BITS["sys_process_list"]
 CAP_PROCESS_KILL = CAPABILITY_BITS["sys_process_kill"]
+CAP_TRACE_CTL = CAPABILITY_BITS["sys_trace_ctl"]
 CAP_ALL_KNOWN = (
     CAP_SERVICE_MANAGER
     | CAP_RAW_FS
@@ -44,6 +46,7 @@ CAP_ALL_KNOWN = (
     | CAP_RAW_NET
     | CAP_PROCESS_LIST
     | CAP_PROCESS_KILL
+    | CAP_TRACE_CTL
 )
 
 def read_symbols(elf):

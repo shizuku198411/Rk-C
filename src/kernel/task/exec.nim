@@ -83,6 +83,9 @@ proc trustedCapsForPath(path: cstring): U32 =
   if cstringEq(path, "/bin/netd"):
     return SysCapRawNet
 
+  if cstringEq(path, "/bin/stracectl"):
+    return SysCapTrace
+
   SysCapNone
 
 

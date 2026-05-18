@@ -2,6 +2,7 @@ import ../../../lib/syscall_types
 import ../../../lib/types
 import ../../mm/usercopy
 import ../../trap/syscall_trace
+import ../syscall_cap
 
 
 const
@@ -25,6 +26,9 @@ proc syscallTrapCount*(outEntries: U64): U64 =
 
 
 proc syscallTraceCtl*(cmd: U64, value: U64): U64 =
+  if not canSyscallTraceCtl():
+    return U64(-1'i64)
+  
   case cmd
   of TraceOff:
     syscallTraceEnabled = false
