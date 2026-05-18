@@ -7,6 +7,7 @@ import ../../dev/timer
 import ../../dev/klog
 import ../../mm/usercopy
 import ../../task/process
+import ../syscall_cap
 
 
 const
@@ -100,6 +101,9 @@ proc syscallKmsg*(outBuf, capacity: U64): U64 =
 
 
 proc syscallShutdown*(): U64 =
+  if not canSyscallShutdown():
+    return U64(-1'i64)
+
   sbiShutdown()
   0
 

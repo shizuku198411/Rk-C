@@ -163,6 +163,8 @@ proc appendCapNames(pos: var U32, mask: U32) =
   appendCapName(pos, mask, SysCapRawNet, cstring("sys_raw_net"), first)
   appendCapName(pos, mask, SysCapProcessList, cstring("sys_process_list"), first)
   appendCapName(pos, mask, SysCapProcessKill, cstring("sys_process_kill"), first)
+  appendCapName(pos, mask, SysCapTrace, cstring("sys_trace_ctl"), first)
+  appendCapName(pos, mask, SysCapShutdown, cstring("sys_shutdown"), first)
 
   let unknown = mask and (not SysCapAllKnown)
   if unknown != SysCapNone:

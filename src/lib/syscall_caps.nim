@@ -10,6 +10,8 @@ const
   SysCapProcessList* = U32(1'u32 shl 4)
   SysCapProcessKill* = U32(1'u32 shl 5)
   SysCapTrace* = U32(1'u32 shl 6)
+  SysCapShutdown* = U32(1'u32 shl 7)
 
   SysCapAllKnown* = SysCapServiceManager or SysCapRawFs or SysCapRawBlock or
-    SysCapRawNet or SysCapProcessList or SysCapProcessKill or SysCapTrace
+    SysCapRawNet or SysCapProcessList or SysCapProcessKill or SysCapTrace or
+    SysCapShutdown

@@ -139,6 +139,10 @@ proc canSyscallTraceCtl*(): bool =
   currentHasCap(SysCapTrace)
 
 
+proc canSyscallShutdown*(): bool =
+  currentHasCap(SysCapShutdown)
+
+
 proc canSyscallByNumber*(num: U64): bool =
   case num
   of SysPs:
@@ -171,5 +175,7 @@ proc canSyscallByNumber*(num: U64): bool =
     canSyscallRawNet()
   of SysTraceCtl:
     canSyscallTraceCtl()
+  of SysShutdown:
+    canSyscallShutdown()
   else:
     true
