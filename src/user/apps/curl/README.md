@@ -28,3 +28,9 @@ curl --help
 - The copied target argument is limited by `ArgCap = 256`
 - HTTPS support depends on the experimental userspace TLS stack
 - Certificate validation is not currently performed by the TLS path
+
+## RKX Metadata
+
+- `stack_pages = 8`
+- capabilities: none
+- Networking is accessed through `netd`; this app does not request raw network capability

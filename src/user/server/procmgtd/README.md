@@ -11,6 +11,17 @@ kernel process syscalls and returns the result to the requester.
 - Keep process management apps less tightly coupled to raw kernel syscall usage
 - Notify `svcmgtd` with a service ready ACK after startup
 
+## RKX Metadata
+
+- `stack_pages = 4`
+- capabilities:
+  - `sys_process_list`
+  - `sys_process_kill`
+
+`procmgtd` owns process listing and process termination syscalls. Client
+requests still carry the sender capability mask, and kill requests require the
+sender to have `sys_process_kill`.
+
 ## Startup Flow
 
 1. `svcmgtd` starts `/bin/procmgtd`
@@ -30,6 +41,7 @@ not poll until it sees itself registered in the service registry.
   - Sends one `SysIpcOpProcListEntry` packet per process entry
 - `SysIpcOpProcKillRequest`
   - Uses `arg0` as the target PID
+  - Requires the sender packet capability mask to include `sys_process_kill`
   - Calls `sysKill`
   - Sends `SysIpcOpProcKillResponse` with the result
 
@@ -40,7 +52,8 @@ Process entries are copied into IPC packet data with `copyToPacketData`.
 - The local process list buffer is capped by `SysProcessMaxSlots`
 - `SysProcessInfo` is copied directly into IPC packet data, so ABI changes must
   stay in sync with clients
-- Permission checks and kill policy are delegated to the kernel
+- Kernel syscall permission checks still apply to `procmgtd`
+- Sender-side kill permission is checked before forwarding the kill request
 - Unknown IPC ops are currently ignored
 
 ## Related Files

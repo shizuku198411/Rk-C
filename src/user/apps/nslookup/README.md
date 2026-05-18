@@ -17,6 +17,12 @@ nslookup --help
 - Prints the server, queried name, and resolved IPv4 address
 - Exits with status `1` when no A record is found
 
+## RKX Metadata
+
+- `stack_pages = 2`
+- capabilities: none
+- DNS is accessed through `netd`; this app does not request raw network capability
+
 ## Boundaries and Notes
 
 - Only A-record lookup is supported

@@ -21,6 +21,12 @@ stracectl --help
   returns the child status
 - `-v` enables verbose syscall details
 
+## RKX Metadata
+
+- `stack_pages = 2`
+- capabilities:
+  - `sys_trace_ctl`
+
 ## Notes
 
 - Uses `sysTraceCtl`

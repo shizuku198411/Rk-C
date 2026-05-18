@@ -23,6 +23,12 @@ Default target:
 - Waits for `SysIpcOpNetPingResponse`
 - Prints either a reply or timeout message
 
+## RKX Metadata
+
+- `stack_pages = 2`
+- capabilities: none
+- ICMP is accessed through `netd`; this app does not request raw network capability
+
 ## Notes
 
 - This sends one ping request, not a continuous stream

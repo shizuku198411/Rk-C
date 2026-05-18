@@ -17,6 +17,15 @@ or ready timeout is handled as a degraded service state.
 - Poll raw packet receive and process ARP replies and TCP packets
 - Notify `svcmgtd` with a service ready ACK after startup
 
+## RKX Metadata
+
+- `stack_pages = 8`
+- capabilities:
+  - `sys_raw_net`
+
+`netd` owns raw network syscalls. Applications use IPC and userspace network
+client libraries instead of raw packet syscalls.
+
 ## Startup Flow
 
 1. `svcmgtd` starts `/bin/netd`

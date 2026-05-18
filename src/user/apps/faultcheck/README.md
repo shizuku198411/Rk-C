@@ -28,3 +28,8 @@ faultcheck --help
 - It is included by the test runner through the test-only app build path
 - It is meant to validate RKX segment permissions, NX stack behavior, and
   usercopy rejection behavior
+
+## RKX Metadata
+
+- `stack_pages = 2`
+- capabilities: none

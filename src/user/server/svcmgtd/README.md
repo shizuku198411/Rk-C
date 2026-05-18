@@ -18,6 +18,18 @@ for starting, registering, and monitoring the rest of the userspace services.
 - Handle control IPC, such as `svc status`, `svc restart <name>`, and
   optional service start/stop
 
+## RKX Metadata
+
+- `stack_pages = 4`
+- capabilities:
+  - `sys_service_manager`
+  - `sys_process_list`
+  - `sys_process_kill`
+
+`svcmgtd` needs service-manager capability for registry mutations, process-list
+capability for liveness checks, and process-kill capability to stop or restart
+managed service processes.
+
 ## Managed Services
 
 Managed services are defined in `src/lib/service_catalog.nim` as

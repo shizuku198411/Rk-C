@@ -22,6 +22,12 @@ ps --help
 - `-f` and `-e` can be combined, for example `ps -ef`
 - Split options also work, for example `ps -e -f`
 
+## RKX Metadata
+
+- `stack_pages = 2`
+- capabilities: none
+- Process data is accessed through `procmgtd`; this app does not request `sys_process_list`
+
 ## Boundaries and Notes
 
 - The local process entry buffer is fixed size

@@ -16,6 +16,11 @@ rmdir --help
 - Calls `sysRmdir` for each path
 - Stops at the first failure and exits with status `1`
 
+## RKX Metadata
+
+- `stack_pages = 1`
+- capabilities: none
+
 ## Notes
 
 - File removal is handled by `rm`

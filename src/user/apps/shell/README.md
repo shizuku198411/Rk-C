@@ -33,6 +33,12 @@ Other commands are executed from `/bin/<command>` with `sysExec`.
 - Basic stdin/stdout save and restore using `sysOpen`, `sysDup2`, and `sysClose`
 - Prompt includes the current working directory from `sysGetCwd`
 
+## RKX Metadata
+
+- `stack_pages = 4`
+- capabilities:
+  - `sys_shutdown`
+
 ## Module Layout
 
 - `shell.nim`

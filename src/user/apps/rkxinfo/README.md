@@ -19,3 +19,14 @@ Examples:
 rkxinfo shell
 rkxinfo /bin/curl
 ```
+
+## RKX Metadata
+
+- `stack_pages = 2`
+- capabilities: none
+
+## Notes
+
+- `rkxinfo` uses normal fd reads and does not require raw filesystem capability
+- It reads the fixed RKX header only, so large `/bin/*.rkx` images can be
+  inspected without loading the full file

@@ -16,6 +16,11 @@ cat --help
 - Appends a newline after file output when the file does not already end with one
 - Uses a fixed `CatBufferSize = 4096` buffer
 
+## RKX Metadata
+
+- `stack_pages = 2`
+- capabilities: none
+
 ## Notes
 
 - Only one file path is supported

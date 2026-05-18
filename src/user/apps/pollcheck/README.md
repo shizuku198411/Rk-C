@@ -14,3 +14,8 @@ pollcheck --help
 
 - This app is included by the QEMU smoke test suite as a test-only binary
 - It is not packed into the normal disk image
+
+## RKX Metadata
+
+- `stack_pages = 2`
+- capabilities: none

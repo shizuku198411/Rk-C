@@ -17,7 +17,13 @@ kill --help
 - Waits for `SysIpcOpProcKillResponse`
 - Exits with status `1` when the request fails or the service reports failure
 
+## RKX Metadata
+
+- `stack_pages = 1`
+- capabilities:
+  - `sys_process_kill`
+
 ## Notes
 
-- Actual permission checks and kill policy are enforced by the kernel
+- The request is sent through `procmgtd`; `procmgtd` checks the sender's effective capability
 - The app does not call `sysKill` directly

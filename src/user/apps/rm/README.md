@@ -16,6 +16,11 @@ rm --help
 - Calls `sysUnlink` for each path
 - Stops at the first failure and exits with status `1`
 
+## RKX Metadata
+
+- `stack_pages = 1`
+- capabilities: none
+
 ## Notes
 
 - Directory removal is handled by `rmdir`

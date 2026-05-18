@@ -60,3 +60,5 @@ Actual capability masks can be inspected with:
 /proc/<pid>/status
 ```
 
+The detailed request, grant, IPC propagation, and service authorization model is
+documented in [Capability Model](capabilities.md).

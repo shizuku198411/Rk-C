@@ -41,3 +41,11 @@ svc --help
 
 - Control commands wait for a short IPC reply from `svcmgtd`
 - Actual stop, unregister, kill, wait, and start logic lives in `svcmgtd`
+
+## RKX Metadata
+
+- `stack_pages = 2`
+- capabilities:
+  - `sys_service_manager`
+
+`svcmgtd` checks this capability on service control and supervision requests.

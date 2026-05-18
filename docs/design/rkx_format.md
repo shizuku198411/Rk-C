@@ -42,6 +42,11 @@ capabilities = []
 
 `make_rkx.py` reads this metadata and writes the RKX header.
 
+The `capabilities` list is a request, not a grant. The kernel grants only the
+intersection of the RKX request and its trusted policy. See
+[Capability Model](capabilities.md) for the full grant and syscall enforcement
+flow.
+
 ## Loader Validation
 
 The kernel RKX loader validates:
@@ -69,4 +74,3 @@ On-disk RKX headers can be inspected without starting the app:
 rkxinfo curl
 rkxinfo /bin/svcmgtd
 ```
-

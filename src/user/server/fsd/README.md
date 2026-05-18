@@ -11,6 +11,16 @@ for operations such as `ls`, `mkdir`, file read, and file write.
 - Return results, data sizes, and directory entries through `SysFsResponse`
 - Notify `svcmgtd` with a service ready ACK after startup
 
+## RKX Metadata
+
+- `stack_pages = 4`
+- capabilities:
+  - `sys_raw_fs`
+
+`fsd` is the managed service that owns raw filesystem syscalls. Normal
+applications should use file and directory syscalls that route through the
+service path.
+
 ## Startup Flow
 
 1. `svcmgtd` starts `/bin/fsd`
@@ -39,6 +49,11 @@ Because `fsd` is a required service, stop or ready-timeout cases are handled by
   - On success, stores the byte count in `resp.size`
 - `SysFsOpWriteFile`
   - Calls `sysRawWriteFile(req.path, req.data, req.size)`
+- `SysFsOpFileSize`
+  - Calls `sysRawFileSize`
+- `SysFsOpReadRange`
+  - Calls `sysRawReadRange`
+  - Used by fd reads and tools that inspect only part of a large file
 - Unknown op
   - Returns `resp.result = -1`
 

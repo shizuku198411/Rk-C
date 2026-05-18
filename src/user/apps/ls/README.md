@@ -18,6 +18,11 @@ ls --help
 - Appends `/` to directory names
 - Uses the shared option parser for short options and `--help`
 
+## RKX Metadata
+
+- `stack_pages = 2`
+- capabilities: none
+
 ## Boundaries and Notes
 
 - The maximum number of entries is fixed by the local `LsMaxEntries` buffer

@@ -18,6 +18,12 @@ tcpcheck --help
   received response chunk
 - Closes the connection with `tcpClose`
 
+## RKX Metadata
+
+- `stack_pages = 2`
+- capabilities: none
+- TCP is accessed through `netd`; this app does not request raw network capability
+
 ## Boundaries and Notes
 
 - Receive buffer size is `RxCap = 512`

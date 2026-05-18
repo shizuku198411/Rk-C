@@ -11,6 +11,15 @@ user processes do not access the block device directly.
 - Return results through `SysBlockResponse`
 - Notify `svcmgtd` with a service ready ACK after startup
 
+## RKX Metadata
+
+- `stack_pages = 4`
+- capabilities:
+  - `sys_raw_block`
+
+`blockd` is the only managed service expected to use raw block read/write
+syscalls.
+
 ## Startup Flow
 
 1. `svcmgtd` starts `/bin/blockd`

@@ -16,6 +16,11 @@ dmesg --help
 - The kernel keeps a fixed-size ring buffer, so older messages are dropped once
   the buffer wraps
 
+## RKX Metadata
+
+- `stack_pages = 1`
+- capabilities: none
+
 ## Related Files
 
 - Kernel log storage: `src/kernel/dev/klog.nim`

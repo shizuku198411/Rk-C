@@ -16,6 +16,11 @@ ipc --help
 - `receive` waits for one message with `sysIpcReceive`
 - Received messages are printed as `from <pid>: <message>`
 
+## RKX Metadata
+
+- `stack_pages = 2`
+- capabilities: none
+
 ## Boundaries and Notes
 
 - The message is copied into the kernel IPC message buffer

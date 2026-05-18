@@ -22,6 +22,11 @@ edit --help
 - Saves the full buffer contents with `sysWriteFile`
 - Uses ANSI escape sequences for screen and cursor updates
 
+## RKX Metadata
+
+- `stack_pages = 8`
+- capabilities: none
+
 ## Boundaries and Notes
 
 - The edit buffer is fixed size
