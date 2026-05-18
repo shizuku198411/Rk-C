@@ -54,6 +54,8 @@ elif defined(userApp_stracectl):
   import apps/stracectl/stracectl
 elif defined(userApp_dmesg):
   import apps/dmesg/dmesg
+elif defined(userApp_rkxinfo):
+  import apps/rkxinfo/rkxinfo
 elif defined(userApp_faultcheck):
   import apps/faultcheck/faultcheck
 elif defined(userApp_capcheck):

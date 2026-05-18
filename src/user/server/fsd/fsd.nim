@@ -7,6 +7,7 @@ import ../lib/service_ready
 var
   req: SysFsRequest
   resp: SysFsResponse
+  rawReq: SysFsRequest
 
   procPacket: SysIpcPacket
   procResp: SysIpcPacket
@@ -42,6 +43,15 @@ proc copyPathToPacket(packet: var SysIpcPacket, path: cstring) =
   
   packet.data[i] = '\0'
   packet.len = i
+
+
+proc copyPathToFsRequest(outReq: var SysFsRequest, path: cstring) =
+  var i = U32(0)
+  while i + U32(1) < SysFsPathMax and path[i] != '\0':
+    outReq.path[i] = path[i]
+    inc i
+
+  outReq.path[i] = '\0'
 
 
 proc requestProcFs(op: U32, path: cstring, capacity: U64): I32 =
@@ -152,6 +162,60 @@ proc handleReadFile() =
     resp.size = U64(resp.result)
 
 
+proc handleFileSize() =
+  if isProcPath(reqPath()):
+    resp.result = requestProcFs(SysIpcOpProcFsReadRequest, reqPath(), SysFsDataMax)
+    return
+
+  resp.result = sysRawFileSize(reqPath())
+
+
+proc handleReadRange() =
+  if isProcPath(reqPath()):
+    var requestCapacity = req.size + req.capacity
+    if requestCapacity > SysFsDataMax:
+      requestCapacity = SysFsDataMax
+
+    let n = requestProcFs(SysIpcOpProcFsReadRequest, reqPath(), requestCapacity)
+    if n < 0:
+      resp.result = -1
+      return
+    if req.size >= U64(n):
+      resp.result = 0
+      resp.size = 0
+      return
+
+    var copySize = U64(n) - req.size
+    if copySize > req.capacity:
+      copySize = req.capacity
+    if copySize > SysFsDataMax:
+      copySize = SysFsDataMax
+
+    resp.result = I32(copySize)
+    resp.size = copySize
+
+    var i = U64(0)
+    while i < copySize:
+      resp.data[i] = U8(procResp.data[req.size + i])
+      inc i
+
+    return
+
+  rawReq = SysFsRequest()
+  rawReq.size = req.size
+  rawReq.capacity = req.capacity
+  copyPathToFsRequest(rawReq, reqPath())
+
+  resp.result = sysRawReadRange(addr rawReq)
+  if resp.result > 0:
+    resp.size = U64(resp.result)
+
+    var i = U64(0)
+    while i < resp.size and i < SysFsDataMax:
+      resp.data[i] = rawReq.data[i]
+      inc i
+
+
 proc handleWriteFile() =
   resp.result = sysRawWriteFile(reqPath(), addr req.data[0], req.size)
 
@@ -171,6 +235,10 @@ proc handleRequest() =
     handleReadFile()
   elif req.op == SysFsOpWriteFile:
     handleWriteFile()
+  elif req.op == SysFsOpFileSize:
+    handleFileSize()
+  elif req.op == SysFsOpReadRange:
+    handleReadRange()
   else:
     resp.result = -1
 

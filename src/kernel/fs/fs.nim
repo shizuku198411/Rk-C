@@ -568,6 +568,25 @@ proc fsIsDir*(path: cstring): bool =
   superBlock.nodes[idx].typ == FsTypeDir or superBlock.nodes[idx].typ == FsTypeMount
 
 
+proc fsFileSize*(path: cstring): int =
+  if not fsReady or path == nil:
+    return -1
+
+  let mountIdx = findMount(path)
+  if mountIdx >= 0 and mounts[mountIdx].backend == vfsTmpfs:
+    return tmpfsFileSize(mountLocalPath(path, mounts[mountIdx].pathLen))
+
+  let appIdx = resolveAppfsPath(path)
+  if appIdx >= 0:
+    return int(appfsEntries[appIdx].size)
+
+  let idx = resolvePath(path)
+  if idx < 0 or superBlock.nodes[idx].typ != FsTypeFile:
+    return -1
+
+  int(superBlock.nodes[idx].size)
+
+
 proc fsMkdir*(path: cstring): int =
   if not fsReady:
     return -1
@@ -704,3 +723,65 @@ proc fsReadFile*(path: cstring, dst: pointer, capacity: U64): int =
       inc done
     inc blk
   int(size)
+
+
+proc fsReadFileRange*(path: cstring, dst: pointer, offset, capacity: U64): int =
+  if not fsReady or path == nil or dst == nil:
+    return -1
+  if capacity == U64(0):
+    return 0
+
+  let mountIdx = findMount(path)
+  if mountIdx >= 0 and mounts[mountIdx].backend == vfsTmpfs:
+    return tmpfsReadRange(mountLocalPath(path, mounts[mountIdx].pathLen), dst, offset, capacity)
+
+  let appIdx = resolveAppfsPath(path)
+  if appIdx >= 0:
+    let size = U64(appfsEntries[appIdx].size)
+    if offset >= size:
+      return 0
+
+    var readLen = size - offset
+    if readLen > capacity:
+      readLen = capacity
+
+    let base = AppfsStartBlock * BlockSize + U64(appfsEntries[appIdx].dataOff) + offset
+    if appfsReadBytes(base, dst, readLen) < 0:
+      return -1
+    return int(readLen)
+
+  let idx = resolvePath(path)
+  if idx < 0 or superBlock.nodes[idx].typ != FsTypeFile:
+    return -1
+
+  let node = superBlock.nodes[idx]
+  let size = U64(node.size)
+  if offset >= size:
+    return 0
+
+  var readLen = size - offset
+  if readLen > capacity:
+    readLen = capacity
+
+  let outBuf = cast[ptr UncheckedArray[U8]](dst)
+  var done = U64(0)
+  while done < readLen:
+    let cur = offset + done
+    let blk = cur div BlockSize
+    let inBlk = cur mod BlockSize
+    if blk >= FsFileBlocks:
+      return -1
+    if serviceBlockRead(U64(node.startBlock) + blk, addr blockBuf[0]) < 0:
+      return -1
+
+    var chunk = BlockSize - inBlk
+    if chunk > readLen - done:
+      chunk = readLen - done
+
+    var i = U64(0)
+    while i < chunk:
+      outBuf[done + i] = blockBuf[inBlk + i]
+      inc i
+    done += chunk
+
+  int(readLen)

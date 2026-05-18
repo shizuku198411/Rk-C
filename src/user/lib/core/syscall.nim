@@ -224,6 +224,14 @@ proc sysRawWriteFile*(path: cstring, buf: pointer, size: U64): I32 =
   I32(rawSyscall3(SysRawWriteFile, cast[U64](path), cast[U64](buf), size))
 
 
+proc sysRawFileSize*(path: cstring): I32 =
+  I32(rawSyscall3(SysRawFileSize, cast[U64](path), 0, 0))
+
+
+proc sysRawReadRange*(req: ptr SysFsRequest): I32 =
+  I32(rawSyscall3(SysRawReadRange, cast[U64](req), 0, 0))
+
+
 proc sysBlockServiceRegister*(): I32 =
   I32(rawSyscall3(SysBlockServiceRegister, 0, 0, 0))
 

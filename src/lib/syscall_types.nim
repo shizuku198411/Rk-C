@@ -18,6 +18,8 @@ const
   SysFsOpRmdir* = U32(4)
   SysFsOpReadFile* = U32(5)
   SysFsOpWriteFile* = U32(6)
+  SysFsOpFileSize* = U32(7)
+  SysFsOpReadRange* = U32(8)
   SysBlockOpRead* = U32(1)
   SysBlockOpWrite* = U32(2)
 

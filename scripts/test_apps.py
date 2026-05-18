@@ -191,6 +191,7 @@ def normal_tests() -> list[TestCase]:
         "curl": "usage: curl",
         "stracectl": "usage:",
         "dmesg": "usage: dmesg",
+        "rkxinfo": "usage: rkxinfo",
         "capcheck": "usage: capcheck",
         "pollcheck": "usage: pollcheck",
     }
@@ -201,6 +202,7 @@ def normal_tests() -> list[TestCase]:
         [
             TestCase("ls /bin", "ls /bin", ["shell", "svcmgtd", "curl", "dmesg"]),
             TestCase("ls -l /bin", "ls -l /bin", ["shell", "bytes"]),
+            TestCase("rkxinfo curl", "rkxinfo curl", ["path: /bin/curl", "magic: RKX1", "version: 2", "text:", "stack_pages:"]),
             TestCase("mkdir /tmp/appsmoke", "mkdir /tmp/appsmoke", []),
             TestCase("ls /tmp after mkdir", "ls /tmp", ["appsmoke/"]),
             TestCase("rmdir /tmp/appsmoke", "rmdir /tmp/appsmoke", []),

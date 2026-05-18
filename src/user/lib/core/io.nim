@@ -32,3 +32,23 @@ proc writeUnsigned*(value: U64) =
     n = n div 10
 
   discard sysWriteFd(1, addr buf[pos], U64(32 - pos))
+
+
+proc writeHexValue*(value: U64) =
+  write("0x")
+
+  var started = false
+  var shift = 60
+  while shift >= 0:
+    let digit = (value shr U64(shift)) and U64(0xf)
+    if digit != 0 or started or shift == 0:
+      started = true
+      if digit < U64(10):
+        writeChar(char(ord('0') + int(digit)))
+      else:
+        writeChar(char(ord('a') + int(digit - U64(10))))
+    shift -= 4
+
+
+proc writeHex32Value*(value: U32) =
+  writeHexValue(U64(value))

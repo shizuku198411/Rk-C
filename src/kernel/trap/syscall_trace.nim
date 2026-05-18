@@ -53,6 +53,8 @@ proc syscallName*(num: U64): cstring =
   of SysRawRmdir: cstring("raw_rmdir")
   of SysRawReadFile: cstring("raw_read_file")
   of SysRawWriteFile: cstring("raw_write_file")
+  of SysRawFileSize: cstring("raw_file_size")
+  of SysRawReadRange: cstring("raw_read_range")
   of SysBlockServiceRegister: cstring("block_service_register")
   of SysBlockServiceReceive: cstring("block_service_receive")
   of SysBlockServiceReply: cstring("block_service_reply")
@@ -321,12 +323,15 @@ proc printSyscallArgs(frame: ptr TrapFrame) =
     printNamedPtr("entries", frame.a1)
     print(", ")
     printNamedU64("max", frame.a2)
-  of SysRawMkdir, SysRawUnlink, SysRawRmdir, SysRawReadFile, SysRawWriteFile:
+  of SysRawMkdir, SysRawUnlink, SysRawRmdir, SysRawReadFile, SysRawWriteFile,
+      SysRawFileSize:
     printNamedCString("path", frame.a0)
     print(", ")
     printNamedPtr("arg1", frame.a1)
     print(", ")
     printNamedU64("arg2", frame.a2)
+  of SysRawReadRange:
+    printNamedPtr("req", frame.a0)
   of SysBlockServiceReceive:
     printNamedPtr("req", frame.a0)
   of SysBlockServiceReply:

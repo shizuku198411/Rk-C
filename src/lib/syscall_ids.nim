@@ -68,3 +68,5 @@ const
   SysKmsg* = U64(67)
   SysPoll* = U64(68)
   SysGetCap* = U64(69)
+  SysRawFileSize* = U64(70)
+  SysRawReadRange* = U64(71)

@@ -180,6 +180,12 @@ proc handleSyscall*(frame: ptr TrapFrame) =
   of SysRawWriteFile:
     frame.a0 = syscallRawWriteFile(frame.a0, frame.a1, frame.a2)
 
+  of SysRawFileSize:
+    frame.a0 = syscallRawFileSize(frame.a0)
+
+  of SysRawReadRange:
+    frame.a0 = syscallRawReadRange(frame.a0)
+
   of SysBlockServiceRegister:
     frame.a0 = syscallBlockServiceRegister()
 

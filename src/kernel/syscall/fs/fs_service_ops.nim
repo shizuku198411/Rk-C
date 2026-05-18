@@ -38,7 +38,9 @@ proc findPending(id: U64): ptr PendingFsRequest =
 proc queueFsRequest(op: U32, path: cstring, data: pointer, size, capacity: U64): ptr PendingFsRequest =
   if not fsServiceAvailable() or currentIsFsService():
     return nil
-  if size > SysFsDataMax or capacity > SysFsDataMax:
+  if capacity > SysFsDataMax:
+    return nil
+  if data != nil and size > SysFsDataMax:
     return nil
 
   let p = allocPending()
@@ -51,7 +53,7 @@ proc queueFsRequest(op: U32, path: cstring, data: pointer, size, capacity: U64):
   p.request.capacity = capacity
   discard copyCString(p.request.path, path)
 
-  if size > 0:
+  if data != nil and size > 0:
     discard copyMem(addr p.request.data[0], data, size)
 
   wakeIpcWaiter(servicePid(serviceFs))
@@ -75,6 +77,14 @@ proc rawLsKernel(path: cstring, outEntries: ptr FsDirEntry, maxEntries: U64): in
 
 proc rawReadFileKernel(path: cstring, buf: pointer, capacity: U64): int =
   fsReadFile(path, buf, capacity)
+
+
+proc rawFileSizeKernel(path: cstring): int =
+  fsFileSize(path)
+
+
+proc rawReadFileRangeKernel(path: cstring, buf: pointer, offset, capacity: U64): int =
+  fsReadFileRange(path, buf, offset, capacity)
 
 
 proc syscallFsServiceRegister*(): U64 =
@@ -263,6 +273,47 @@ proc serviceReadFileToKernel*(path: cstring, dst: pointer, capacity: U64): I32 =
   outValue
 
 
+proc serviceFileSizeToKernel*(path: cstring): I32 =
+  let req = queueFsRequest(SysFsOpFileSize, path, nil, 0, 0)
+  if req == nil:
+    if not canFallbackToRawFs():
+      return -1
+
+    return I32(rawFileSizeKernel(path))
+
+  let resp = waitFsResponse(req)
+  let outValue =
+    if resp == nil:
+      -1'i32
+    else:
+      resp.result
+
+  finishPending(req)
+  outValue
+
+
+proc serviceReadFileRangeToKernel*(path: cstring, dst: pointer, offset, capacity: U64): I32 =
+  if dst == nil or capacity > SysFsDataMax:
+    return -1
+
+  let req = queueFsRequest(SysFsOpReadRange, path, nil, offset, capacity)
+  if req == nil:
+    if not canFallbackToRawFs():
+      return -1
+
+    return I32(rawReadFileRangeKernel(path, dst, offset, capacity))
+
+  let resp = waitFsResponse(req)
+  if resp == nil or resp.result < 0:
+    finishPending(req)
+    return -1
+
+  discard copyMem(dst, addr resp.data[0], U64(resp.result))
+  let outValue = resp.result
+  finishPending(req)
+  outValue
+
+
 proc serviceWriteFile*(path: cstring, data: pointer, size: U64): U64 =
   let req = queueFsRequest(SysFsOpWriteFile, path, data, size, 0)
   if req == nil:
@@ -351,6 +402,45 @@ proc syscallRawReadFile*(pathVal, bufVal, capacity: U64): U64 =
   if readLen < 0:
     return U64(-1'i64)
   if copyToUser(bufVal, addr rawFileBuf[0], U64(readLen)) != 0:
+    return U64(-1'i64)
+
+  U64(readLen)
+
+
+proc syscallRawFileSize*(pathVal: U64): U64 =
+  if not canSyscallRawFs() or pathVal == 0:
+    return U64(-1'i64)
+
+  var pathBuf: array[SysFsPathMax, char]
+  if copyUserCString(addr pathBuf[0], pathVal, U64(SysFsPathMax)) < 0:
+    return U64(-1'i64)
+
+  let size = rawFileSizeKernel(cast[cstring](addr pathBuf[0]))
+  if size < 0:
+    return U64(-1'i64)
+
+  U64(size)
+
+
+proc syscallRawReadRange*(reqVal: U64): U64 =
+  if not canSyscallRawFs() or reqVal == 0:
+    return U64(-1'i64)
+
+  var req: SysFsRequest
+  if copyFromUser(addr req, reqVal, U64(sizeof(SysFsRequest))) != 0:
+    return U64(-1'i64)
+  if req.capacity > SysFsDataMax:
+    return U64(-1'i64)
+
+  let readLen = rawReadFileRangeKernel(
+    cast[cstring](addr req.path[0]),
+    addr req.data[0],
+    req.size,
+    req.capacity,
+  )
+  if readLen < 0:
+    return U64(-1'i64)
+  if copyToUser(reqVal, addr req, U64(sizeof(SysFsRequest))) != 0:
     return U64(-1'i64)
 
   U64(readLen)

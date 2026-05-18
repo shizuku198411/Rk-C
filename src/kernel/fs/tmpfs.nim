@@ -154,6 +154,40 @@ proc tmpfsIsDir*(path: cstring): bool =
   idx >= 0 and nodes[idx].typ == TmpfsTypeDir
 
 
+proc tmpfsFileSize*(path: cstring): int =
+  if not ready:
+    return -1
+  let idx = resolvePath(path)
+  if idx < 0 or nodes[idx].typ != TmpfsTypeFile:
+    return -1
+
+  int(nodes[idx].size)
+
+
+proc tmpfsReadRange*(path: cstring, dst: pointer, offset, capacity: U64): int =
+  if not ready or dst == nil:
+    return -1
+  let idx = resolvePath(path)
+  if idx < 0 or nodes[idx].typ != TmpfsTypeFile:
+    return -1
+
+  let size = U64(nodes[idx].size)
+  if offset >= size:
+    return 0
+
+  var readLen = size - offset
+  if readLen > capacity:
+    readLen = capacity
+
+  let outBuf = cast[ptr UncheckedArray[char]](dst)
+  var i = U64(0)
+  while i < readLen:
+    outBuf[i] = nodes[idx].data[offset + i]
+    inc i
+
+  int(readLen)
+
+
 proc tmpfsReadFile*(path: cstring, dst: pointer, capacity: U64): int =
   if not ready or dst == nil:
     return -1
@@ -165,12 +199,7 @@ proc tmpfsReadFile*(path: cstring, dst: pointer, capacity: U64): int =
   if size > capacity:
     return -1
 
-  let outBuf = cast[ptr UncheckedArray[char]](dst)
-  var i = U64(0)
-  while i < size:
-    outBuf[i] = nodes[idx].data[i]
-    inc i
-  int(size)
+  tmpfsReadRange(path, dst, U64(0), capacity)
 
 
 proc tmpfsMkdir*(path: cstring): int =

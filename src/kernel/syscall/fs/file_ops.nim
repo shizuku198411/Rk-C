@@ -99,7 +99,7 @@ proc syscallWriteFile*(path, buf, size: U64): U64 =
 
 
 proc refreshFdSize(entry: var FdEntry): bool =
-  let size = serviceReadFileToKernel(fdPath(entry), addr fdFileBuf[0], SysFileIoMax)
+  let size = serviceFileSizeToKernel(fdPath(entry))
   if size < 0:
     return false
 
@@ -173,11 +173,9 @@ proc syscallReadFd*(fdVal, bufVal, len: U64): U64 =
   if entry.kind != SysFdKindFile:
     return U64(-1'i64)
 
-  let size = serviceReadFileToKernel(fdPath(entry[]), addr fdFileBuf[0], SysFileIoMax)
-  if size < 0:
+  if not refreshFdSize(entry[]):
     return U64(-1'i64)
 
-  entry.size = U64(size)
   if entry.offset >= entry.size:
     return 0
 
@@ -188,11 +186,17 @@ proc syscallReadFd*(fdVal, bufVal, len: U64): U64 =
     else:
       len
 
-  if copyToUser(bufVal, cast[pointer](cast[U64](addr fdFileBuf[0]) + entry.offset), readLen) != 0:
+  let actualLen = serviceReadFileRangeToKernel(fdPath(entry[]), addr fdFileBuf[0], entry.offset, readLen)
+  if actualLen < 0:
+    return U64(-1'i64)
+  if actualLen == 0:
+    return 0
+
+  if copyToUser(bufVal, addr fdFileBuf[0], U64(actualLen)) != 0:
     return U64(-1'i64)
 
-  entry.offset += readLen
-  readLen
+  entry.offset += U64(actualLen)
+  U64(actualLen)
 
 
 proc syscallWriteFd*(fdVal, bufVal, len: U64): U64 =
