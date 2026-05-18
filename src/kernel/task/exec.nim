@@ -92,6 +92,9 @@ proc trustedCapsForPath(path: cstring): U32 =
   if cstringEq(path, "/bin/shell"):
     return SysCapShutdown
 
+  if cstringEq(path, "/bin/svc"):
+    return SysCapServiceManager
+
   SysCapNone
 
 

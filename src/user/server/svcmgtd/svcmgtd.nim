@@ -2,6 +2,7 @@ import ../../lib/core/io
 import ../../lib/core/strutils
 import ../../lib/core/syscall
 import ../../../lib/service_catalog
+import ../../../lib/syscall_caps
 
 const
   ProcessCap = int(SysProcessMaxSlots)
@@ -220,6 +221,8 @@ proc handleReadyPacket(packet: ptr SysIpcPacket) =
 
 proc handleControlPacket(packet: ptr SysIpcPacket) =
   if packet.op == SysIpcOpSvcRestart:
+    if (packet.capabilityMask and SysCapServiceManager) == 0:
+      return
     handleRestartCommand(cast[cstring](addr packet.data[0]))
   elif packet.op == SysIpcOpSvcReady:
     handleReadyPacket(packet)
