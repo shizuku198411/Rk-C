@@ -17,37 +17,31 @@ Rk-C is an experimental microkernel-style operating system for RISC-V 64-bit,
 implemented mainly in Nim.
 
 It targets QEMU's `virt` machine, boots through OpenSBI, enters S-mode as an ELF
-kernel, and runs U-mode programs packaged as `rkx` images from a disk-backed
+kernel, and runs U-mode programs packaged as RKX images from a disk-backed
 `/bin`.
 
-The project is intentionally small, but it already has a real userspace/server
+The project is intentionally small, but it already has a real userland/server
 shape: core mechanisms remain in the kernel, while process management, block
-I/O, filesystem operations, service management, and networking are served from
-userland processes over IPC.
+I/O, filesystem operations, service management, procfs, and networking are
+served from userland processes over IPC.
 
-## Current Status
+## Highlights
 
 - RISC-V 64-bit S-mode kernel on QEMU `virt`
 - OpenSBI `fw_jump` boot flow
 - Sv39 paging with per-process address spaces
-- U-mode process execution from `rkx` images
-- `rkx` segment permissions:
-  - text: user RX
-  - rodata: user R
-  - data/bss: user RW
-  - stack: user RW, NX
-- trap entry, syscall dispatch, and user/kernel fault split
-- preemptive timer-driven scheduling for user processes
-- hardened usercopy range checks for syscall pointer arguments
-- structured IPC packets and request/reply helpers
-- service registry with ready ACKs, restart support, and degraded optional services
-- userland servers for process, block, filesystem, and network services
-- appfs-packed `/bin`
-- VFS-style mount points with tmpfs-backed `/tmp`
-- shell with standalone command binaries, pipes, redirection, and background apps
-- VirtIO MMIO block and network devices
-- ARP, IPv4, ICMP, UDP, DNS, TCP, HTTP, and experimental HTTPS/TLS client paths
-- QEMU smoke tests for boot, services, user apps, W^X, NX stack, and user pointer rejection
+- RKX executable format with separate text, rodata, data, bss, and stack
+  mappings
+- W^X user mappings and NX user stacks
+- timer-driven preemptive scheduling for user processes
+- hardened usercopy validation for syscall pointer arguments
+- structured IPC and request/reply service protocols
+- service registry, ready ACKs, restart/degraded handling, and supervision
+  status/logs
+- userland servers for process, block, filesystem, procfs, and networking
+- appfs-packed `/bin`, tmpfs-backed `/tmp`, and `/proc`
+- shell commands, pipes, redirection, background apps, syscall tracing, and
+  smoke tests
 
 ## Architecture
 
@@ -60,7 +54,7 @@ kernel.elf
   +-- trap/syscall dispatch
   +-- scheduler and process table
   +-- memory manager and Sv39 paging
-  +-- rkx loader
+  +-- RKX loader
   +-- IPC transport and service registry
   +-- low-level VirtIO MMIO access
   |
@@ -69,103 +63,13 @@ kernel.elf
         +-- /bin/procmgtd
         +-- /bin/blockd
         +-- /bin/fsd
+        +-- /bin/procfsd
         +-- /bin/netd
         |
         +-- /bin/shell
 ```
 
-The boot task starts `svcmgtd`, waits for required services to become ready,
-waits for optional services until timeout, marks unavailable optional services
-as degraded, and then starts the interactive shell.
-
-Required services:
-
-- `svcmgtd`
-- `procmgtd`
-- `blockd`
-- `fsd`
-
-Optional service:
-
-- `netd`
-
-## Kernel Responsibilities
-
-- bootstrapping from OpenSBI
-- trap entry and syscall dispatch
-- page allocation and Sv39 page table management
-- process table, process lifecycle, and context switching
-- preemptive timer scheduling
-- safe user memory copy validation
-- `rkx` image loading and segment permission mapping
-- service registry and service availability checks
-- IPC queueing and request/reply transport
-- raw fallback paths while required services are unavailable during boot
-- low-level VirtIO MMIO access for block and network devices
-
-## Userland Servers
-
-| Server | Path | Role |
-| --- | --- | --- |
-| `svcmgtd` | `/bin/svcmgtd` | Starts, monitors, lists, and restarts registered services. |
-| `procmgtd` | `/bin/procmgtd` | Handles process listing and process termination requests. |
-| `blockd` | `/bin/blockd` | Serves block read/write requests over IPC. |
-| `fsd` | `/bin/fsd` | Serves file and directory operations over IPC. |
-| `netd` | `/bin/netd` | Serves network operations over IPC. Optional; boot may continue degraded without it. |
-
-## User Applications
-
-| Command | Description |
-| --- | --- |
-| `shell` | Interactive shell |
-| `ls` | List directory entries |
-| `cat` | Print file contents |
-| `mkdir` | Create directory |
-| `rm` | Remove file |
-| `rmdir` | Remove empty directory |
-| `ps` | Show processes through `procmgtd` |
-| `kill` | Request process termination through `procmgtd` |
-| `date` | Show RTC date/time |
-| `edit` | Small terminal file editor |
-| `ipc` | IPC test command |
-| `svc` | Service management command |
-| `ping` | ICMP echo request through `netd` |
-| `nslookup` | DNS A record lookup through UDP/netd |
-| `tcpcheck` | TCP connectivity test command |
-| `curl` | HTTP/HTTPS client command |
-| `stracectl` | Syscall trace control command |
-
-Test-only app:
-
-| Command | Description |
-| --- | --- |
-| `faultcheck` | Packed only by `make test-apps`; checks invalid user CString rejection, user text W^X, and NX stack behavior. |
-
-## RKX User Image Format
-
-User programs are linked as ELF files, then converted by `scripts/make_rkx.py`
-into compact `rkx` images for appfs.
-
-`rkx` stores:
-
-- magic/version/header size
-- entry virtual address
-- text segment VA, file offset, file size, memory size
-- rodata segment VA, file offset, file size, memory size
-- data segment VA, file offset, file size, memory size
-- bss VA and memory size
-
-The kernel loader validates:
-
-- magic/version/header size
-- file ranges
-- page alignment
-- expected user VA window
-- entry inside text
-- segment non-overlap
-
-The loader maps each segment with separate permissions, avoiding the old
-single RWX user image mapping.
+Design details live under [docs/design](docs/design/README.md).
 
 ## Repository Layout
 
@@ -173,31 +77,17 @@ single RWX user image mapping.
 src/
   arch/riscv64/        RISC-V assembly and CSR/SBI helpers
   kernel/              Kernel implementation
-    dev/               Console, timer, RTC
-    fs/                Kernel filesystem and VFS pieces
-    init/              Bootstrap code
-    lib/               Kernel-only helper modules
-    mm/                Memory, paging, usercopy
-    net/               Low-level network device support
-    service/           Kernel service registry
-    syscall/           Syscall implementation grouped by subsystem
-    task/              Process, scheduler, exec, rkx loader
-    trap/              Trap and syscall entry logic
   lib/                 Shared kernel/user ABI types and helpers
   user/
     apps/              User commands and test-only apps
-    lib/
-      core/            User syscall, IO, path, string, CLI helpers
-      ipc/             User IPC helpers and service clients
-      net/             User network clients and protocol helpers
-      runtime/         User entry and syscall assembly
+    lib/               User runtime, syscall, IPC, and protocol helpers
     server/            Userland servers
 scripts/
-  make_rkx.py          Converts user ELF files into rkx images
-  pack_appfs.py        Packs rkx images into the disk image
+  make_rkx.py          Converts user ELF files into RKX images
+  pack_appfs.py        Packs RKX images into the disk image
   test_apps.py         Boots QEMU and smoke-tests user apps
 docs/
-  design/              Design notes
+  design/              Subsystem design notes
   review/              Review notes and follow-up checklists
 ```
 
@@ -274,15 +164,10 @@ This builds:
 - user applications and servers as `bin/*.rkx`
 - `bin/disk.img` with packed `/bin` contents
 
-Build kernel and rkx images without repacking the disk image:
+Useful variants:
 
 ```bash
 make build-bins
-```
-
-Build the test-only app images too:
-
-```bash
 make build-test-bins
 ```
 
@@ -292,29 +177,22 @@ make build-test-bins
 make run
 ```
 
-The kernel boots through OpenSBI, starts the service manager, waits for required
-service ready ACKs, waits for optional services up to timeout, and then starts
-the shell.
-
-Example boot flow:
-
-```text
-[svcmgtd] service management server started pid=3
-[svcmgtd] service started procmgtd pid=4
-[svcmgtd] service ready procmgtd pid=4
-[svcmgtd] service started blockd pid=5
-[svcmgtd] service ready blockd pid=5
-[svcmgtd] service started fsd pid=6
-[svcmgtd] service ready fsd pid=6
-[svcmgtd] service started netd pid=7
-[svcmgtd] service ready netd pid=7
-Rk-C:/$
-```
-
 Run without a VirtIO network device to test degraded optional-service boot:
 
 ```bash
 make degraded-run
+```
+
+Start QEMU paused with a GDB server:
+
+```bash
+make qemu-debug
+```
+
+Override the GDB port with:
+
+```bash
+make qemu-debug GDB_PORT=1235
 ```
 
 ## Tests
@@ -325,21 +203,6 @@ Run the QEMU app smoke test suite:
 make test-apps
 ```
 
-The default test network is TAP. Set up `tap0` as shown in the networking
-section before running the full network smoke tests.
-
-The test runner:
-
-- builds normal and test-only rkx images
-- copies `bin/disk.img` to `bin/test-disk.img`
-- packs `/bin/faultcheck` only into the test disk
-- boots QEMU with the test disk
-- verifies boot, shell commands, all app help paths, FS operations, pipes,
-  redirection, service/process commands, network smoke paths, W^X, NX stack, and
-  invalid user CString rejection
-- prints expected values and summarized actual output for each test
-- deletes `bin/test-disk.img` after completion
-
 Useful variants:
 
 ```bash
@@ -348,6 +211,9 @@ python3 scripts/test_apps.py --skip-network-smoke
 python3 scripts/test_apps.py --keep-test-disk
 python3 scripts/test_apps.py --tap-if tap0 --host-ip 10.0.1.1
 ```
+
+The test runner uses `bin/test-disk.img` and removes it after completion unless
+`--keep-test-disk` is passed.
 
 ## Networking
 
@@ -358,8 +224,7 @@ QEMU_NET=tap
 QEMU_TAP_IF=tap0
 ```
 
-The guest creates default static network settings if `/etc/interface.conf` and
-`/etc/resolve.conf` are missing:
+The guest default network settings are:
 
 ```text
 guest IP:    10.0.1.10
@@ -384,65 +249,25 @@ QEMU user networking is also available:
 make run QEMU_NET=user
 ```
 
-The user-mode network is configured as `10.0.1.0/24` with host address
-`10.0.1.1` by default.
-
-External ICMP may timeout with QEMU user networking, so TAP is the recommended
-mode for `ping` and general network testing.
-
 Print the current networking notes:
 
 ```bash
 make net-host-help
 ```
 
-## HTTPS/TLS Status
-
-The HTTPS path is experimental. It is intended as a learning implementation and
-currently focuses on fetching HTTPS content through the userspace network stack.
-
-Implemented pieces include:
-
-- TLS 1.3 client handshake groundwork
-- X25519 key exchange
-- HKDF/SHA-256 helpers
-- ChaCha20-Poly1305 AEAD
-- HTTP over the TLS transport path
-
-Certificate trust validation, mTLS, entropy syscall integration, and broader
-cipher suite support are future work.
-
 ## Shell Examples
 
 ```text
 Rk-C:/$ help
-Rk-C:/$ svc list
-Rk-C:/$ ps
-Rk-C:/$ ls /
-Rk-C:/$ mkdir /tmp/demo
+Rk-C:/$ svc status
+Rk-C:/$ ps -l
+Rk-C:/$ ls /proc
+Rk-C:/$ rkxinfo curl
 Rk-C:/$ date > /tmp/now.txt
 Rk-C:/$ cat /tmp/now.txt | cat
-Rk-C:/$ edit /tmp/hello.txt
 Rk-C:/$ ping 10.0.1.1
-Rk-C:/$ nslookup example.com
 Rk-C:/$ curl http://example.com/
-Rk-C:/$ curl https://example.com/
-Rk-C:/$ svc restart fsd
 Rk-C:/$ shutdown
-```
-
-## Debug Run
-
-```bash
-make qemu-debug
-```
-
-This starts QEMU with `-S -gdb tcp::1234`.
-
-Override the GDB port with:
-
-```bash
-make qemu-debug GDB_PORT=1235
 ```
 
 ## Clean
@@ -457,5 +282,3 @@ make clean
 - The ABI and internal service protocols are still evolving.
 - The HTTPS/TLS path does not validate certificates yet.
 - The network stack is intentionally small and experimental.
-- Many subsystems intentionally start small and are being pushed toward
-  userland services over time.
