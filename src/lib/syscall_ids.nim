@@ -70,3 +70,4 @@ const
   SysGetCap* = U64(69)
   SysRawFileSize* = U64(70)
   SysRawReadRange* = U64(71)
+  SysSignalPoll* = U64(72)

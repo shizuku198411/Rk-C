@@ -43,7 +43,7 @@ USER_SHELL_RKX := $(BIN_DIR)/shell.rkx
 
 USER_APP_NAMES := ls cat mkdir ps rm rmdir date edit ipc kill svc ping nslookup tcpcheck curl stracectl dmesg rkxinfo
 USER_SERVER_NAMES := svcmgtd procmgtd fsd blockd procfsd netd
-TEST_APP_NAMES := faultcheck capcheck pollcheck
+TEST_APP_NAMES := faultcheck capcheck pollcheck signalcheck
 APPFS_EXTRA_APPS ?=
 
 USER_PACK_NAMES := $(filter-out tcpcheck curl,$(USER_APP_NAMES)) $(USER_SERVER_NAMES) tcpcheck curl

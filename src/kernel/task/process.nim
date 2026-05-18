@@ -116,6 +116,7 @@ type
     wait*: WaitTarget
     detached*: bool
     exitStatus*: U64
+    pendingSignals*: U32
     cpuTicks*: U64
     cpuWindowTicks*: U64
     cpuPercent*: U32
@@ -159,6 +160,10 @@ proc wakePipeReaders*(pipeId: I32)
 proc wakePipeWriters*(pipeId: I32)
 proc wakePollWaiters*()
 proc clearWait*(p: ptr Process)
+proc markProcessZombie*(p: ptr Process, status: U64)
+proc sendProcessSignal*(pid: I32, signal: U32): int
+proc takeProcessSignal*(p: ptr Process): U32
+proc deliverCurrentSignals*()
 
 
 proc setKernelPageTable*(root: PageTable) =
@@ -188,6 +193,13 @@ proc clearIpcQueue(p: ptr Process) =
   while i < SysIpcQueueCap:
     p.ipc.queue[i] = SysIpcPacket()
     inc i
+
+
+proc signalBit(signal: U32): U32 =
+  if signal == SysSignalNone or signal > SysSignalMax:
+    return U32(0)
+
+  U32(1'u32 shl signal)
 
 
 proc pipeNext(index: U32): U32 =
@@ -376,6 +388,7 @@ proc sleepCurrentFor(kind: WaitKind, value: U64) =
   currentProc.wait.value = value
   currentProc.state = procSleeping
   schedule()
+  deliverCurrentSignals()
 
 
 proc wakeWaiters(kind: WaitKind, value: U64, wakeAll: bool) =
@@ -469,6 +482,7 @@ proc createKernelProcessInternal(entry: KernelTask, isIdle: bool, name: cstring)
   clearWait(p)
   p.detached = false
   p.exitStatus = 0
+  p.pendingSignals = U32(0)
   clearIpcQueue(p)
   initStandardFiles(p)
   p.context = Context()
@@ -497,6 +511,7 @@ proc processInit*() =
     clearWait(addr procs[i])
     procs[i].detached = false
     procs[i].exitStatus = 0
+    procs[i].pendingSignals = U32(0)
     clearIpcQueue(addr procs[i])
     clearFileState(addr procs[i])
     inc i
@@ -589,6 +604,7 @@ proc configureUserProcess*(p: ptr Process, root: PageTable, path: cstring,
   p.user.capabilityMask = capabilityMask
   p.user.arg0 = arg0
   p.user.arg1 = arg1
+  p.pendingSignals = U32(0)
   clearWait(p)
   p.exitStatus = 0
   p.state = procRunnable
@@ -647,6 +663,7 @@ proc discardProcess*(p: ptr Process) =
   clearWait(p)
   p.detached = false
   p.exitStatus = 0
+  p.pendingSignals = U32(0)
   p.cpuTicks = 0
   p.cpuWindowTicks = 0
   p.cpuPercent = 0
@@ -789,6 +806,54 @@ proc wakePipeWriters*(pipeId: I32) =
   wakePollWaiters()
 
 
+proc wakeProcessForSignal(p: ptr Process) =
+  if p == nil:
+    return
+
+  if p.state == procSleeping:
+    clearWait(p)
+    p.state = procRunnable
+
+  wakePollWaiters()
+  requestResched()
+
+
+proc sendProcessSignal*(pid: I32, signal: U32): int =
+  let bit = signalBit(signal)
+  if bit == U32(0):
+    return -1
+
+  let p = findProcessByPid(pid)
+  if p == nil or p.state == procUnused or p.state == procZombie:
+    return -1
+
+  p.pendingSignals = p.pendingSignals or bit
+  wakeProcessForSignal(p)
+  0
+
+
+proc takeProcessSignal*(p: ptr Process): U32 =
+  if p == nil or p.pendingSignals == U32(0):
+    return SysSignalNone
+
+  let order = [
+    SysSignalTerminate,
+    SysSignalInterrupt,
+    SysSignalChildExited,
+    SysSignalServiceStopped,
+  ]
+  var i = 0
+  while i < order.len:
+    let signal = order[i]
+    let bit = signalBit(signal)
+    if (p.pendingSignals and bit) != U32(0):
+      p.pendingSignals = p.pendingSignals and not bit
+      return signal
+    inc i
+
+  SysSignalNone
+
+
 proc reapDetachedZombies() =
   var i = 0
   while i < MaxProcs:
@@ -824,17 +889,40 @@ proc markProcessZombie*(p: ptr Process, status: U64) =
     return
 
   let pid = p.pid
+  let parentPid = p.parentPid
 
   detachChildrenOf(pid)
 
   p.exitStatus = status
   clearWait(p)
   clearFileState(p)
+  p.pendingSignals = U32(0)
   p.state = procZombie
 
   if not p.detached and not hasLiveParane(p):
     p.detached = true
   wakePidWaiters(p.pid)
+
+  if parentPid > 0:
+    discard sendProcessSignal(parentPid, SysSignalChildExited)
+
+
+proc deliverCurrentSignals*() =
+  if currentProc == nil or not currentProc.user.active or currentProc.state == procZombie:
+    return
+
+  if (currentProc.pendingSignals and signalBit(SysSignalTerminate)) != U32(0):
+    currentProc.pendingSignals =
+      currentProc.pendingSignals and not signalBit(SysSignalTerminate)
+    markProcessZombie(currentProc, U64(143))
+    schedule()
+    return
+
+  if (currentProc.pendingSignals and signalBit(SysSignalInterrupt)) != U32(0):
+    currentProc.pendingSignals =
+      currentProc.pendingSignals and not signalBit(SysSignalInterrupt)
+    markProcessZombie(currentProc, U64(130))
+    schedule()
 
 
 proc maybeYieldOnResched*() =

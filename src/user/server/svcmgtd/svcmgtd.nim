@@ -40,6 +40,7 @@ var
   kernelServices: array[8, SysServiceInfo]
   controlPacket: SysIpcPacket
   replyPacket: SysIpcPacket
+  pendingSignal: U32
   serviceLogs: array[ServiceLogCount, array[ServiceLogLen, char]]
   serviceLogNext: U32
   serviceLogTotal: U32
@@ -299,6 +300,41 @@ proc restartService(entry: ptr ServiceEntry) =
   startService(entry)
 
 
+proc handleServiceProcessExit(entry: ptr ServiceEntry, reason: cstring) =
+  if entry.pid > 0:
+    entry.lastExitStatus = sysWait(entry.pid)
+  entry.pid = -1
+  entry.livenessMisses = U32(0)
+
+  if entry.required:
+    write("[svcmgtd] service restarting ")
+    write(entry.name)
+    write("\n")
+    entry.state = srvStopped
+    entry.lastFailureReason = reason
+    logEvent(entry.name, reason)
+    inc entry.restarts
+    startService(entry)
+  else:
+    discard sysServiceUnregister(entry.kind)
+    entry.state = srvDegraded
+    entry.lastFailureReason = reason
+    logEvent(entry.name, reason)
+    write("[svcmgtd] service degraded ")
+    write(entry.name)
+    write("\n")
+
+
+proc handleExitedServiceSignals() =
+  while sysSignalPoll(addr pendingSignal) == 0 and pendingSignal != SysSignalNone:
+    if pendingSignal == SysSignalChildExited:
+      var i = 0
+      while i < len(services):
+        if services[i].pid > 0 and not serviceAlive(addr services[i]):
+          handleServiceProcessExit(addr services[i], cstring("process_exit"))
+        inc i
+
+
 proc findServiceByName(name: cstring): ptr ServiceEntry =
   var i = 0
   while i < len(services):
@@ -503,6 +539,8 @@ proc pollControlMessages() =
 
 
 proc monitorServices() =
+  handleExitedServiceSignals()
+
   var i = 0
   while i < len(services):
     if services[i].state == srvDegraded and not services[i].required:
@@ -531,21 +569,13 @@ proc monitorServices() =
       continue
 
     services[i].livenessMisses = U32(0)
-    if not services[i].required:
-      degradeService(addr services[i], cstring("process_exit"))
-      inc i
-      continue
-
-    write("[svcmgtd] service restarting ")
-    write(services[i].name)
-    write("\n")
-    services[i].lastFailureReason = cstring("process_exit")
-    restartService(addr services[i])
+    handleServiceProcessExit(addr services[i], cstring("process_exit"))
     inc i
 
 
 proc waitForServiceReady(entry: ptr ServiceEntry) =
   while entry.state == srvStarting and sysTicks() < entry.readyDeadline:
+    handleExitedServiceSignals()
     pollControlMessages()
     discard sysSleep(1)
 

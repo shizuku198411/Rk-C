@@ -231,6 +231,9 @@ proc handleSyscall*(frame: ptr TrapFrame) =
   of SysGetCap:
     frame.a0 = syscallGetCap(frame.a0, frame.a1)
 
+  of SysSignalPoll:
+    frame.a0 = syscallSignalPoll(frame.a0)
+
   else:
     frame.a0 = U64(-1'i64)
   

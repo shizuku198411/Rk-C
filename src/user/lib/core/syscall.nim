@@ -188,6 +188,10 @@ proc sysKill*(pid: I32): I32 =
   I32(rawSyscall3(SysKill, U64(pid), 0, 0))
 
 
+proc sysSignalPoll*(signal: ptr U32): I32 =
+  I32(rawSyscall3(SysSignalPoll, cast[U64](signal), 0, 0))
+
+
 proc sysFsServiceRegister*(): I32 =
   I32(rawSyscall3(SysFsServiceRegister, 0, 0, 0))
 

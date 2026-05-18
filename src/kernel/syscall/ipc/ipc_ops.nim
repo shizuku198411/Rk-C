@@ -171,9 +171,7 @@ proc syscallKill*(pidVal: U64): U64 =
   if target == nil or target.state == procUnused or target.state == procZombie:
     return U64(-1'i64)
 
-  markProcessZombie(target, U64(255))
-
-  if currentProc == target:
-    schedule()
+  if sendProcessSignal(pid, SysSignalTerminate) != 0:
+    return U64(-1'i64)
 
   0

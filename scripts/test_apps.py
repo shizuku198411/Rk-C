@@ -14,7 +14,7 @@ from pathlib import Path
 
 ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
 PROMPT_MARKER = "$ "
-TEST_APP_NAMES = ["faultcheck", "capcheck", "pollcheck"]
+TEST_APP_NAMES = ["faultcheck", "capcheck", "pollcheck", "signalcheck"]
 
 
 @dataclass
@@ -252,6 +252,17 @@ def abnormal_tests() -> list[TestCase]:
                 "pollcheck: pipe read ready ok",
                 "pollcheck: invalid fd error ok",
                 "pollcheck: ok",
+            ],
+            timeout=12.0,
+        ),
+        TestCase(
+            "signalcheck process events",
+            "signalcheck",
+            [
+                "signalcheck: child wait ok",
+                "signalcheck: child_exited signal ok",
+                "signalcheck: empty signal queue ok",
+                "signalcheck: ok",
             ],
             timeout=12.0,
         ),

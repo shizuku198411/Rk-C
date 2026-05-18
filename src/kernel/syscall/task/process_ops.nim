@@ -50,6 +50,7 @@ proc fillProcessInfo(entry: var SysProcessInfo, p: ptr Process) =
   entry.stackPages = p.user.stackPages
   entry.requestedCapabilityMask = p.user.requestedCapabilityMask
   entry.capabilityMask = p.user.capabilityMask
+  entry.pendingSignals = p.pendingSignals
   if p.user.active:
     entry.isUser = 1
   else:
@@ -203,5 +204,19 @@ proc syscallGetCap*(outBuf, bufSize: U64): U64 =
 
   if copyToUser(outBuf, addr currentProc.user.capabilityMask, bufSize) != 0:
     return U64(-1'i64)
+
+  0
+
+
+proc syscallSignalPoll*(outSignal: U64): U64 =
+  if currentProc == nil or outSignal == 0:
+    return U64(-1'i64)
+
+  var signal = takeProcessSignal(currentProc)
+  if copyToUser(outSignal, addr signal, U64(sizeof(U32))) != 0:
+    return U64(-1'i64)
+
+  if signal == SysSignalTerminate or signal == SysSignalInterrupt:
+    return U64(1)
 
   0

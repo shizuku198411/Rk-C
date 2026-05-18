@@ -12,6 +12,7 @@ for starting, registering, and monitoring the rest of the userspace services.
 - Receive service ready ACKs and move services to the running state
 - Restart required services after stop or timeout
 - Mark optional services as degraded after startup failure or ready timeout
+- Consume process `child_exited` signals and reconcile stopped service processes
 - Track supervision metadata such as start count, restart count, ready tick,
   and last failure reason
 - Keep a small service event ring for `svc logs`
@@ -27,8 +28,8 @@ for starting, registering, and monitoring the rest of the userspace services.
   - `sys_process_kill`
 
 `svcmgtd` needs service-manager capability for registry mutations, process-list
-capability for liveness checks, and process-kill capability to stop or restart
-managed service processes.
+capability for fallback liveness checks, and process-kill capability to send
+terminate signals when stopping or restarting managed service processes.
 
 ## Managed Services
 
@@ -84,7 +85,7 @@ unrelated processes.
 - `SysIpcOpSvcRestart`
   - Reads the service name from packet data
   - Finds the matching managed service
-  - Calls `stopService` to unregister, kill, and wait
+  - Calls `stopService` to unregister, send a terminate signal, and wait
   - Calls `startService` to launch it again
 - `SysIpcOpSvcStart`
   - Starts a stopped or degraded service
@@ -105,14 +106,16 @@ The main loop repeats:
 - `pollControlMessages()`
   - Uses `sysIpcTryReceivePacket` to process control packets
 - `monitorServices()`
+  - Consumes pending `child_exited` signals with `sysSignalPoll`
+  - Reconciles exited service processes immediately
   - Detects ready timeouts
-  - Checks service liveness
+  - Checks service liveness as a fallback
   - Restarts required services
   - Marks optional services degraded
 - `sysSleep(MonitorSleepTicks)`
 
-Liveness checks use `sysPs` and treat zombie or unused process states as not
-alive.
+Child-exit signals are the primary service-stop notification. Liveness checks
+use `sysPs` as a fallback and treat zombie or unused process states as not alive.
 
 ## Boundaries and Notes
 

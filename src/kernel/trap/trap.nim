@@ -106,6 +106,7 @@ proc trapHandler*(frame: ptr TrapFrame) {.exportc: "trap_handler", cdecl.} =
     inc trapCount.environmentCallFromUMode
     handleSyscall(frame)
     frame.sepc = userPc + 4
+    deliverCurrentSignals()
     maybeYieldOnResched()
   
   of ScauseEnvironmentCallFromSMode:
@@ -142,6 +143,7 @@ proc trapHandler*(frame: ptr TrapFrame) {.exportc: "trap_handler", cdecl.} =
 
     requestResched()
     if fromUser:
+      deliverCurrentSignals()
       maybeYieldOnResched()
   
   else:

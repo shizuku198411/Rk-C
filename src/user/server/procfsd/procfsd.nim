@@ -183,6 +183,41 @@ proc appendCapMaskLine(pos: var U32, label: cstring, mask: U32) =
   appendStr(pos, cstring(")\n"))
 
 
+proc appendSignalName(pos: var U32, mask, bit: U32, name: cstring, first: var bool) =
+  if (mask and bit) == 0:
+    return
+
+  if not first:
+    appendChar(pos, ',')
+  appendStr(pos, name)
+  first = false
+
+
+proc signalMask(signal: U32): U32 =
+  U32(1'u32 shl signal)
+
+
+proc appendSignalNames(pos: var U32, mask: U32) =
+  if mask == U32(0):
+    appendStr(pos, cstring("none"))
+    return
+
+  var first = true
+  appendSignalName(pos, mask, signalMask(SysSignalTerminate), cstring("terminate"), first)
+  appendSignalName(pos, mask, signalMask(SysSignalInterrupt), cstring("interrupt"), first)
+  appendSignalName(pos, mask, signalMask(SysSignalChildExited), cstring("child_exited"), first)
+  appendSignalName(pos, mask, signalMask(SysSignalServiceStopped), cstring("service_stopped"), first)
+
+
+proc appendSignalMaskLine(pos: var U32, label: cstring, mask: U32) =
+  appendStr(pos, label)
+  appendStr(pos, cstring(": "))
+  appendHex64(pos, U64(mask))
+  appendStr(pos, cstring(" ("))
+  appendSignalNames(pos, mask)
+  appendStr(pos, cstring(")\n"))
+
+
 proc clearResponseData() =
   var i = U32(0)
   while i < SysIpcMessageMax:
@@ -471,6 +506,7 @@ proc renderStatus(pid: I32): U32 =
 
       appendCapMaskLine(pos, cstring("requested_caps"), procInfos[i].requestedCapabilityMask)
       appendCapMaskLine(pos, cstring("caps"), procInfos[i].capabilityMask)
+      appendSignalMaskLine(pos, cstring("pending_signals"), procInfos[i].pendingSignals)
 
       appendStr(pos, cstring("exe: "))
       appendStr(pos, cast[cstring](addr procInfos[i].exePath[0]))

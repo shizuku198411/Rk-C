@@ -82,6 +82,12 @@ const
   SysPollPidExit* = U32(8)
   SysPollTimer* = U32(16)
   SysPollError* = U32(0x80000000'u32)
+  SysSignalNone* = U32(0)
+  SysSignalTerminate* = U32(1)
+  SysSignalInterrupt* = U32(2)
+  SysSignalChildExited* = U32(3)
+  SysSignalServiceStopped* = U32(4)
+  SysSignalMax* = U32(31)
 
   SysProcessMaxSlots* = U32(32)
   SysProcessUnused* = U32(0)
@@ -121,6 +127,7 @@ type
     stackPages*: U64
     requestedCapabilityMask*: U32
     capabilityMask*: U32
+    pendingSignals*: U32
     exePath*: array[SysProcessNameMax, char]
 
   SysDateTime* {.packed.} = object
