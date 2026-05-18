@@ -6,12 +6,47 @@ import subprocess
 import tempfile
 
 RKX_MAGIC = 0x31584B52  # "RKX1"
-RKX_VERSION = 1
-HEADER_SIZE = 4 * 4 + 1 * 8 + 3 * 4 * 8 + 2 * 8
+RKX_VERSION = 2
+DEFAULT_STACK_PAGES = 4
+MIN_STACK_PAGES = 1
+MAX_STACK_PAGES = 16
+HEADER_SIZE = 4 * 4 + 1 * 8 + 3 * 4 * 8 + 2 * 8 + 2 * 4
 # magic, version, headerSize, reserved
 # entryVa
 # text/rodata/data: va, off, fileSize, memSize
 # bss: va, memSize
+# stackPages, flags
+
+STACK_PAGES_BY_APP = {
+    "date": 1,
+    "mkdir": 1,
+    "rm": 1,
+    "rmdir": 1,
+    "kill": 1,
+    "dmesg": 1,
+
+    "ls": 2,
+    "cat": 2,
+    "ipc": 2,
+    "svc": 2,
+    "ping": 2,
+    "nslookup": 2,
+    "tcpcheck": 2,
+    "ps": 2,
+    "stracectl": 2,
+    "faultcheck": 2,
+
+    "shell": 4,
+    "svcmgtd": 4,
+    "procmgtd": 4,
+    "blockd": 4,
+    "fsd": 4,
+    "procfsd": 4,
+
+    "edit": 8,
+    "curl": 8,
+    "netd": 8,
+}
 
 def read_symbols(elf):
     out = subprocess.check_output(["llvm-nm", "-n", elf], text=True)
@@ -47,11 +82,32 @@ def need(syms, name):
         raise RuntimeError(f"missing symbol: {name}")
     return syms[name]
 
+def app_name_from_path(path):
+    base = os.path.basename(path)
+    if "." in base:
+        base = base.rsplit(".", 1)[0]
+    return base
+
+def default_stack_pages(out_path):
+    return STACK_PAGES_BY_APP.get(app_name_from_path(out_path), DEFAULT_STACK_PAGES)
+
+def validate_stack_pages(value):
+    if value < MIN_STACK_PAGES or value > MAX_STACK_PAGES:
+        raise RuntimeError(
+            f"stack pages out of range: {value} "
+            f"(expected {MIN_STACK_PAGES}..{MAX_STACK_PAGES})"
+        )
+    return value
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--elf", required=True)
     parser.add_argument("--out", required=True)
+    parser.add_argument("--stack-pages", type=int)
     args = parser.parse_args()
+    stack_pages = validate_stack_pages(
+        args.stack_pages if args.stack_pages is not None else default_stack_pages(args.out)
+    )
 
     syms = read_symbols(args.elf)
 
@@ -98,7 +154,8 @@ def main():
         "QQQQ"
         "QQQQ"
         "QQQQ"
-        "QQ",
+        "QQ"
+        "II",
         RKX_MAGIC,
         RKX_VERSION,
         HEADER_SIZE,
@@ -122,6 +179,9 @@ def main():
 
         bss_va,
         bss_end - bss_va,
+
+        stack_pages,
+        0,
     )
 
     assert len(header) == HEADER_SIZE
@@ -135,7 +195,10 @@ def main():
     with open(args.out, "wb") as f:
         f.write(image)
 
-    print(f"[rkx] {args.out}: text={len(text_blob)} rodata={len(ro_blob)} data={len(data_blob)} bss={bss_end - bss_va}")
+    print(
+        f"[rkx] {args.out}: text={len(text_blob)} rodata={len(ro_blob)} "
+        f"data={len(data_blob)} bss={bss_end - bss_va} stack_pages={stack_pages}"
+    )
 
 if __name__ == "__main__":
     main()

@@ -7,6 +7,7 @@ import ../../fs/fs
 import ../../mm/usercopy
 import ../../service/registry
 import ../ipc/request_reply
+import ../syscall_cap
 import ../../task/process
 
 const
@@ -26,18 +27,6 @@ var
   rawFileBuf: array[SysFsDataMax, U8]
 
 
-proc currentIsFsServer(): bool =
-  currentIsService(serviceFs)
-
-
-proc fsServerAvailable(): bool =
-  serviceAvailable(serviceFs)
-
-
-proc canFallbackToRawFs(): bool =
-  not serviceRegistered(serviceFs) or currentIsFsServer()
-
-
 proc allocPending(): ptr PendingFsRequest =
   allocIpcPending(pending)
 
@@ -47,7 +36,7 @@ proc findPending(id: U64): ptr PendingFsRequest =
 
 
 proc queueFsRequest(op: U32, path: cstring, data: pointer, size, capacity: U64): ptr PendingFsRequest =
-  if not fsServerAvailable() or currentIsFsServer():
+  if not fsServiceAvailable() or currentIsFsService():
     return nil
   if size > SysFsDataMax or capacity > SysFsDataMax:
     return nil
@@ -89,11 +78,9 @@ proc rawReadFileKernel(path: cstring, buf: pointer, capacity: U64): int =
 
 
 proc syscallFsServiceRegister*(): U64 =
-  if currentProc == nil or not currentProc.user.active:
-    return U64(-1'i64)
-  if currentIsService(serviceFs):
+  if currentIsFsService():
     return 0
-  if serviceRegistered(serviceManager):
+  if not canSyscallFsServiceRegister():
     return U64(-1'i64)
 
   registerService(serviceFs, currentProc.pid)
@@ -101,7 +88,7 @@ proc syscallFsServiceRegister*(): U64 =
 
 
 proc syscallFsServiceReceive*(outReq: U64): U64 =
-  if outReq == 0 or not currentIsFsServer():
+  if outReq == 0 or not canSyscallFsServiceReceive():
     return U64(-1'i64)
 
   while true:
@@ -118,7 +105,7 @@ proc syscallFsServiceReceive*(outReq: U64): U64 =
 
 
 proc syscallFsServiceReply*(respVal: U64): U64 =
-  if respVal == 0 or not currentIsFsServer():
+  if respVal == 0 or not canSyscallFsServiceReply():
     return U64(-1'i64)
 
   var resp: SysFsResponse
@@ -296,7 +283,7 @@ proc serviceWriteFile*(path: cstring, data: pointer, size: U64): U64 =
 
 
 proc syscallRawLs*(pathVal, entriesVal, maxEntries: U64): U64 =
-  if not currentIsFsServer() or pathVal == 0 or entriesVal == 0:
+  if not canSyscallRawFs() or pathVal == 0 or entriesVal == 0:
     return U64(-1'i64)
 
   var pathBuf: array[SysFsPathMax, char]
@@ -320,7 +307,7 @@ proc syscallRawLs*(pathVal, entriesVal, maxEntries: U64): U64 =
 
 
 proc syscallRawMkdir*(pathVal: U64): U64 =
-  if not currentIsFsServer() or pathVal == 0:
+  if not canSyscallRawFs() or pathVal == 0:
     return U64(-1'i64)
 
   var pathBuf: array[SysFsPathMax, char]
@@ -331,7 +318,7 @@ proc syscallRawMkdir*(pathVal: U64): U64 =
 
 
 proc syscallRawUnlink*(pathVal: U64): U64 =
-  if not currentIsFsServer() or pathVal == 0:
+  if not canSyscallRawFs() or pathVal == 0:
     return U64(-1'i64)
 
   var pathBuf: array[SysFsPathMax, char]
@@ -342,7 +329,7 @@ proc syscallRawUnlink*(pathVal: U64): U64 =
 
 
 proc syscallRawRmdir*(pathVal: U64): U64 =
-  if not currentIsFsServer() or pathVal == 0:
+  if not canSyscallRawFs() or pathVal == 0:
     return U64(-1'i64)
 
   var pathBuf: array[SysFsPathMax, char]
@@ -353,7 +340,7 @@ proc syscallRawRmdir*(pathVal: U64): U64 =
 
 
 proc syscallRawReadFile*(pathVal, bufVal, capacity: U64): U64 =
-  if not currentIsFsServer() or pathVal == 0 or bufVal == 0 or capacity > SysFsDataMax:
+  if not canSyscallRawFs() or pathVal == 0 or bufVal == 0 or capacity > SysFsDataMax:
     return U64(-1'i64)
 
   var pathBuf: array[SysFsPathMax, char]
@@ -370,7 +357,7 @@ proc syscallRawReadFile*(pathVal, bufVal, capacity: U64): U64 =
 
 
 proc syscallRawWriteFile*(pathVal, bufVal, size: U64): U64 =
-  if not currentIsFsServer() or pathVal == 0 or size > SysFsDataMax:
+  if not canSyscallRawFs() or pathVal == 0 or size > SysFsDataMax:
     return U64(-1'i64)
 
   var pathBuf: array[SysFsPathMax, char]

@@ -13,7 +13,6 @@ const
   ShellStackTop* = VAddr(0x01100000)
   AppBase* = VAddr(0x01200000)
   AppStackTop* = VAddr(0x01300000)
-  UserStackPages = U64(4)
   UserArgMax = U64(128)
 
   QemuUart0Base = PAddr(0x10000000)
@@ -57,16 +56,26 @@ proc execStackTopForPath(path: cstring): VAddr =
   AppStackTop
 
 
-proc replaceUserStack(root: PageTable, stackTop: VAddr, arg: cstring, userSp, argVa: var VAddr): int =
-  let stackPa = palloc(UserStackPages)
+proc stackPagesFromHeader(hdr: ptr RkxHeader): U64 =
+  if hdr == nil or hdr.stackPages == U32(0):
+    return U64(RkxDefaultStackPages)
+
+  U64(hdr.stackPages)
+
+
+proc replaceUserStack(root: PageTable, stackTop: VAddr, stackPages: U64, arg: cstring, userSp, argVa: var VAddr): int =
+  if stackPages < U64(RkxMinStackPages) or stackPages > U64(RkxMaxStackPages):
+    return -1
+
+  let stackPa = palloc(stackPages)
   if stackPa == NilPAddr:
     panic("failed to allocate user stack")
 
-  if mapRangeReplaceFree(root, stackTop - UserStackPages * PageSize, stackPa,
-                         UserStackPages * PageSize, PteU or PteR or PteW) != 0:
+  if mapRangeReplaceFree(root, stackTop - stackPages * PageSize, stackPa,
+                         stackPages * PageSize, PteU or PteR or PteW) != 0:
     panic("failed to map user stack")
 
-  let argPa = stackPa + UserStackPages * PageSize - UserArgMax
+  let argPa = stackPa + stackPages * PageSize - UserArgMax
   argVa = stackTop - UserArgMax
   userSp = argVa
   copyArg(argPa, arg, UserArgMax)
@@ -85,13 +94,14 @@ proc installExecImage(p: ptr Process, root: PageTable, path: cstring, base, stac
   if loadRkxImage(root, path, base, imagePages, entryVa, addr rkxHeader) != 0:
     return -1
 
+  let stackPages = stackPagesFromHeader(addr rkxHeader)
   var userSp = VAddr(0)
   var argVa = VAddr(0)
-  if replaceUserStack(root, stackTop, arg, userSp, argVa) != 0:
+  if replaceUserStack(root, stackTop, stackPages, arg, userSp, argVa) != 0:
     return -1
 
   flushTlb()
-  configureUserProcess(p, root, path, base, entryVa, stackTop, userSp, imagePages, UserStackPages, argVa, 0)
+  configureUserProcess(p, root, path, base, entryVa, stackTop, userSp, imagePages, stackPages, argVa, 0)
   setUserRkxMap(
     p,
     rkxHeader.textVa,

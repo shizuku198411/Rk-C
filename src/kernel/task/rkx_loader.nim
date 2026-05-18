@@ -129,6 +129,10 @@ proc validateRkxHeader(hdr: ptr RkxHeader, imageSize: U64, expectedBase: VAddr):
   if U64(hdr.headerSize) > imageSize:
     return false
 
+  if hdr.stackPages != U32(0):
+    if hdr.stackPages < RkxMinStackPages or hdr.stackPages > RkxMaxStackPages:
+      return false
+
   if not validateSegment(
     hdr.textVa,
     hdr.textOff,

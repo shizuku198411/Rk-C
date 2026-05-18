@@ -5,6 +5,7 @@ import ../../../lib/types
 import ../../lib/syscall_out
 import ../../service/registry
 import ../../task/process
+import ../syscall_cap
 
 
 var serviceInfos: array[serviceMax, SysServiceInfo]
@@ -77,10 +78,7 @@ proc fillServiceInfo(kind: ServiceKind) =
 
 
 proc syscallServiceManagerRegister*(): U64 =
-  if currentProc == nil or not currentProc.user.active:
-    return U64(-1'i64)
-
-  if serviceRegistered(serviceManager) and not currentIsService(serviceManager):
+  if not canSyscallServiceManagerRegister():
     return U64(-1'i64)
 
   registerService(serviceManager, currentProc.pid, true)
@@ -88,13 +86,10 @@ proc syscallServiceManagerRegister*(): U64 =
 
 
 proc syscallServiceRegister*(kindVal, pidVal: U64): U64 =
-  if not currentIsService(serviceManager):
-    return U64(-1'i64)
-
   var kind = serviceBlock
   if not serviceKindFromValue(kindVal, kind):
     return U64(-1'i64)
-  if kind == serviceManager:
+  if not canSyscallServiceKindMutation(kind):
     return U64(-1'i64)
 
   let pid = int32(pidVal)
@@ -106,13 +101,10 @@ proc syscallServiceRegister*(kindVal, pidVal: U64): U64 =
 
 
 proc syscallServiceReady*(kindVal, pidVal: U64): U64 =
-  if not currentIsService(serviceManager):
-    return U64(-1'i64)
-
   var kind = serviceBlock
   if not serviceKindFromValue(kindVal, kind):
     return U64(-1'i64)
-  if kind == serviceManager:
+  if not canSyscallServiceKindMutation(kind):
     return U64(-1'i64)
 
   if not markServiceReady(kind, int32(pidVal)):
@@ -122,13 +114,10 @@ proc syscallServiceReady*(kindVal, pidVal: U64): U64 =
 
 
 proc syscallServiceUnregister*(kindVal: U64): U64 =
-  if not currentIsService(serviceManager):
-    return U64(-1'i64)
-
   var kind = serviceBlock
   if not serviceKindFromValue(kindVal, kind):
     return U64(-1'i64)
-  if kind == serviceManager:
+  if not canSyscallServiceKindMutation(kind):
     return U64(-1'i64)
 
   unregisterService(kind)

@@ -3,11 +3,11 @@ import ../../../lib/types
 import ../../lib/syscall_out
 import ../../mm/usercopy
 import ../../net/netdev
-import ../../service/registry
+import ../syscall_cap
 
 
 proc syscallRawNetInfo*(outInfo: U64): U64 =
-  if outInfo == 0 or not currentIsService(serviceNet):
+  if outInfo == 0 or not canSyscallRawNet():
     return U64(-1'i64)
 
   var info = netdevInfo()
@@ -18,14 +18,14 @@ proc syscallRawNetInfo*(outInfo: U64): U64 =
 
 
 proc syscallRawNetInit*(): U64 =
-  if not currentIsService(serviceNet):
+  if not canSyscallRawNet():
     return U64(-1'i64)
 
   U64(netdevInit())
 
 
 proc syscallRawNetMac*(outMac: U64): U64 =
-  if outMac == 0 or not currentIsService(serviceNet):
+  if outMac == 0 or not canSyscallRawNet():
     return U64(-1'i64)
 
   var mac: array[SysNetMacLen, U8]
@@ -38,7 +38,7 @@ proc syscallRawNetMac*(outMac: U64): U64 =
 
 
 proc syscallRawNetRecv*(outBuf, capacity: U64): U64 =
-  if outBuf == 0 or capacity == 0 or capacity > SysNetPacketMax or not currentIsService(serviceNet):
+  if outBuf == 0 or capacity == 0 or capacity > SysNetPacketMax or not canSyscallRawNet():
     return U64(-1'i64)
 
   var packet: array[SysNetPacketMax, U8]
@@ -54,7 +54,7 @@ proc syscallRawNetRecv*(outBuf, capacity: U64): U64 =
 
 
 proc syscallRawNetSend*(inBuf, size: U64): U64 =
-  if inBuf == 0 or size == 0 or size > SysNetPacketMax or not currentIsService(serviceNet):
+  if inBuf == 0 or size == 0 or size > SysNetPacketMax or not canSyscallRawNet():
     return U64(-1'i64)
 
   var packet: array[SysNetPacketMax, U8]

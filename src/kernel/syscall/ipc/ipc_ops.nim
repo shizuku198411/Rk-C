@@ -1,8 +1,8 @@
 import ../../../lib/syscall_types
 import ../../../lib/types
 import ../../mm/usercopy
-import ../../service/registry
 import ../../task/process
+import ../syscall_cap
 
 var sendBuf: array[SysIpcMessageMax, char]
 
@@ -159,11 +159,7 @@ proc syscallIpcTryReceivePacket*(outPacket: U64): U64 =
 
 proc syscallKill*(pidVal: U64): U64 =
   let pid = int32(pidVal)
-  if pid <= 1:
-    return U64(-1'i64)
-  if not currentIsService(serviceManager) and not currentIsService(serviceProcess):
-    return U64(-1'i64)
-  if isServicePid(pid) and not currentIsService(serviceManager):
+  if not canSyscallKillTarget(pid):
     return U64(-1'i64)
 
   let target = findProcessByPid(pid)

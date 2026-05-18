@@ -2,7 +2,10 @@ import ./types
 
 const
   RkxMagic* = U32(0x31584b52)   # "RKX1"
-  RkxVersion* = U32(1)
+  RkxVersion* = U32(2)
+  RkxDefaultStackPages* = U32(4)
+  RkxMinStackPages* = U32(1)
+  RkxMaxStackPages* = U32(16)
 
 
 type
@@ -31,3 +34,6 @@ type
 
     bssVa*: U64
     bssMemSize*: U64
+
+    stackPages*: U32
+    flags*: U32

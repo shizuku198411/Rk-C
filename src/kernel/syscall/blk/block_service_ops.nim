@@ -5,6 +5,7 @@ import ../../fs/blockdev
 import ../../mm/usercopy
 import ../../service/registry
 import ../ipc/request_reply
+import ../syscall_cap
 import ../../task/process
 
 const
@@ -27,18 +28,6 @@ proc blockServiceInit*() =
   blockdevInit()
 
 
-proc currentIsBlockServer(): bool =
-  currentIsService(serviceBlock)
-
-
-proc blockServerAvailable(): bool =
-  serviceAvailable(serviceBlock)
-
-
-proc canFallbackToRawBlock(): bool =
-  not serviceRegistered(serviceBlock) or currentIsBlockServer()
-
-
 proc allocPending(): ptr PendingBlockRequest =
   allocIpcPending(pending)
 
@@ -48,7 +37,7 @@ proc findPending(id: U64): ptr PendingBlockRequest =
 
 
 proc queueBlockRequest(op: U32, blockIndex: U64, data: pointer): ptr PendingBlockRequest =
-  if not blockServerAvailable() or currentIsBlockServer():
+  if not blockServiceAvailable() or currentIsBlockService():
     return nil
 
   let p = allocPending()
@@ -121,11 +110,9 @@ proc serviceBlockWrite*(blockIndex: U64, inBlock: pointer): int =
 
 
 proc syscallBlockServiceRegister*(): U64 =
-  if currentProc == nil or not currentProc.user.active:
-    return U64(-1'i64)
-  if currentIsService(serviceBlock):
+  if currentIsBlockService():
     return 0
-  if serviceRegistered(serviceManager):
+  if not canSyscallBlockServiceRegister():
     return U64(-1'i64)
 
   registerService(serviceBlock, currentProc.pid)
@@ -133,7 +120,7 @@ proc syscallBlockServiceRegister*(): U64 =
 
 
 proc syscallBlockServiceReceive*(outReq: U64): U64 =
-  if outReq == 0 or not currentIsBlockServer():
+  if outReq == 0 or not canSyscallBlockServiceReceive():
     return U64(-1'i64)
 
   while true:
@@ -150,7 +137,7 @@ proc syscallBlockServiceReceive*(outReq: U64): U64 =
 
 
 proc syscallBlockServiceReply*(respVal: U64): U64 =
-  if respVal == 0 or not currentIsBlockServer():
+  if respVal == 0 or not canSyscallBlockServiceReply():
     return U64(-1'i64)
 
   var resp: SysBlockResponse
@@ -168,7 +155,7 @@ proc syscallBlockServiceReply*(respVal: U64): U64 =
 
 
 proc syscallRawBlockRead*(blockIndex, outVal: U64): U64 =
-  if not currentIsBlockServer() or outVal == 0:
+  if not canSyscallRawBlock() or outVal == 0:
     return U64(-1'i64)
 
   if blockdev.blockRead(blockIndex, addr rawBlockBuf[0]) != 0:
@@ -180,7 +167,7 @@ proc syscallRawBlockRead*(blockIndex, outVal: U64): U64 =
 
 
 proc syscallRawBlockWrite*(blockIndex, inVal: U64): U64 =
-  if not currentIsBlockServer() or inVal == 0:
+  if not canSyscallRawBlock() or inVal == 0:
     return U64(-1'i64)
 
   if copyFromUser(addr rawBlockBuf[0], inVal, SysBlockDataSize) != 0:

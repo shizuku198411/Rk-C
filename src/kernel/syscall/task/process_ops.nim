@@ -5,9 +5,9 @@ import ../../dev/console
 import ../../fs/fs
 import ../../lib/syscall_out
 import ../../mm/usercopy
-import ../../service/registry
 import ../../task/exec
 import ../../task/process
+import ../syscall_cap
 
 var
   processEntries: array[MaxProcs, SysProcessInfo]
@@ -22,11 +22,6 @@ proc processStateValue(state: ProcessState): U32 =
   of procRunning: SysProcessRunning
   of procSleeping: SysProcessSleeping
   of procZombie: SysProcessZombie
-
-
-proc currentCanUseRawProcessOps(): bool =
-  currentIsService(serviceManager) or currentIsService(serviceProcess) or
-    currentIsService(serviceProcFs)
 
 
 proc fillProcessInfo(entry: var SysProcessInfo, p: ptr Process) =
@@ -61,7 +56,7 @@ proc fillProcessInfo(entry: var SysProcessInfo, p: ptr Process) =
 
 
 proc syscallPs*(outEntries: U64, maxEntries: U64, flags: U64 = 0): U64 =
-  if not currentCanUseRawProcessOps():
+  if not canSyscallProcessList():
     return U64(-1'i64)
   if outEntries == 0 or maxEntries == 0:
     return U64(-1'i64)
