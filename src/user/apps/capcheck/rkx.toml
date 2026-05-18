@@ -1,0 +1,10 @@
+schema_version = 1
+stack_pages = 4
+capabilities = [
+  "sys_service_manager",
+  "sys_raw_fs",
+  "sys_raw_block",
+  "sys_raw_net",
+  "sys_process_list",
+  "sys_process_kill",
+]

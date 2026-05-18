@@ -1,15 +1,18 @@
 #!/usr/bin/env python3
 import argparse
 import os
+from pathlib import Path
 import struct
 import subprocess
 import tempfile
+import tomllib
 
 RKX_MAGIC = 0x31584B52  # "RKX1"
 RKX_VERSION = 2
 DEFAULT_STACK_PAGES = 4
 MIN_STACK_PAGES = 1
 MAX_STACK_PAGES = 16
+METADATA_VERSION = 1
 HEADER_SIZE = 4 * 4 + 1 * 8 + 3 * 4 * 8 + 2 * 8 + 2 * 4
 # magic, version, headerSize, capabilityMask
 # entryVa
@@ -17,12 +20,23 @@ HEADER_SIZE = 4 * 4 + 1 * 8 + 3 * 4 * 8 + 2 * 8 + 2 * 4
 # bss: va, memSize
 # stackPages, flags
 
-CAP_SERVICE_MANAGER = 1 << 0
-CAP_RAW_FS = 1 << 1
-CAP_RAW_BLOCK = 1 << 2
-CAP_RAW_NET = 1 << 3
-CAP_PROCESS_LIST = 1 << 4
-CAP_PROCESS_KILL = 1 << 5
+REPO_ROOT = Path(__file__).resolve().parent.parent
+
+CAPABILITY_BITS = {
+    "sys_service_manager": 1 << 0,
+    "sys_raw_fs": 1 << 1,
+    "sys_raw_block": 1 << 2,
+    "sys_raw_net": 1 << 3,
+    "sys_process_list": 1 << 4,
+    "sys_process_kill": 1 << 5,
+}
+
+CAP_SERVICE_MANAGER = CAPABILITY_BITS["sys_service_manager"]
+CAP_RAW_FS = CAPABILITY_BITS["sys_raw_fs"]
+CAP_RAW_BLOCK = CAPABILITY_BITS["sys_raw_block"]
+CAP_RAW_NET = CAPABILITY_BITS["sys_raw_net"]
+CAP_PROCESS_LIST = CAPABILITY_BITS["sys_process_list"]
+CAP_PROCESS_KILL = CAPABILITY_BITS["sys_process_kill"]
 CAP_ALL_KNOWN = (
     CAP_SERVICE_MANAGER
     | CAP_RAW_FS
@@ -31,47 +45,6 @@ CAP_ALL_KNOWN = (
     | CAP_PROCESS_LIST
     | CAP_PROCESS_KILL
 )
-
-STACK_PAGES_BY_APP = {
-    "date": 1,
-    "mkdir": 1,
-    "rm": 1,
-    "rmdir": 1,
-    "kill": 1,
-    "dmesg": 1,
-
-    "ls": 2,
-    "cat": 2,
-    "ipc": 2,
-    "svc": 2,
-    "ping": 2,
-    "nslookup": 2,
-    "tcpcheck": 2,
-    "ps": 2,
-    "stracectl": 2,
-    "faultcheck": 2,
-
-    "shell": 4,
-    "svcmgtd": 4,
-    "procmgtd": 4,
-    "blockd": 4,
-    "fsd": 4,
-    "procfsd": 4,
-
-    "edit": 8,
-    "curl": 8,
-    "netd": 8,
-}
-
-CAPABILITY_MASK_BY_APP = {
-    "svcmgtd": CAP_SERVICE_MANAGER | CAP_PROCESS_LIST | CAP_PROCESS_KILL,
-    "procmgtd": CAP_PROCESS_LIST | CAP_PROCESS_KILL,
-    "procfsd": CAP_PROCESS_LIST,
-    "fsd": CAP_RAW_FS,
-    "blockd": CAP_RAW_BLOCK,
-    "netd": CAP_RAW_NET,
-    "capcheck": CAP_ALL_KNOWN,
-}
 
 def read_symbols(elf):
     out = subprocess.check_output(["llvm-nm", "-n", elf], text=True)
@@ -113,13 +86,71 @@ def app_name_from_path(path):
         base = base.rsplit(".", 1)[0]
     return base
 
-def default_stack_pages(out_path):
-    return STACK_PAGES_BY_APP.get(app_name_from_path(out_path), DEFAULT_STACK_PAGES)
+def find_metadata_path(app_name, explicit_path=None):
+    if explicit_path is not None:
+        path = Path(explicit_path)
+        if not path.is_absolute():
+            path = REPO_ROOT / path
+        return path
 
-def default_capability_mask(out_path):
-    return CAPABILITY_MASK_BY_APP.get(app_name_from_path(out_path), 0)
+    candidates = [
+        REPO_ROOT / "src" / "user" / "apps" / app_name / "rkx.toml",
+        REPO_ROOT / "src" / "user" / "server" / app_name / "rkx.toml",
+    ]
+    for path in candidates:
+        if path.exists():
+            return path
+
+    return None
+
+def capability_mask_from_names(names, metadata_path):
+    mask = 0
+    for name in names:
+        if name not in CAPABILITY_BITS:
+            known = ", ".join(sorted(CAPABILITY_BITS.keys()))
+            raise RuntimeError(
+                f"{metadata_path}: unknown capability {name!r}; known: {known}"
+            )
+        mask |= CAPABILITY_BITS[name]
+    return mask
+
+def load_metadata(app_name, explicit_path=None):
+    metadata = {
+        "stack_pages": DEFAULT_STACK_PAGES,
+        "capability_mask": 0,
+        "path": None,
+    }
+
+    path = find_metadata_path(app_name, explicit_path)
+    if path is None:
+        return metadata
+    if not path.exists():
+        raise RuntimeError(f"metadata file not found: {path}")
+
+    with path.open("rb") as f:
+        data = tomllib.load(f)
+
+    version = data.get("schema_version")
+    if version != METADATA_VERSION:
+        raise RuntimeError(
+            f"{path}: unsupported metadata schema_version {version!r}; "
+            f"expected {METADATA_VERSION}"
+        )
+
+    if "stack_pages" in data:
+        metadata["stack_pages"] = data["stack_pages"]
+
+    capabilities = data.get("capabilities", [])
+    if not isinstance(capabilities, list):
+        raise RuntimeError(f"{path}: capabilities must be a list")
+
+    metadata["capability_mask"] = capability_mask_from_names(capabilities, path)
+    metadata["path"] = path
+    return metadata
 
 def validate_stack_pages(value):
+    if not isinstance(value, int):
+        raise RuntimeError(f"stack pages must be an integer: {value!r}")
     if value < MIN_STACK_PAGES or value > MAX_STACK_PAGES:
         raise RuntimeError(
             f"stack pages out of range: {value} "
@@ -139,16 +170,19 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--elf", required=True)
     parser.add_argument("--out", required=True)
+    parser.add_argument("--metadata")
     parser.add_argument("--stack-pages", type=int)
     parser.add_argument("--capability-mask", type=lambda x: int(x, 0))
     args = parser.parse_args()
+    app_name = app_name_from_path(args.out)
+    metadata = load_metadata(app_name, args.metadata)
     stack_pages = validate_stack_pages(
-        args.stack_pages if args.stack_pages is not None else default_stack_pages(args.out)
+        args.stack_pages if args.stack_pages is not None else metadata["stack_pages"]
     )
     capability_mask = validate_capability_mask(
         args.capability_mask
         if args.capability_mask is not None
-        else default_capability_mask(args.out)
+        else metadata["capability_mask"]
     )
 
     syms = read_symbols(args.elf)

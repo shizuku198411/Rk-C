@@ -1,0 +1,3 @@
+schema_version = 1
+stack_pages = 8
+capabilities = ["sys_raw_net"]

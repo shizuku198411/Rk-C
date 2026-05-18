@@ -1,0 +1,3 @@
+schema_version = 1
+stack_pages = 4
+capabilities = ["sys_service_manager", "sys_process_list", "sys_process_kill"]
