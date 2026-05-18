@@ -11,7 +11,7 @@ import ../mm/paging
 
 const
   RkxImageMaxPages* = U64(64)
-  RkxImageMaxSIze* = RkxImageMaxPages * PageSize
+  RkxImageMaxSize* = RkxImageMaxPages * PageSize
   UserImageVaSizeLimit = U64(0x00100000)
 
 

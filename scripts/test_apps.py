@@ -257,6 +257,7 @@ def abnormal_tests() -> list[TestCase]:
                 "capcheck: granted caps stripped",
                 "capcheck: raw_net denied",
                 "capcheck: process_list denied",
+                "capcheck: forged kill denied",
                 "capcheck: ok",
             ],
             timeout=12.0,

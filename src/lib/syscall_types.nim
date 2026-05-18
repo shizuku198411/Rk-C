@@ -174,6 +174,7 @@ type
     arg0*: U64
     arg1*: U64
     len*: U32
+    capabilityMask*: U32
     data*: array[SysIpcMessageMax, char]
 
   SysFsRequest* {.packed.} = object

@@ -195,3 +195,13 @@ proc syscallGetPpid*(): U64 =
     return U64(-1'i64)
 
   U64(currentProc.parentPid)
+
+
+proc syscallGetCap*(outBuf, bufSize: U64): U64 =
+  if currentProc == nil:
+    return U64(-1'i64)
+
+  if copyToUser(outBuf, addr currentProc.user.capabilityMask, bufSize) != 0:
+    return U64(-1'i64)
+
+  0

@@ -1,3 +1,3 @@
 schema_version = 1
 stack_pages = 1
-capabilities = []
+capabilities = ["sys_process_kill"]

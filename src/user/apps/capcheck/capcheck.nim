@@ -1,7 +1,10 @@
+import ../../../lib/syscall_caps
 import ../../lib/core/args
 import ../../lib/core/io
 import ../../lib/core/strutils
 import ../../lib/core/syscall
+import ../../lib/ipc/ipc_request
+import ../../lib/ipc/service_client
 
 
 const
@@ -15,6 +18,8 @@ var
   pathBuf: array[PathBufSize, char]
   procInfos: array[ProcInfoCap, SysProcessInfo]
   netInfo: SysNetDeviceInfo
+  requestPacket: SysIpcPacket
+  responsePacket: SysIpcPacket
 
 
 proc printUsage() =
@@ -95,6 +100,30 @@ proc expectDenied(result: I32, name: cstring) =
   write(" denied\n")
 
 
+proc expectForgedKillDenied(pid: I32) =
+  let processManager = servicePidByKind(SysServiceKindProcess)
+  if processManager <= 0:
+    fail(cstring("process service"))
+
+  requestPacket = SysIpcPacket()
+  requestPacket.op = SysIpcOpProcKillRequest
+  requestPacket.arg0 = U64(pid)
+  requestPacket.capabilityMask = SysCapProcessKill
+
+  if requestIpcReply(
+      processManager,
+      addr requestPacket,
+      addr responsePacket,
+      SysIpcOpProcKillResponse,
+    ) != 0:
+    fail(cstring("forged kill reply"))
+
+  if I32(responsePacket.arg0) == 0:
+    fail(cstring("forged kill accepted"))
+
+  write("capcheck: forged kill denied\n")
+
+
 proc runCheck() =
   let pid = sysGetPid()
   if pid <= 0:
@@ -120,6 +149,7 @@ proc runCheck() =
 
   expectDenied(sysRawNetInfo(addr netInfo), cstring("raw_net"))
   expectDenied(sysPs(addr procInfos[0], U64(ProcInfoCap)), cstring("process_list"))
+  expectForgedKillDenied(pid)
 
   write("capcheck: ok\n")
   sysExit(0)

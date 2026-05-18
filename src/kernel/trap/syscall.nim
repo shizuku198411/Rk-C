@@ -10,12 +10,18 @@ import ../syscall/service/service_ops
 import ../syscall/system/system_ops
 import ../syscall/system/trap_ops
 import ../syscall/task/process_ops
+import ../syscall/syscall_cap
 import ../trap/trap_types
 import ../trap/syscall_trace
 
 
 proc handleSyscall*(frame: ptr TrapFrame) =
   traceSyscallEnter(frame)
+
+  if not canSyscallByNumber(frame.a3):
+    frame.a0 = U64(-1'i64)
+    traceSyscallExit(frame)
+    return
 
   case frame.a3
   of SysWrite:
@@ -215,6 +221,9 @@ proc handleSyscall*(frame: ptr TrapFrame) =
   
   of SysGetPpid:
     frame.a0 = syscallGetPpid()
+
+  of SysGetCap:
+    frame.a0 = syscallGetCap(frame.a0, frame.a1)
 
   else:
     frame.a0 = U64(-1'i64)

@@ -146,7 +146,7 @@ proc appendCapName(pos: var U32, mask: U32, cap: U32, name: cstring, first: var 
     return
 
   if not first:
-    appendChar(pos, ' ')
+    appendChar(pos, ',')
   appendStr(pos, name)
   first = false
 

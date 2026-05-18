@@ -1,5 +1,6 @@
 import ../../lib/core/syscall
 import ../../lib/ipc/packet_data
+import ../../../lib/syscall_caps
 import ../lib/service_ready
 
 const
@@ -77,12 +78,19 @@ proc handleKillRequest(senderPid: I32, targetPid: I32) =
   sendKillResponse(senderPid, result)
 
 
+proc handleKillDeny(senderPid: I32) =
+  sendKillResponse(senderPid, I32(-1'i32))
+
+
 proc handlePacket(packet: ptr SysIpcPacket) =
   if packet.op == SysIpcOpProcListRequest:
     handleListRequest(packet.senderPid, I32(packet.arg0), packet.arg1)
     return
 
   if packet.op == SysIpcOpProcKillRequest:
+    if (packet.capabilityMask and SysCapProcessKill) == 0:
+      handleKillDeny(packet.senderPid)
+      return
     handleKillRequest(packet.senderPid, I32(packet.arg0))
     return
 

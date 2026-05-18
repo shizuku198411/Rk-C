@@ -306,3 +306,7 @@ proc sysTraceCtl*(cmd: U64, value: U64): I32 =
 
 proc sysEntropy*(buf: pointer, size: U64): I32 =
   I32(rawSyscall3(SysEntropy, cast[U64](buf), size, 0))
+
+
+proc sysGetCap*(buf: pointer, size: U64): I32 =
+  I32(rawSyscall3(SysGetCap, cast[U64](buf), size, 0))
