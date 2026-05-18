@@ -2,6 +2,7 @@
 import argparse
 import os
 from pathlib import Path
+import re
 import struct
 import subprocess
 import tempfile
@@ -21,36 +22,50 @@ HEADER_SIZE = 4 * 4 + 1 * 8 + 3 * 4 * 8 + 2 * 8 + 2 * 4
 # stackPages, flags
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-
-CAPABILITY_BITS = {
-    "sys_service_manager": 1 << 0,
-    "sys_raw_fs": 1 << 1,
-    "sys_raw_block": 1 << 2,
-    "sys_raw_net": 1 << 3,
-    "sys_process_list": 1 << 4,
-    "sys_process_kill": 1 << 5,
-    "sys_trace_ctl": 1 << 6,
-    "sys_shutdown": 1 << 7,
-}
-
-CAP_SERVICE_MANAGER = CAPABILITY_BITS["sys_service_manager"]
-CAP_RAW_FS = CAPABILITY_BITS["sys_raw_fs"]
-CAP_RAW_BLOCK = CAPABILITY_BITS["sys_raw_block"]
-CAP_RAW_NET = CAPABILITY_BITS["sys_raw_net"]
-CAP_PROCESS_LIST = CAPABILITY_BITS["sys_process_list"]
-CAP_PROCESS_KILL = CAPABILITY_BITS["sys_process_kill"]
-CAP_TRACE_CTL = CAPABILITY_BITS["sys_trace_ctl"]
-CAP_SHUTDOWN = CAPABILITY_BITS["sys_shutdown"]
-CAP_ALL_KNOWN = (
-    CAP_SERVICE_MANAGER
-    | CAP_RAW_FS
-    | CAP_RAW_BLOCK
-    | CAP_RAW_NET
-    | CAP_PROCESS_LIST
-    | CAP_PROCESS_KILL
-    | CAP_TRACE_CTL
-    | CAP_SHUTDOWN
+CAPS_NIM = REPO_ROOT / "src" / "lib" / "syscall_caps.nim"
+CAP_CONST_RE = re.compile(
+    r"^\s*(SysCap[A-Za-z0-9]+)\*\s*=\s*U32\(1'u32\s+shl\s+(\d+)\)"
 )
+CAP_NAME_RE = re.compile(r'^\s*(SysCap[A-Za-z0-9]+)Name\*\s*=\s*"([^"]+)"')
+
+
+def load_capability_bits(path: Path) -> dict[str, int]:
+    names: dict[str, str] = {}
+    shifts: dict[str, int] = {}
+
+    with path.open("r", encoding="utf-8") as f:
+        for line in f:
+            cap_match = CAP_CONST_RE.match(line)
+            if cap_match:
+                shifts[cap_match.group(1)] = int(cap_match.group(2))
+                continue
+
+            name_match = CAP_NAME_RE.match(line)
+            if name_match:
+                names[name_match.group(1)] = name_match.group(2)
+
+    capability_bits: dict[str, int] = {}
+    missing_names = sorted(set(shifts) - set(names))
+    if missing_names:
+        joined = ", ".join(missing_names)
+        raise RuntimeError(f"{path}: missing capability name constants for {joined}")
+
+    for const_name, shift in shifts.items():
+        metadata_name = names[const_name]
+        if metadata_name in capability_bits:
+            raise RuntimeError(f"{path}: duplicate capability name {metadata_name!r}")
+        capability_bits[metadata_name] = 1 << shift
+
+    if not capability_bits:
+        raise RuntimeError(f"{path}: no capability definitions found")
+
+    return capability_bits
+
+
+CAPABILITY_BITS = load_capability_bits(CAPS_NIM)
+CAP_ALL_KNOWN = 0
+for bit in CAPABILITY_BITS.values():
+    CAP_ALL_KNOWN |= bit
 
 def read_symbols(elf):
     out = subprocess.check_output(["llvm-nm", "-n", elf], text=True)

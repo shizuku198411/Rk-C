@@ -157,14 +157,14 @@ proc appendCapNames(pos: var U32, mask: U32) =
     return
 
   var first = true
-  appendCapName(pos, mask, SysCapServiceManager, cstring("sys_service_manager"), first)
-  appendCapName(pos, mask, SysCapRawFs, cstring("sys_raw_fs"), first)
-  appendCapName(pos, mask, SysCapRawBlock, cstring("sys_raw_block"), first)
-  appendCapName(pos, mask, SysCapRawNet, cstring("sys_raw_net"), first)
-  appendCapName(pos, mask, SysCapProcessList, cstring("sys_process_list"), first)
-  appendCapName(pos, mask, SysCapProcessKill, cstring("sys_process_kill"), first)
-  appendCapName(pos, mask, SysCapTrace, cstring("sys_trace_ctl"), first)
-  appendCapName(pos, mask, SysCapShutdown, cstring("sys_shutdown"), first)
+  appendCapName(pos, mask, SysCapServiceManager, cstring(SysCapServiceManagerName), first)
+  appendCapName(pos, mask, SysCapRawFs, cstring(SysCapRawFsName), first)
+  appendCapName(pos, mask, SysCapRawBlock, cstring(SysCapRawBlockName), first)
+  appendCapName(pos, mask, SysCapRawNet, cstring(SysCapRawNetName), first)
+  appendCapName(pos, mask, SysCapProcessList, cstring(SysCapProcessListName), first)
+  appendCapName(pos, mask, SysCapProcessKill, cstring(SysCapProcessKillName), first)
+  appendCapName(pos, mask, SysCapTrace, cstring(SysCapTraceName), first)
+  appendCapName(pos, mask, SysCapShutdown, cstring(SysCapShutdownName), first)
 
   let unknown = mask and (not SysCapAllKnown)
   if unknown != SysCapNone:

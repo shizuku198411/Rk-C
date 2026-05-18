@@ -15,3 +15,12 @@ const
   SysCapAllKnown* = SysCapServiceManager or SysCapRawFs or SysCapRawBlock or
     SysCapRawNet or SysCapProcessList or SysCapProcessKill or SysCapTrace or
     SysCapShutdown
+
+  SysCapServiceManagerName* = "sys_service_manager"
+  SysCapRawFsName* = "sys_raw_fs"
+  SysCapRawBlockName* = "sys_raw_block"
+  SysCapRawNetName* = "sys_raw_net"
+  SysCapProcessListName* = "sys_process_list"
+  SysCapProcessKillName* = "sys_process_kill"
+  SysCapTraceName* = "sys_trace_ctl"
+  SysCapShutdownName* = "sys_shutdown"
