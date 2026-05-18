@@ -224,6 +224,10 @@ def normal_tests() -> list[TestCase]:
             TestCase("cat /proc/1/status", "cat /proc/1/status", ["pid: 1", "cpu:", "mem:", "exe: init"]),
             TestCase("cat /proc/3/rkx_map", "cat /proc/3/rkx_map", ["r-x text", "r-- rodata", "rw- stack"]),
             TestCase("svc list", "svc list", ["service", "procmgtd", "blockd", "fsd", "netd"]),
+            TestCase("svc status", "svc status", ["service", "state", "starts", "restarts", "ready_tick", "procmgtd"]),
+            TestCase("svc status netd", "svc status netd", ["netd", "reason"]),
+            TestCase("svc degraded", "svc degraded", ["service", "state"]),
+            TestCase("svc logs", "svc logs", ["started", "ready"]),
             TestCase("stracectl app", "stracectl ls /bin", ["shell", "curl"], timeout=12.0),
             TestCase("stracectl on", "stracectl on", ["strace on"]),
             TestCase("stracectl off", "stracectl off", ["strace off"]),
@@ -235,24 +239,25 @@ def normal_tests() -> list[TestCase]:
 def abnormal_tests() -> list[TestCase]:
     return [
         TestCase("kill invalid pid", "kill 999", ["kill: failed"]),
-            TestCase("ipc invalid send", "ipc send 999 hello", ["ipc: send failed"]),
-            TestCase(
-                "pollcheck event wait",
-                "pollcheck",
-                [
-                    "pollcheck: ipc empty ok",
-                    "pollcheck: timer ok",
-                    "pollcheck: pipe read empty ok",
-                    "pollcheck: pipe write ready ok",
-                    "pollcheck: pipe read ready ok",
-                    "pollcheck: invalid fd error ok",
-                    "pollcheck: ok",
-                ],
-                timeout=12.0,
-            ),
-            TestCase(
-                "capcheck unauthorized rkx caps",
-                "capcheck",
+        TestCase("svc stop required service", "svc stop fsd", ["cannot stop required service"]),
+        TestCase("ipc invalid send", "ipc send 999 hello", ["ipc: send failed"]),
+        TestCase(
+            "pollcheck event wait",
+            "pollcheck",
+            [
+                "pollcheck: ipc empty ok",
+                "pollcheck: timer ok",
+                "pollcheck: pipe read empty ok",
+                "pollcheck: pipe write ready ok",
+                "pollcheck: pipe read ready ok",
+                "pollcheck: invalid fd error ok",
+                "pollcheck: ok",
+            ],
+            timeout=12.0,
+        ),
+        TestCase(
+            "capcheck unauthorized rkx caps",
+            "capcheck",
             [
                 "capcheck: requested caps visible",
                 "capcheck: requested cap names visible",

@@ -12,7 +12,11 @@ for starting, registering, and monitoring the rest of the userspace services.
 - Receive service ready ACKs and move services to the running state
 - Restart required services after stop or timeout
 - Mark optional services as degraded after startup failure or ready timeout
-- Handle control IPC, such as `svc restart <name>`
+- Track supervision metadata such as start count, restart count, ready tick,
+  and last failure reason
+- Keep a small service event ring for `svc logs`
+- Handle control IPC, such as `svc status`, `svc restart <name>`, and
+  optional service start/stop
 
 ## Managed Services
 
@@ -70,6 +74,15 @@ unrelated processes.
   - Finds the matching managed service
   - Calls `stopService` to unregister, kill, and wait
   - Calls `startService` to launch it again
+- `SysIpcOpSvcStart`
+  - Starts a stopped or degraded service
+- `SysIpcOpSvcStop`
+  - Stops optional services
+  - Required services are rejected
+- `SysIpcOpSvcStatusRequest`
+  - Returns service state, PID, counters, ready tick, and reason
+- `SysIpcOpSvcLogsRequest`
+  - Returns recent service supervision events
 - `SysIpcOpSvcReady`
   - Handles a ready ACK from a starting service
 
@@ -94,10 +107,7 @@ alive.
 - The process snapshot buffer is capped by `SysProcessMaxSlots`
 - Ready timeout is controlled by `ServiceReadyTimeoutTicks`
 - Optional services are not automatically retried after entering degraded state
-- `startInitialService` currently starts `services[0]` through `services[3]`
-  explicitly
-- If the service catalog count or ordering changes, the initial startup code
-  should be checked as well
+- Required services cannot be stopped through `svc stop`
 
 ## Related Files
 

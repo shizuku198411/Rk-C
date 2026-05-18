@@ -49,6 +49,13 @@ const
   SysIpcOpProcFsReadResponse* = U32(24)
   SysIpcOpProcFsLsRequest* = U32(25)
   SysIpcOpProcFsLsResponse* = U32(26)
+  SysIpcOpSvcStatusRequest* = U32(27)
+  SysIpcOpSvcStatusResponse* = U32(28)
+  SysIpcOpSvcLogsRequest* = U32(29)
+  SysIpcOpSvcLogsResponse* = U32(30)
+  SysIpcOpSvcStart* = U32(31)
+  SysIpcOpSvcStop* = U32(32)
+  SysIpcOpSvcCommandResponse* = U32(33)
 
   SysFdMax* = U32(8)
   SysFdPathMax* = U32(128)

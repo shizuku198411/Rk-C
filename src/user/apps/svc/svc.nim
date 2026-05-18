@@ -12,13 +12,19 @@ const
 
 var
   services: array[ServiceCap, SysServiceInfo]
-  restartPacket: SysIpcPacket
+  requestPacket: SysIpcPacket
+  responsePacket: SysIpcPacket
   parsedArgs: UserArgs
 
 
 proc printUsage() =
   write("usage:\n")
   write("  svc list\n")
+  write("  svc status [service]\n")
+  write("  svc degraded\n")
+  write("  svc logs\n")
+  write("  svc start <service>\n")
+  write("  svc stop <service>\n")
   write("  svc restart <service>\n")
 
 
@@ -47,31 +53,90 @@ proc managerPid(): I32 =
   servicePidByKind(SysServiceKindManager)
 
 
-proc restartService() =
-  if parsedArgs.argc != 2:
-    printUsage()
-    sysExit(1)
+proc copyNameToPacket(name: cstring) =
+  var i = U32(0)
+  while i + 1 < U32(SysIpcMessageMax) and name != nil and name[i] != '\0':
+    requestPacket.data[int(i)] = name[i]
+    inc i
 
+  requestPacket.data[int(i)] = '\0'
+  requestPacket.len = i
+
+
+proc requestManager(op, expectedOp: U32, name: cstring = nil, arg0: U64 = U64(0)) =
   let pid = managerPid()
   if pid <= 0:
     write("svc: manager unavailable\n")
     sysExit(1)
 
-  restartPacket = SysIpcPacket()
-  restartPacket.op = SysIpcOpSvcRestart
+  requestPacket = SysIpcPacket()
+  requestPacket.op = op
+  requestPacket.arg0 = arg0
+  copyNameToPacket(name)
 
-  let name = argAt(parsedArgs, 1)
-  var i = U32(0)
-  while i + 1 < U32(SysIpcMessageMax) and name[i] != '\0':
-    restartPacket.data[int(i)] = name[i]
-    inc i
-
-  restartPacket.data[int(i)] = '\0'
-  restartPacket.len = i
-
-  if sendIpcRequest(pid, addr restartPacket) != 0:
-    write("svc: restart request failed\n")
+  if requestIpcReply(pid, addr requestPacket, addr responsePacket, expectedOp) != 0:
+    write("svc: request failed\n")
     sysExit(1)
+
+  if responsePacket.len > 0:
+    discard sysWriteFd(1, addr responsePacket.data[0], U64(responsePacket.len))
+
+  if responsePacket.arg0 != U64(0):
+    sysExit(1)
+
+
+proc restartService() =
+  if parsedArgs.argc != 2:
+    printUsage()
+    sysExit(1)
+
+  requestManager(SysIpcOpSvcRestart, SysIpcOpSvcCommandResponse, argAt(parsedArgs, 1))
+
+
+proc startService() =
+  if parsedArgs.argc != 2:
+    printUsage()
+    sysExit(1)
+
+  requestManager(SysIpcOpSvcStart, SysIpcOpSvcCommandResponse, argAt(parsedArgs, 1))
+
+
+proc stopService() =
+  if parsedArgs.argc != 2:
+    printUsage()
+    sysExit(1)
+
+  requestManager(SysIpcOpSvcStop, SysIpcOpSvcCommandResponse, argAt(parsedArgs, 1))
+
+
+proc statusServices() =
+  if parsedArgs.argc > 2:
+    printUsage()
+    sysExit(1)
+
+  let name =
+    if parsedArgs.argc == 2:
+      argAt(parsedArgs, 1)
+    else:
+      nil
+
+  requestManager(SysIpcOpSvcStatusRequest, SysIpcOpSvcStatusResponse, name)
+
+
+proc degradedServices() =
+  if parsedArgs.argc != 1:
+    printUsage()
+    sysExit(1)
+
+  requestManager(SysIpcOpSvcStatusRequest, SysIpcOpSvcStatusResponse, nil, U64(1))
+
+
+proc serviceLogs() =
+  if parsedArgs.argc != 1:
+    printUsage()
+    sysExit(1)
+
+  requestManager(SysIpcOpSvcLogsRequest, SysIpcOpSvcLogsResponse)
 
 
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
@@ -89,6 +154,26 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
 
   if parsedArgs.argc >= 1 and cstringEq(argAt(parsedArgs, 0), "restart"):
     restartService()
+    sysExit(0)
+
+  if parsedArgs.argc >= 1 and cstringEq(argAt(parsedArgs, 0), "start"):
+    startService()
+    sysExit(0)
+
+  if parsedArgs.argc >= 1 and cstringEq(argAt(parsedArgs, 0), "stop"):
+    stopService()
+    sysExit(0)
+
+  if parsedArgs.argc >= 1 and cstringEq(argAt(parsedArgs, 0), "status"):
+    statusServices()
+    sysExit(0)
+
+  if parsedArgs.argc >= 1 and cstringEq(argAt(parsedArgs, 0), "degraded"):
+    degradedServices()
+    sysExit(0)
+
+  if parsedArgs.argc >= 1 and cstringEq(argAt(parsedArgs, 0), "logs"):
+    serviceLogs()
     sysExit(0)
 
   printUsage()
