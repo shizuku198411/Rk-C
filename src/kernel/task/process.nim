@@ -56,6 +56,8 @@ type
     dataMemSize*: U64
     bssVa*: VAddr
     bssMemSize*: U64
+    requestedCapabilityMask*: U32
+    capabilityMask*: U32
     arg0*: U64
     arg1*: U64
 
@@ -552,7 +554,9 @@ proc allocUserProcessFromParent*(parent: ptr Process, inheritMetadata: bool = tr
 
 proc configureUserProcess*(p: ptr Process, root: PageTable, path: cstring,
                            userBase, userPc, userStackTop, userSp: VAddr,
-                           imagePages, stackPages: U64, arg0: U64 = 0, arg1: U64 = 0) =
+                           imagePages, stackPages: U64, arg0: U64 = 0,
+                           arg1: U64 = 0, requestedCapabilityMask: U32 = U32(0),
+                           capabilityMask: U32 = U32(0)) =
   setExePath(p, path)
   p.rootPageTable = root
   p.user.active = true
@@ -562,6 +566,8 @@ proc configureUserProcess*(p: ptr Process, root: PageTable, path: cstring,
   p.user.sp = userSp
   p.user.imagePages = imagePages
   p.user.stackPages = stackPages
+  p.user.requestedCapabilityMask = requestedCapabilityMask
+  p.user.capabilityMask = capabilityMask
   p.user.arg0 = arg0
   p.user.arg1 = arg1
   clearWait(p)

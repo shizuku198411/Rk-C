@@ -103,6 +103,8 @@ type
     bssMemSize*: U64
     stackTop*: U64
     stackPages*: U64
+    requestedCapabilityMask*: U32
+    capabilityMask*: U32
     exePath*: array[SysProcessNameMax, char]
 
   SysDateTime* {.packed.} = object

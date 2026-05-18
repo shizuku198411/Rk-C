@@ -1,6 +1,7 @@
 import ../../lib/mem
 import ../../lib/calc
 import ../../lib/rkx
+import ../../lib/syscall_caps
 import ../../lib/types
 import ../dev/console
 import ../fs/fs
@@ -127,6 +128,9 @@ proc validateRkxHeader(hdr: ptr RkxHeader, imageSize: U64, expectedBase: VAddr):
     return false
 
   if U64(hdr.headerSize) > imageSize:
+    return false
+
+  if (hdr.capabilityMask and (not SysCapAllKnown)) != U32(0):
     return false
 
   if hdr.stackPages != U32(0):

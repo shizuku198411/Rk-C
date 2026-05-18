@@ -1,6 +1,7 @@
 import ../../lib/core/io
 import ../../lib/core/syscall
 import ../../lib/core/strutils
+import ../../../lib/syscall_caps
 import ../lib/service_ready
 
 
@@ -138,6 +139,46 @@ proc appendRkxMapLine(pos: var U32, start, size: U64, perms, name: cstring) =
   appendChar(pos, ' ')
   appendStr(pos, name)
   appendChar(pos, '\n')
+
+
+proc appendCapName(pos: var U32, mask: U32, cap: U32, name: cstring, first: var bool) =
+  if (mask and cap) == 0:
+    return
+
+  if not first:
+    appendChar(pos, ' ')
+  appendStr(pos, name)
+  first = false
+
+
+proc appendCapNames(pos: var U32, mask: U32) =
+  if mask == SysCapNone:
+    appendStr(pos, cstring("none"))
+    return
+
+  var first = true
+  appendCapName(pos, mask, SysCapServiceManager, cstring("sys_service_manager"), first)
+  appendCapName(pos, mask, SysCapRawFs, cstring("sys_raw_fs"), first)
+  appendCapName(pos, mask, SysCapRawBlock, cstring("sys_raw_block"), first)
+  appendCapName(pos, mask, SysCapRawNet, cstring("sys_raw_net"), first)
+  appendCapName(pos, mask, SysCapProcessList, cstring("sys_process_list"), first)
+  appendCapName(pos, mask, SysCapProcessKill, cstring("sys_process_kill"), first)
+
+  let unknown = mask and (not SysCapAllKnown)
+  if unknown != SysCapNone:
+    if not first:
+      appendChar(pos, ' ')
+    appendStr(pos, cstring("unknown:"))
+    appendHex64(pos, U64(unknown))
+
+
+proc appendCapMaskLine(pos: var U32, label: cstring, mask: U32) =
+  appendStr(pos, label)
+  appendStr(pos, cstring(": "))
+  appendHex64(pos, U64(mask))
+  appendStr(pos, cstring(" ("))
+  appendCapNames(pos, mask)
+  appendStr(pos, cstring(")\n"))
 
 
 proc clearResponseData() =
@@ -425,6 +466,9 @@ proc renderStatus(pid: I32): U32 =
       appendStr(pos, cstring("mem: "))
       appendPages(pos, procInfos[i].memoryPages)
       appendChar(pos, '\n')
+
+      appendCapMaskLine(pos, cstring("requested_caps"), procInfos[i].requestedCapabilityMask)
+      appendCapMaskLine(pos, cstring("caps"), procInfos[i].capabilityMask)
 
       appendStr(pos, cstring("exe: "))
       appendStr(pos, cast[cstring](addr procInfos[i].exePath[0]))

@@ -11,11 +11,26 @@ DEFAULT_STACK_PAGES = 4
 MIN_STACK_PAGES = 1
 MAX_STACK_PAGES = 16
 HEADER_SIZE = 4 * 4 + 1 * 8 + 3 * 4 * 8 + 2 * 8 + 2 * 4
-# magic, version, headerSize, reserved
+# magic, version, headerSize, capabilityMask
 # entryVa
 # text/rodata/data: va, off, fileSize, memSize
 # bss: va, memSize
 # stackPages, flags
+
+CAP_SERVICE_MANAGER = 1 << 0
+CAP_RAW_FS = 1 << 1
+CAP_RAW_BLOCK = 1 << 2
+CAP_RAW_NET = 1 << 3
+CAP_PROCESS_LIST = 1 << 4
+CAP_PROCESS_KILL = 1 << 5
+CAP_ALL_KNOWN = (
+    CAP_SERVICE_MANAGER
+    | CAP_RAW_FS
+    | CAP_RAW_BLOCK
+    | CAP_RAW_NET
+    | CAP_PROCESS_LIST
+    | CAP_PROCESS_KILL
+)
 
 STACK_PAGES_BY_APP = {
     "date": 1,
@@ -46,6 +61,16 @@ STACK_PAGES_BY_APP = {
     "edit": 8,
     "curl": 8,
     "netd": 8,
+}
+
+CAPABILITY_MASK_BY_APP = {
+    "svcmgtd": CAP_SERVICE_MANAGER | CAP_PROCESS_LIST | CAP_PROCESS_KILL,
+    "procmgtd": CAP_PROCESS_LIST | CAP_PROCESS_KILL,
+    "procfsd": CAP_PROCESS_LIST,
+    "fsd": CAP_RAW_FS,
+    "blockd": CAP_RAW_BLOCK,
+    "netd": CAP_RAW_NET,
+    "capcheck": CAP_ALL_KNOWN,
 }
 
 def read_symbols(elf):
@@ -91,6 +116,9 @@ def app_name_from_path(path):
 def default_stack_pages(out_path):
     return STACK_PAGES_BY_APP.get(app_name_from_path(out_path), DEFAULT_STACK_PAGES)
 
+def default_capability_mask(out_path):
+    return CAPABILITY_MASK_BY_APP.get(app_name_from_path(out_path), 0)
+
 def validate_stack_pages(value):
     if value < MIN_STACK_PAGES or value > MAX_STACK_PAGES:
         raise RuntimeError(
@@ -99,14 +127,28 @@ def validate_stack_pages(value):
         )
     return value
 
+def validate_capability_mask(value):
+    if value < 0 or (value & ~CAP_ALL_KNOWN) != 0:
+        raise RuntimeError(
+            f"unknown capability mask bits: 0x{value:x} "
+            f"(known mask 0x{CAP_ALL_KNOWN:x})"
+        )
+    return value
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--elf", required=True)
     parser.add_argument("--out", required=True)
     parser.add_argument("--stack-pages", type=int)
+    parser.add_argument("--capability-mask", type=lambda x: int(x, 0))
     args = parser.parse_args()
     stack_pages = validate_stack_pages(
         args.stack_pages if args.stack_pages is not None else default_stack_pages(args.out)
+    )
+    capability_mask = validate_capability_mask(
+        args.capability_mask
+        if args.capability_mask is not None
+        else default_capability_mask(args.out)
     )
 
     syms = read_symbols(args.elf)
@@ -159,7 +201,7 @@ def main():
         RKX_MAGIC,
         RKX_VERSION,
         HEADER_SIZE,
-        0,
+        capability_mask,
         entry,
 
         text_va,
@@ -197,7 +239,8 @@ def main():
 
     print(
         f"[rkx] {args.out}: text={len(text_blob)} rodata={len(ro_blob)} "
-        f"data={len(data_blob)} bss={bss_end - bss_va} stack_pages={stack_pages}"
+        f"data={len(data_blob)} bss={bss_end - bss_va} stack_pages={stack_pages} "
+        f"caps=0x{capability_mask:08x}"
     )
 
 if __name__ == "__main__":

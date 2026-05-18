@@ -56,5 +56,7 @@ elif defined(userApp_dmesg):
   import apps/dmesg/dmesg
 elif defined(userApp_faultcheck):
   import apps/faultcheck/faultcheck
+elif defined(userApp_capcheck):
+  import apps/capcheck/capcheck
 else:
   {.error: "missing user app define".}

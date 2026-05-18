@@ -1,4 +1,5 @@
 import ../../lib/syscall_ids
+import ../../lib/syscall_caps
 import ../../lib/types
 import ../service/registry
 import ../task/process
@@ -6,6 +7,10 @@ import ../task/process
 
 proc currentIsUserProcess*(): bool =
   currentProc != nil and currentProc.user.active
+
+
+proc currentHasCap*(capability: U32): bool =
+  currentIsUserProcess() and (currentProc.user.capabilityMask and capability) == capability
 
 
 proc currentIsServiceManager*(): bool =
@@ -41,58 +46,63 @@ proc blockServiceAvailable*(): bool =
 
 
 proc canSyscallFsServiceRegister*(): bool =
-  currentIsUserProcess() and not currentIsFsService() and
+  currentIsUserProcess() and currentHasCap(SysCapRawFs) and not currentIsFsService() and
     not serviceRegistered(serviceManager)
 
 
 proc canSyscallFsServiceReceive*(): bool =
-  currentIsFsService()
+  currentIsFsService() and currentHasCap(SysCapRawFs)
 
 
 proc canSyscallFsServiceReply*(): bool =
-  currentIsFsService()
+  currentIsFsService() and currentHasCap(SysCapRawFs)
 
 
 proc canSyscallRawFs*(): bool =
-  currentIsFsService()
+  currentIsFsService() and currentHasCap(SysCapRawFs)
 
 
 proc canFallbackToRawFs*(): bool =
-  not serviceRegistered(serviceFs) or currentIsFsService()
+  not serviceRegistered(serviceFs) or canSyscallRawFs()
 
 
 proc canSyscallBlockServiceRegister*(): bool =
-  currentIsUserProcess() and not currentIsBlockService() and
+  currentIsUserProcess() and currentHasCap(SysCapRawBlock) and
+    not currentIsBlockService() and
     not serviceRegistered(serviceManager)
 
 
 proc canSyscallBlockServiceReceive*(): bool =
-  currentIsBlockService()
+  currentIsBlockService() and currentHasCap(SysCapRawBlock)
 
 
 proc canSyscallBlockServiceReply*(): bool =
-  currentIsBlockService()
+  currentIsBlockService() and currentHasCap(SysCapRawBlock)
 
 
 proc canSyscallRawBlock*(): bool =
-  currentIsBlockService()
+  currentIsBlockService() and currentHasCap(SysCapRawBlock)
 
 
 proc canFallbackToRawBlock*(): bool =
-  not serviceRegistered(serviceBlock) or currentIsBlockService()
+  not serviceRegistered(serviceBlock) or canSyscallRawBlock()
 
 
 proc canSyscallRawNet*(): bool =
-  currentIsNetService()
+  currentIsNetService() and currentHasCap(SysCapRawNet)
 
 
 proc canSyscallProcessList*(): bool =
-  currentIsServiceManager() or currentIsProcessService() or
+  currentHasCap(SysCapProcessList) and (
+    currentIsServiceManager() or currentIsProcessService() or
     currentIsProcFsService()
+  )
 
 
 proc canSyscallKillProcess*(): bool =
-  currentIsServiceManager() or currentIsProcessService()
+  currentHasCap(SysCapProcessKill) and (
+    currentIsServiceManager() or currentIsProcessService()
+  )
 
 
 proc canSyscallKillTarget*(pid: int32): bool =
@@ -109,6 +119,8 @@ proc canSyscallKillTarget*(pid: int32): bool =
 proc canSyscallServiceManagerRegister*(): bool =
   if not currentIsUserProcess():
     return false
+  if not currentHasCap(SysCapServiceManager):
+    return false
   if serviceRegistered(serviceManager) and not currentIsServiceManager():
     return false
 
@@ -116,7 +128,7 @@ proc canSyscallServiceManagerRegister*(): bool =
 
 
 proc canSyscallServiceMutation*(): bool =
-  currentIsServiceManager()
+  currentIsServiceManager() and currentHasCap(SysCapServiceManager)
 
 
 proc canSyscallServiceKindMutation*(kind: ServiceKind): bool =

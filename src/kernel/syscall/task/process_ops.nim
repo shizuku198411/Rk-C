@@ -48,6 +48,8 @@ proc fillProcessInfo(entry: var SysProcessInfo, p: ptr Process) =
   entry.bssMemSize = p.user.bssMemSize
   entry.stackTop = p.user.stackTop
   entry.stackPages = p.user.stackPages
+  entry.requestedCapabilityMask = p.user.requestedCapabilityMask
+  entry.capabilityMask = p.user.capabilityMask
   if p.user.active:
     entry.isUser = 1
   else:

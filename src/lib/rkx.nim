@@ -13,7 +13,7 @@ type
     magic*: U32
     version*: U32
     headerSize*: U32
-    reserved*: U32
+    capabilityMask*: U32
 
     entryVa*: U64
 

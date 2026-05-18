@@ -14,7 +14,7 @@ from pathlib import Path
 
 ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
 PROMPT_MARKER = "$ "
-TEST_APP_NAMES = ["faultcheck"]
+TEST_APP_NAMES = ["faultcheck", "capcheck"]
 
 
 @dataclass
@@ -34,6 +34,12 @@ class CommandResult:
     output: str
     errors: list[str]
     fatal: bool = False
+
+
+@dataclass
+class TestSection:
+    name: str
+    tests: list[TestCase]
 
 
 class QemuConsole:
@@ -156,7 +162,7 @@ def prepare_test_disk(test_disk: Path, base_disk: Path, no_build: bool) -> None:
     )
 
 
-def base_tests() -> list[TestCase]:
+def normal_tests() -> list[TestCase]:
     tests = [
         TestCase("shell help", "help", ["available commands:", "curl", "stracectl", "dmesg"]),
         TestCase("shell ticks", "ticks", regex=[r"\d+"]),
@@ -185,6 +191,7 @@ def base_tests() -> list[TestCase]:
         "curl": "usage: curl",
         "stracectl": "usage:",
         "dmesg": "usage: dmesg",
+        "capcheck": "usage: capcheck",
     }
     for app, expected in help_cases.items():
         tests.append(TestCase(f"{app} --help", f"{app} --help", [expected]))
@@ -214,11 +221,32 @@ def base_tests() -> list[TestCase]:
             TestCase("cat /proc/1/status", "cat /proc/1/status", ["pid: 1", "cpu:", "mem:", "exe: init"]),
             TestCase("cat /proc/3/rkx_map", "cat /proc/3/rkx_map", ["r-x text", "r-- rodata", "rw- stack"]),
             TestCase("svc list", "svc list", ["service", "procmgtd", "blockd", "fsd", "netd"]),
-            TestCase("kill invalid pid", "kill 999", ["kill: failed"]),
-            TestCase("ipc invalid send", "ipc send 999 hello", ["ipc: send failed"]),
             TestCase("stracectl app", "stracectl ls /bin", ["shell", "curl"], timeout=12.0),
             TestCase("stracectl on", "stracectl on", ["strace on"]),
             TestCase("stracectl off", "stracectl off", ["strace off"]),
+        ]
+    )
+    return tests
+
+
+def abnormal_tests() -> list[TestCase]:
+    return [
+        TestCase("kill invalid pid", "kill 999", ["kill: failed"]),
+        TestCase("ipc invalid send", "ipc send 999 hello", ["ipc: send failed"]),
+        TestCase(
+            "capcheck unauthorized rkx caps",
+            "capcheck",
+            [
+                "capcheck: requested caps visible",
+                "capcheck: requested cap names visible",
+                "capcheck: granted caps stripped",
+                "capcheck: raw_net denied",
+                "capcheck: process_list denied",
+                "capcheck: ok",
+            ],
+            timeout=12.0,
+        ),
+        *[
             TestCase("faultcheck --help", "faultcheck --help", ["usage: faultcheck"]),
             TestCase("faultcheck bad cstring", "faultcheck bad-cstring", ["bad-cstring: rejected"]),
             TestCase(
@@ -241,9 +269,8 @@ def base_tests() -> list[TestCase]:
                 ],
                 timeout=10.0,
             ),
-        ]
-    )
-    return tests
+        ],
+    ]
 
 
 def network_tests(host_ip: str, delay: float) -> list[TestCase]:
@@ -325,6 +352,13 @@ def print_result(status: str, case: TestCase, output: str) -> None:
     print(f"[{status}] {case.name}")
     print(f"       expected: {expected_summary(case)}")
     print(f"       actual  : {actual_summary(output)}")
+
+
+def print_section(name: str) -> None:
+    print("")
+    print("=" * 72)
+    print(name)
+    print("=" * 72)
 
 
 def print_failure(case: TestCase, output: str, errors: list[str]) -> None:
@@ -438,21 +472,30 @@ def main() -> int:
             )
 
         qemu.buffer = ""
-        tests = base_tests()
+        sections = [
+            TestSection("normal tests", normal_tests()),
+            TestSection("abnormal/security tests", abnormal_tests()),
+        ]
         if not args.skip_network_smoke:
-            tests.extend(network_tests(args.host_ip, args.network_test_delay))
+            sections.append(TestSection("network tests", network_tests(args.host_ip, args.network_test_delay)))
 
-        for case in tests:
-            result = run_and_validate(qemu, case, args.command_recover_timeout)
+        stop = False
+        for section in sections:
+            if stop:
+                break
+            print_section(section.name)
+            for case in section.tests:
+                result = run_and_validate(qemu, case, args.command_recover_timeout)
 
-            if result.errors:
-                print_failure(case, result.output, result.errors)
-                failures += 1
-                if result.fatal:
-                    print("fatal console desync; stopping remaining tests")
-                    break
-            else:
-                print_result("PASS", case, result.output)
+                if result.errors:
+                    print_failure(case, result.output, result.errors)
+                    failures += 1
+                    if result.fatal:
+                        print("fatal console desync; stopping remaining tests")
+                        stop = True
+                        break
+                else:
+                    print_result("PASS", case, result.output)
     finally:
         qemu.close()
         if not args.keep_test_disk:

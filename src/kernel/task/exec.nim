@@ -1,5 +1,6 @@
 import ../../lib/fixed_string
 import ../../lib/rkx
+import ../../lib/syscall_caps
 import ../../lib/syscall_types
 import ../../lib/types
 import ../dev/console
@@ -63,6 +64,35 @@ proc stackPagesFromHeader(hdr: ptr RkxHeader): U64 =
   U64(hdr.stackPages)
 
 
+proc trustedCapsForPath(path: cstring): U32 =
+  if cstringEq(path, "/bin/svcmgtd"):
+    return SysCapServiceManager or SysCapProcessList or SysCapProcessKill
+
+  if cstringEq(path, "/bin/procmgtd"):
+    return SysCapProcessList or SysCapProcessKill
+
+  if cstringEq(path, "/bin/procfsd"):
+    return SysCapProcessList
+
+  if cstringEq(path, "/bin/fsd"):
+    return SysCapRawFs
+
+  if cstringEq(path, "/bin/blockd"):
+    return SysCapRawBlock
+
+  if cstringEq(path, "/bin/netd"):
+    return SysCapRawNet
+
+  SysCapNone
+
+
+proc grantedCapsForImage(path: cstring, hdr: ptr RkxHeader): U32 =
+  if hdr == nil:
+    return SysCapNone
+
+  hdr.capabilityMask and trustedCapsForPath(path)
+
+
 proc replaceUserStack(root: PageTable, stackTop: VAddr, stackPages: U64, arg: cstring, userSp, argVa: var VAddr): int =
   if stackPages < U64(RkxMinStackPages) or stackPages > U64(RkxMaxStackPages):
     return -1
@@ -100,8 +130,25 @@ proc installExecImage(p: ptr Process, root: PageTable, path: cstring, base, stac
   if replaceUserStack(root, stackTop, stackPages, arg, userSp, argVa) != 0:
     return -1
 
+  let requestedCaps = rkxHeader.capabilityMask
+  let grantedCaps = grantedCapsForImage(path, addr rkxHeader)
+
   flushTlb()
-  configureUserProcess(p, root, path, base, entryVa, stackTop, userSp, imagePages, stackPages, argVa, 0)
+  configureUserProcess(
+    p,
+    root,
+    path,
+    base,
+    entryVa,
+    stackTop,
+    userSp,
+    imagePages,
+    stackPages,
+    argVa,
+    0,
+    requestedCaps,
+    grantedCaps,
+  )
   setUserRkxMap(
     p,
     rkxHeader.textVa,
