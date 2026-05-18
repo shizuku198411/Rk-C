@@ -70,7 +70,7 @@ proc kernelBanner() =
   printlnConsoleOnly("║  ██║  ██║ ██║  ██╗      ╚██████╗  ║")
   printlnConsoleOnly("║  ╚═╝  ╚═╝ ╚═╝  ╚═╝       ╚═════╝  ║")
   printlnConsoleOnly("╠═══════════════════════════════════╣")
-  printlnConsoleOnly("║  version: 0.1.0                   ║")
+  printlnConsoleOnly("║  version: 0.1.1                   ║")
   printlnConsoleOnly("╚═══════════════════════════════════╝\n")
 
 
