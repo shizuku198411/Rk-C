@@ -133,6 +133,15 @@ proc isBinRoot(path: cstring): bool =
   cstringEq(path, "/bin") or cstringEq(path, "/bin/")
 
 
+proc isBinPath(path: cstring): bool =
+  if path == nil:
+    return false
+
+  isBinRoot(path) or
+    (path[0] == '/' and path[1] == 'b' and path[2] == 'i' and
+      path[3] == 'n' and path[4] == '/')
+
+
 proc isDevRoot(path: cstring): bool =
   cstringEq(path, "/dev") or cstringEq(path, "/dev/")
 
@@ -632,6 +641,9 @@ proc fsFileSize*(path: cstring): int =
 proc fsMkdir*(path: cstring): int =
   if not fsReady:
     return -1
+  if isBinPath(path):
+    return -1
+
   let mountIdx = findMount(path)
   if mountIdx >= 0 and mounts[mountIdx].backend == vfsTmpfs:
     return tmpfsMkdir(mountLocalPath(path, mounts[mountIdx].pathLen))
@@ -658,6 +670,8 @@ proc fsWriteText*(path: cstring, data: cstring): int =
 
 proc fsWriteFile*(path: cstring, data: pointer, size: U64): int =
   if not fsReady:
+    return -1
+  if isBinPath(path):
     return -1
   if data == nil and size > 0:
     return -1
@@ -689,6 +703,9 @@ proc fsWriteFile*(path: cstring, data: pointer, size: U64): int =
 proc fsUnlink*(path: cstring): int =
   if not fsReady:
     return -1
+  if isBinPath(path):
+    return -1
+
   let mountIdx = findMount(path)
   if mountIdx >= 0 and mounts[mountIdx].backend == vfsTmpfs:
     return tmpfsUnlink(mountLocalPath(path, mounts[mountIdx].pathLen))
@@ -709,7 +726,7 @@ proc fsUnlink*(path: cstring): int =
 proc fsRmdir*(path: cstring): int =
   if not fsReady:
     return -1
-  if isBinRoot(path):
+  if isBinPath(path):
     return -1
 
   let mountIdx = findMount(path)

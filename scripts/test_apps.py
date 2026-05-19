@@ -259,6 +259,9 @@ def abnormal_tests() -> list[TestCase]:
         TestCase("kill invalid pid", "kill 999", ["kill: failed"]),
         TestCase("svc stop required service", "svc stop fsd", ["cannot stop required service"]),
         TestCase("ipc invalid send", "ipc send 999 hello", ["ipc: send failed"]),
+        TestCase("deny write under /bin", "ls > /bin/ls.txt", ["redirect: failed to open /bin/ls.txt"]),
+        TestCase("deny mkdir under /bin", "mkdir /bin/scratch", ["mkdir: failed"]),
+        TestCase("deny unlink under /bin", "rm /bin/ls", ["rm: failed"]),
         TestCase(
             "pollcheck event wait",
             "pollcheck",
