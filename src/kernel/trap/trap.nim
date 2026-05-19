@@ -4,11 +4,15 @@ import ../../lib/syscall_types
 import ../syscall/system/trap_ops
 import ../dev/console
 import ../dev/timer
+import ../fs/fs
 import ../task/process
 import ../trap/syscall
 import ../trap/trap_types
 
 const
+  UserPanicLogPath = cstring"/var/log/user_panic.log"
+  UserPanicLogMax = 512
+
   ScauseInstructionAddressMisaligned   = U64(0x00)
   ScauseInstructionAccessFault          = U64(0x01)
   ScauseIllegalInstruction              = U64(0x02)
@@ -44,7 +48,113 @@ proc panicMsg(scauseType: cstring, scause: U64, stval: U64, userPc: U64) =
     arch.wfi()
 
 
-proc faultOrPanic(scauseType: cstring, scause: U64, stval: U64, userPc: U64, fromUser: bool) =
+proc appendLogChar(dst: var array[UserPanicLogMax, char], pos: var U64, ch: char) =
+  if pos + U64(1) >= U64(UserPanicLogMax):
+    return
+
+  dst[pos] = ch
+  inc pos
+  dst[pos] = '\0'
+
+
+proc appendLogCString(dst: var array[UserPanicLogMax, char], pos: var U64, src: cstring) =
+  if src == nil:
+    appendLogCString(dst, pos, cstring"(nil)")
+    return
+
+  var i = U64(0)
+  while src[i] != '\0' and pos + U64(1) < U64(UserPanicLogMax):
+    dst[pos] = src[i]
+    inc pos
+    inc i
+  dst[pos] = '\0'
+
+
+proc appendLogUnsigned(dst: var array[UserPanicLogMax, char], pos: var U64, value: U64) =
+  var digits: array[20, char]
+  var n = value
+  var count = 0
+
+  if n == U64(0):
+    appendLogChar(dst, pos, '0')
+    return
+
+  while n > U64(0) and count < digits.len:
+    digits[count] = char(ord('0') + int(n mod U64(10)))
+    n = n div U64(10)
+    inc count
+
+  while count > 0:
+    dec count
+    appendLogChar(dst, pos, digits[count])
+
+
+proc logHexDigit(value: U64): char =
+  let digit = int(value and U64(0xf))
+  if digit < 10:
+    char(ord('0') + digit)
+  else:
+    char(ord('a') + digit - 10)
+
+
+proc appendLogHex(dst: var array[UserPanicLogMax, char], pos: var U64, value: U64) =
+  appendLogCString(dst, pos, cstring"0x")
+
+  var started = false
+  var shift = 60
+  while shift >= 0:
+    let digit = (value shr U64(shift)) and U64(0xf)
+    if digit != U64(0) or started or shift == 0:
+      appendLogChar(dst, pos, logHexDigit(digit))
+      started = true
+    shift -= 4
+
+
+proc appendLogField(dst: var array[UserPanicLogMax, char], pos: var U64, name: cstring) =
+  if pos > U64(0):
+    appendLogChar(dst, pos, ' ')
+  appendLogCString(dst, pos, name)
+  appendLogChar(dst, pos, '=')
+
+
+proc writeUserPanicLog(scause: U64, stval: U64, userPc: U64, frame: ptr TrapFrame) =
+  if currentProc == nil or frame == nil:
+    return
+
+  var line: array[UserPanicLogMax, char]
+  var pos = U64(0)
+
+  appendLogField(line, pos, cstring"pid")
+  appendLogUnsigned(line, pos, U64(currentProc.pid))
+  appendLogField(line, pos, cstring"exe")
+  appendLogCString(line, pos, currentProc.exePath)
+  appendLogField(line, pos, cstring"scause")
+  appendLogHex(line, pos, scause)
+  appendLogField(line, pos, cstring"stval")
+  appendLogHex(line, pos, stval)
+  appendLogField(line, pos, cstring"sepc")
+  appendLogHex(line, pos, userPc)
+  appendLogField(line, pos, cstring"sp")
+  appendLogHex(line, pos, frame.sp)
+  appendLogField(line, pos, cstring"a0")
+  appendLogHex(line, pos, frame.a0)
+  appendLogField(line, pos, cstring"a1")
+  appendLogHex(line, pos, frame.a1)
+  appendLogField(line, pos, cstring"a2")
+  appendLogHex(line, pos, frame.a2)
+  appendLogField(line, pos, cstring"a3")
+  appendLogHex(line, pos, frame.a3)
+  appendLogChar(line, pos, '\n')
+
+  discard fsWriteFileWithFlags(
+    UserPanicLogPath,
+    addr line[0],
+    pos,
+    SysFsWriteCreate or SysFsWriteAppend,
+  )
+
+
+proc faultOrPanic(scauseType: cstring, scause: U64, stval: U64, userPc: U64, fromUser: bool, frame: ptr TrapFrame) =
   if fromUser and currentProc != nil:
     print("PAGE FAULT DETECTED: ")
     print(scauseType)
@@ -55,6 +165,7 @@ proc faultOrPanic(scauseType: cstring, scause: U64, stval: U64, userPc: U64, fro
     print(", sepc=")
     printPtr(userPc)
     putChar('\n')
+    writeUserPanicLog(scause, stval, userPc, frame)
     killCurrentUserProcess(U64(255))
   else:
     panicMsg(scauseType, scause, stval, userPc)
@@ -72,35 +183,35 @@ proc trapHandler*(frame: ptr TrapFrame) {.exportc: "trap_handler", cdecl.} =
   case scause
   of ScauseInstructionAddressMisaligned:
     inc trapCount.instructionAddressMissaligned
-    faultOrPanic("Instruction Address Misaligned", scause, stval, userPc, fromUser)
+    faultOrPanic("Instruction Address Misaligned", scause, stval, userPc, fromUser, frame)
 
   of ScauseInstructionAccessFault:
     inc trapCount.instructionAccessFault
-    faultOrPanic("Instruction Access Fault", scause, stval, userPc, fromUser)
+    faultOrPanic("Instruction Access Fault", scause, stval, userPc, fromUser, frame)
 
   of ScauseIllegalInstruction:
     inc trapCount.illegalInstruction
-    faultOrPanic("Illegal Instruction", scause, stval, userPc, fromUser)
+    faultOrPanic("Illegal Instruction", scause, stval, userPc, fromUser, frame)
   
   of ScauseBreakpoint:
     inc trapCount.breakpoint
-    faultOrPanic("Breakpoint", scause, stval, userPc, fromUser)
+    faultOrPanic("Breakpoint", scause, stval, userPc, fromUser, frame)
   
   of ScauseLoadAddressMisaligned:
     inc trapCount.loadAddressMisaligned
-    faultOrPanic("Load Address Misaligned", scause, stval, userPc, fromUser)
+    faultOrPanic("Load Address Misaligned", scause, stval, userPc, fromUser, frame)
   
   of ScauseLoadAccessFault:
     inc trapCount.loadAccessFault
-    faultOrPanic("Load Access Fault", scause, stval, userPc, fromUser)
+    faultOrPanic("Load Access Fault", scause, stval, userPc, fromUser, frame)
   
   of ScauseStoreAMOAddressMisaligned:
     inc trapCount.storeAMOAddressMisaligned
-    faultOrPanic("Store/AMO Address Misaligned", scause, stval, userPc, fromUser)
+    faultOrPanic("Store/AMO Address Misaligned", scause, stval, userPc, fromUser, frame)
   
   of ScauseStoreAMOAccessFault:
     inc trapCount.storeAMOAccessFault
-    faultOrPanic("Store/AMO Access Fault", scause, stval, userPc, fromUser)
+    faultOrPanic("Store/AMO Access Fault", scause, stval, userPc, fromUser, frame)
   
   of ScauseEnvironmentCallFromUMode:
     inc trapCount.environmentCallFromUMode
@@ -115,15 +226,15 @@ proc trapHandler*(frame: ptr TrapFrame) {.exportc: "trap_handler", cdecl.} =
   
   of ScauseInstructionPageFault:
     inc trapCount.instructionPageFault
-    faultOrPanic("Instruction Page Fault", scause, stval, userPc, fromUser)
+    faultOrPanic("Instruction Page Fault", scause, stval, userPc, fromUser, frame)
   
   of ScauseLoadPageFault:
     inc trapCount.loadPageFault
-    faultOrPanic("Load Page Fault", scause, stval, userPc, fromUser)
+    faultOrPanic("Load Page Fault", scause, stval, userPc, fromUser, frame)
   
   of ScauseStoreAMOPageFault:
     inc trapCount.storeAMOPageFault
-    faultOrPanic("Store/AMO Page Fault", scause, stval, userPc, fromUser)
+    faultOrPanic("Store/AMO Page Fault", scause, stval, userPc, fromUser, frame)
   
   of ScauseSupervisorTimer:
     inc trapCount.supervisorTimer

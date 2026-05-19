@@ -68,6 +68,8 @@ elif defined(userApp_df):
   import apps/df/df
 elif defined(userApp_wc):
   import apps/wc/wc
+elif defined(userApp_paniclog):
+  import apps/paniclog/paniclog
 # == test use only apps ==
 elif defined(userApp_faultcheck):
   import apps/faultcheck/faultcheck

@@ -205,6 +205,7 @@ def normal_tests() -> list[TestCase]:
         "cp": "usage: cp",
         "mv": "usage: mv",
         "df": "usage: df",
+        "paniclog": "usage: paniclog",
         "capcheck": "usage: capcheck",
         "pollcheck": "usage: pollcheck",
         "writecheck": "usage: writecheck",
@@ -214,6 +215,8 @@ def normal_tests() -> list[TestCase]:
 
     tests.extend(
         [
+            TestCase("ls root dirs", "ls /", ["var/"], not_contains=["var/log/"]),
+            TestCase("ls /var", "ls /var", ["log/"]),
             TestCase("ls /bin", "ls /bin", ["shell", "svcmgtd", "tcpcheck", "curl", "dmesg"], not_contains=["./", "../"]),
             TestCase("ls -a dot entries", "ls -a /bin", ["./", "../", "shell"]),
             TestCase("ls -al dot entries", "ls -al /bin", ["./", "../", "shell", "bytes"]),
@@ -374,6 +377,22 @@ def abnormal_tests() -> list[TestCase]:
                     "PAGE FAULT DETECTED: Instruction Access Fault",
                 ],
                 timeout=10.0,
+            ),
+            TestCase(
+                "user panic log",
+                "paniclog",
+                [
+                    "pid=",
+                    "exe=/bin/faultcheck",
+                    "scause=",
+                    "stval=",
+                    "sepc=",
+                    "sp=",
+                    "a0=",
+                    "a1=",
+                    "a2=",
+                    "a3=",
+                ],
             ),
         ],
     ]

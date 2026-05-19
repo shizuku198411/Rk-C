@@ -439,11 +439,27 @@ proc formatFs() =
     panic("fs format failed")
 
 
-proc ensureRootDir(name: cstring, typ: U32) =
+proc ensureRootDir(name: cstring, typ: U32): bool =
   let before = superBlock.count
   discard allocNode(0, name, typ)
-  if superBlock.count != before:
-    discard writeSuper()
+  superBlock.count != before
+
+
+proc ensureDir(parentIdx: int, name: cstring, typ: U32): bool =
+  if parentIdx < 0 or superBlock.nodes[parentIdx].typ != FsTypeDir:
+    return false
+  if name == nil or name[0] == '\0':
+    return false
+
+  var i = 0
+  while name[i] != '\0':
+    if name[i] == '/':
+      return false
+    inc i
+
+  let before = superBlock.count
+  discard allocNode(parentIdx, name, typ)
+  superBlock.count != before
 
 
 proc fsInit*() =
@@ -458,11 +474,18 @@ proc fsInit*() =
   else:
     printBootMsg("  disk fs mounted\n")
 
-  ensureRootDir("tmp", FsTypeMount)
-  ensureRootDir("bin", FsTypeDir)
-  ensureRootDir("etc", FsTypeDir)
-  ensureRootDir("dev", FsTypeDir)
-  ensureRootDir("var", FsTypeDir)
+  var fsChanged = false
+  fsChanged = ensureRootDir("tmp", FsTypeMount) or fsChanged
+  fsChanged = ensureRootDir("bin", FsTypeDir) or fsChanged
+  fsChanged = ensureRootDir("etc", FsTypeDir) or fsChanged
+  fsChanged = ensureRootDir("dev", FsTypeDir) or fsChanged
+  fsChanged = ensureRootDir("var", FsTypeDir) or fsChanged
+
+  let varIdx = resolvePath("/var")
+  fsChanged = ensureDir(varIdx, "log", FsTypeDir) or fsChanged
+
+  if fsChanged and writeSuper() < 0:
+    panic("fs ensure dirs failed")
 
   if appfsLoad() < 0:
     panic("appfs load failed")
