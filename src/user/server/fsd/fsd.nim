@@ -17,6 +17,10 @@ proc reqPath(): cstring =
   cast[cstring](addr req.path[0])
 
 
+proc reqDataPath(): cstring =
+  cast[cstring](addr req.data[0])
+
+
 proc clearResponse() =
   resp = SysFsResponse()
   resp.id = req.id
@@ -220,6 +224,14 @@ proc handleWriteFile() =
   resp.result = sysRawWriteFile(reqPath(), addr req.data[0], req.size)
 
 
+proc handleRename() =
+  if isProcPath(reqPath()) or isProcPath(reqDataPath()):
+    resp.result = -1
+    return
+
+  resp.result = sysRawRename(reqPath(), reqDataPath())
+
+
 proc handleRequest() =
   clearResponse()
 
@@ -235,6 +247,8 @@ proc handleRequest() =
     handleReadFile()
   elif req.op == SysFsOpWriteFile:
     handleWriteFile()
+  elif req.op == SysFsOpRename:
+    handleRename()
   elif req.op == SysFsOpFileSize:
     handleFileSize()
   elif req.op == SysFsOpReadRange:

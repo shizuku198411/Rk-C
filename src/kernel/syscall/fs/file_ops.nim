@@ -20,6 +20,7 @@ var
   fileBuf: array[SysFileIoMax, U8]
   fdFileBuf: array[SysFileIoMax, U8]
   pollEvents: array[SysPollMaxEvents, SysPollEvent]
+  renamePathBuf: array[SysPathMax, char]
 
 
 proc readPath(pathVal: U64, defaultRoot: bool = false): cstring =
@@ -96,6 +97,16 @@ proc syscallWriteFile*(path, buf, size: U64): U64 =
     return U64(-1'i64)
 
   serviceWriteFile(copiedPath, addr fileBuf[0], size)
+
+
+proc syscallRename*(oldPathVal, newPathVal: U64): U64 =
+  let oldPath = readPath(oldPathVal)
+  if oldPath == nil:
+    return U64(-1'i64)
+  if copyUserCString(addr renamePathBuf[0], newPathVal, SysPathMax) < 0:
+    return U64(-1'i64)
+
+  serviceRename(oldPath, cast[cstring](addr renamePathBuf[0]))
 
 
 proc refreshFdSize(entry: var FdEntry): bool =

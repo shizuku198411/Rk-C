@@ -15,7 +15,7 @@ const
   FsDataStartBlock = U64(8)
   AppfsMagic = U32(0x41504653) # APFS
   AppfsStartBlock = U64(4096)
-  AppfsMaxEntries = 32
+  AppfsMaxEntries = 64
 
   FsTypeFile = U32(1)
   FsTypeDir = U32(2)
@@ -75,6 +75,7 @@ let devEntryNames = [
 
 
 proc fsWriteFile*(path: cstring, data: pointer, size: U64): int
+proc fsRename*(oldPath, newPath: cstring): int
 
 
 proc pathMatchesMount(path: cstring, mountPath: cstring, mountLen: int): bool =
@@ -740,6 +741,58 @@ proc fsRmdir*(path: cstring): int =
   superBlock.nodes[idx] = FsNode()
   if superBlock.count > 0:
     dec superBlock.count
+  writeSuper()
+
+
+proc isDescendant(idx, maybeParent: int): bool =
+  var current = idx
+  while current > 0:
+    if current == maybeParent:
+      return true
+    current = int(superBlock.nodes[current].parent)
+  false
+
+
+proc fsRename*(oldPath, newPath: cstring): int =
+  if not fsReady:
+    return -1
+  if oldPath == nil or newPath == nil:
+    return -1
+  if isBinPath(oldPath) or isBinPath(newPath):
+    return -1
+
+  let oldMountIdx = findMount(oldPath)
+  let newMountIdx = findMount(newPath)
+  if oldMountIdx >= 0 or newMountIdx >= 0:
+    if oldMountIdx < 0 or newMountIdx < 0 or oldMountIdx != newMountIdx:
+      return -1
+    if mounts[oldMountIdx].backend == vfsTmpfs:
+      return tmpfsRename(
+        mountLocalPath(oldPath, mounts[oldMountIdx].pathLen),
+        mountLocalPath(newPath, mounts[newMountIdx].pathLen),
+      )
+    return -1
+
+  if resolveAppfsPath(oldPath) >= 0 or resolveAppfsPath(newPath) >= 0:
+    return -1
+  if resolveDevPath(oldPath) >= 0 or resolveDevPath(newPath) >= 0:
+    return -1
+
+  let src = resolvePath(oldPath)
+  if src <= 0:
+    return -1
+  if resolvePath(newPath) >= 0:
+    return -1
+
+  var leaf: array[FsNameMax, char]
+  let newParent = resolveParent(newPath, leaf)
+  if newParent < 0 or superBlock.nodes[newParent].typ != FsTypeDir:
+    return -1
+  if superBlock.nodes[src].typ == FsTypeDir and isDescendant(newParent, src):
+    return -1
+
+  superBlock.nodes[src].parent = U32(newParent)
+  discard copyCString(superBlock.nodes[src].name, cast[cstring](addr leaf[0]))
   writeSuper()
 
 

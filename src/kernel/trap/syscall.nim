@@ -84,6 +84,9 @@ proc handleSyscall*(frame: ptr TrapFrame) =
   of SysWriteFile:
     frame.a0 = syscallWriteFile(frame.a0, frame.a1, frame.a2)
 
+  of SysRename:
+    frame.a0 = syscallRename(frame.a0, frame.a1)
+
   of SysOpen:
     frame.a0 = syscallOpen(frame.a0, frame.a1)
 
@@ -185,6 +188,9 @@ proc handleSyscall*(frame: ptr TrapFrame) =
 
   of SysRawReadRange:
     frame.a0 = syscallRawReadRange(frame.a0)
+
+  of SysRawRename:
+    frame.a0 = syscallRawRename(frame.a0, frame.a1)
 
   of SysBlockServiceRegister:
     frame.a0 = syscallBlockServiceRegister()

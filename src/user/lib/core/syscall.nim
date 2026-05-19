@@ -116,6 +116,10 @@ proc sysWriteFile*(path: cstring, buf: pointer, size: U64): I32 =
   I32(rawSyscall3(SysWriteFile, cast[U64](path), cast[U64](buf), size))
 
 
+proc sysRename*(oldPath, newPath: cstring): I32 =
+  I32(rawSyscall3(SysRename, cast[U64](oldPath), cast[U64](newPath), 0))
+
+
 proc sysOpen*(path: cstring, flags: U32): I32 =
   I32(rawSyscall3(SysOpen, cast[U64](path), U64(flags), 0))
 
@@ -226,6 +230,10 @@ proc sysRawReadFile*(path: cstring, buf: pointer, capacity: U64): I32 =
 
 proc sysRawWriteFile*(path: cstring, buf: pointer, size: U64): I32 =
   I32(rawSyscall3(SysRawWriteFile, cast[U64](path), cast[U64](buf), size))
+
+
+proc sysRawRename*(oldPath, newPath: cstring): I32 =
+  I32(rawSyscall3(SysRawRename, cast[U64](oldPath), cast[U64](newPath), 0))
 
 
 proc sysRawFileSize*(path: cstring): I32 =

@@ -56,6 +56,14 @@ elif defined(userApp_dmesg):
   import apps/dmesg/dmesg
 elif defined(userApp_rkxinfo):
   import apps/rkxinfo/rkxinfo
+elif defined(userApp_echo):
+  import apps/echo/echo
+elif defined(userApp_touch):
+  import apps/touch/touch
+elif defined(userApp_cp):
+  import apps/cp/cp
+elif defined(userApp_mv):
+  import apps/mv/mv
 elif defined(userApp_faultcheck):
   import apps/faultcheck/faultcheck
 elif defined(userApp_capcheck):

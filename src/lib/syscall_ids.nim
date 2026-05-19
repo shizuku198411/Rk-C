@@ -71,3 +71,5 @@ const
   SysRawFileSize* = U64(70)
   SysRawReadRange* = U64(71)
   SysSignalPoll* = U64(72)
+  SysRename* = U64(73)
+  SysRawRename* = U64(74)

@@ -263,6 +263,37 @@ proc tmpfsRmdir*(path: cstring): int =
   0
 
 
+proc isDescendant(idx, maybeParent: int): bool =
+  var current = idx
+  while current > 0:
+    if current == maybeParent:
+      return true
+    current = int(nodes[current].parent)
+  false
+
+
+proc tmpfsRename*(oldPath, newPath: cstring): int =
+  if not ready:
+    return -1
+
+  let src = resolvePath(oldPath)
+  if src <= 0:
+    return -1
+  if resolvePath(newPath) >= 0:
+    return -1
+
+  var leaf: array[TmpfsNameMax, char]
+  let newParent = resolveParent(newPath, leaf)
+  if newParent < 0 or nodes[newParent].typ != TmpfsTypeDir:
+    return -1
+  if nodes[src].typ == TmpfsTypeDir and isDescendant(newParent, src):
+    return -1
+
+  nodes[src].parent = U32(newParent)
+  discard copyCString(nodes[src].name, cast[cstring](addr leaf[0]))
+  0
+
+
 proc tmpfsWriteText*(path: cstring, data: cstring): int =
   var size = U64(0)
   while data[size] != '\0' and size < U64(TmpfsFileMax):

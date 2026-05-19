@@ -25,6 +25,7 @@ var
   pending: array[FsPendingMax, PendingFsRequest]
   rawEntries: array[FsRawDirEntryMax, FsDirEntry]
   rawFileBuf: array[SysFsDataMax, U8]
+  renamePathBuf: array[SysFsPathMax, char]
 
 
 proc allocPending(): ptr PendingFsRequest =
@@ -85,6 +86,10 @@ proc rawFileSizeKernel(path: cstring): int =
 
 proc rawReadFileRangeKernel(path: cstring, buf: pointer, offset, capacity: U64): int =
   fsReadFileRange(path, buf, offset, capacity)
+
+
+proc rawRenameKernel(oldPath, newPath: cstring): int =
+  fsRename(oldPath, newPath)
 
 
 proc syscallFsServiceRegister*(): U64 =
@@ -369,6 +374,34 @@ proc serviceWriteFile*(path: cstring, data: pointer, size: U64): U64 =
   outValue
 
 
+proc serviceRename*(oldPath, newPath: cstring): U64 =
+  if not copyCString(renamePathBuf, newPath):
+    return U64(-1'i64)
+
+  let req = queueFsRequest(
+    SysFsOpRename,
+    oldPath,
+    addr renamePathBuf[0],
+    U64(cstrlen(cast[cstring](addr renamePathBuf[0])) + U64(1)),
+    0,
+  )
+  if req == nil:
+    if not canFallbackToRawFs():
+      return U64(-1'i64)
+
+    return U64(rawRenameKernel(oldPath, newPath))
+
+  let resp = waitFsResponse(req)
+  let outValue =
+    if resp == nil:
+      U64(-1'i64)
+    else:
+      U64(resp.result)
+
+  finishPending(req)
+  outValue
+
+
 proc syscallRawLs*(pathVal, entriesVal, maxEntries: U64): U64 =
   if not canSyscallRawFs() or pathVal == 0 or entriesVal == 0:
     return U64(-1'i64)
@@ -493,3 +526,17 @@ proc syscallRawWriteFile*(pathVal, bufVal, size: U64): U64 =
     return U64(-1'i64)
 
   U64(fsWriteFile(cast[cstring](addr pathBuf[0]), addr rawFileBuf[0], size))
+
+
+proc syscallRawRename*(oldPathVal, newPathVal: U64): U64 =
+  if not canSyscallRawFs() or oldPathVal == 0 or newPathVal == 0:
+    return U64(-1'i64)
+
+  var oldPathBuf: array[SysFsPathMax, char]
+  var newPathBuf: array[SysFsPathMax, char]
+  if copyUserCString(addr oldPathBuf[0], oldPathVal, U64(SysFsPathMax)) < 0:
+    return U64(-1'i64)
+  if copyUserCString(addr newPathBuf[0], newPathVal, U64(SysFsPathMax)) < 0:
+    return U64(-1'i64)
+
+  U64(rawRenameKernel(cast[cstring](addr oldPathBuf[0]), cast[cstring](addr newPathBuf[0])))

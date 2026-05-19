@@ -8,6 +8,25 @@ var resolvedPath: array[PathMax, char]
 var joinedPath: array[PathMax, char]
 
 
+proc copyCString(dst: var openArray[char], src: cstring): bool =
+  if dst.len == 0:
+    return false
+
+  var i = 0
+  while i + 1 < dst.len and src[i] != '\0':
+    dst[i] = src[i]
+    inc i
+
+  if src[i] != '\0':
+    return false
+
+  while i < dst.len:
+    dst[i] = '\0'
+    inc i
+
+  true
+
+
 proc copyCString(dst: var array[PathMax, char], pos: var U64, src: cstring): bool =
   var i = U64(0)
   while src[i] != '\0':
@@ -142,3 +161,13 @@ proc resolvePath*(path: cstring): cstring =
 
   terminate(joinedPath, pos)
   normalizeAbsolute(cast[cstring](addr joinedPath[0]))
+
+
+proc resolvePathInto*(path: cstring, dst: var openArray[char]): cstring =
+  let resolved = resolvePath(path)
+  if resolved == nil:
+    return nil
+  if not copyCString(dst, resolved):
+    return nil
+
+  cast[cstring](addr dst[0])

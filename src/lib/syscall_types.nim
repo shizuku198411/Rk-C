@@ -20,6 +20,7 @@ const
   SysFsOpWriteFile* = U32(6)
   SysFsOpFileSize* = U32(7)
   SysFsOpReadRange* = U32(8)
+  SysFsOpRename* = U32(9)
   SysBlockOpRead* = U32(1)
   SysBlockOpWrite* = U32(2)
 

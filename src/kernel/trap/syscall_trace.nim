@@ -38,6 +38,7 @@ proc syscallName*(num: U64): cstring =
   of SysGetDateTime: cstring("get_date_time")
   of SysReadFile: cstring("read_file")
   of SysWriteFile: cstring("write_file")
+  of SysRename: cstring("rename")
   of SysGetCwd: cstring("get_cwd")
   of SysSetCwd: cstring("set_cwd")
   of SysGetBitMap: cstring("get_bit_map")
@@ -55,6 +56,7 @@ proc syscallName*(num: U64): cstring =
   of SysRawWriteFile: cstring("raw_write_file")
   of SysRawFileSize: cstring("raw_file_size")
   of SysRawReadRange: cstring("raw_read_range")
+  of SysRawRename: cstring("raw_rename")
   of SysBlockServiceRegister: cstring("block_service_register")
   of SysBlockServiceReceive: cstring("block_service_receive")
   of SysBlockServiceReply: cstring("block_service_reply")
@@ -231,6 +233,10 @@ proc printSyscallArgs(frame: ptr TrapFrame) =
     printNamedU64("status", frame.a0)
   of SysLs, SysMkdir, SysUnlink, SysRmdir, SysSetCwd:
     printNamedCString("path", frame.a0)
+  of SysRename:
+    printNamedCString("old", frame.a0)
+    print(", ")
+    printNamedCString("new", frame.a1)
   of SysReadFile:
     printNamedCString("path", frame.a0)
     print(", ")
@@ -324,6 +330,10 @@ proc printSyscallArgs(frame: ptr TrapFrame) =
     printNamedPtr("entries", frame.a1)
     print(", ")
     printNamedU64("max", frame.a2)
+  of SysRawRename:
+    printNamedCString("old", frame.a0)
+    print(", ")
+    printNamedCString("new", frame.a1)
   of SysRawMkdir, SysRawUnlink, SysRawRmdir, SysRawReadFile, SysRawWriteFile,
       SysRawFileSize:
     printNamedCString("path", frame.a0)
