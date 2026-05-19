@@ -1,5 +1,5 @@
 <p>
-  <img src="./assets/Rk-C_logo_tp.png" alt="Rk-C Logo" width="250">
+  <img src="./assets/Rk-C_logo.png" alt="Rk-C Logo" width="250">
 </p>
 
 Rk-C is an experimental microkernel-style operating system for RISC-V 64-bit,
