@@ -62,16 +62,17 @@ proc enableSv39(memInfo: MemoryInfo) =
 
 proc kernelBanner() =
   putChar('\n')
-  printlnConsoleOnly("╔═══════════════════════════════════╗")
-  printlnConsoleOnly("║  ██████╗  ██╗  ██╗       ██████╗  ║")
-  printlnConsoleOnly("║  ██╔══██╗ ██║ ██╔╝      ██╔════╝  ║")
-  printlnConsoleOnly("║  ██████╔╝ █████╔╝ █████╗██║       ║")
-  printlnConsoleOnly("║  ██╔══██╗ ██╔═██╗ ╚════╝██║       ║")
-  printlnConsoleOnly("║  ██║  ██║ ██║  ██╗      ╚██████╗  ║")
-  printlnConsoleOnly("║  ╚═╝  ╚═╝ ╚═╝  ╚═╝       ╚═════╝  ║")
-  printlnConsoleOnly("╠═══════════════════════════════════╣")
-  printlnConsoleOnly("║  version: 0.1.1                   ║")
-  printlnConsoleOnly("╚═══════════════════════════════════╝\n")
+  printlnConsoleOnly("╔════════════════════════════════════════╗")
+  printlnConsoleOnly("║     ██████╗  ██╗  ██╗       \x1b[38;5;208m██████\x1b[0m╗    ║")
+  printlnConsoleOnly("║     ██╔══██╗ ██║ ██╔╝      \x1b[38;5;208m██\x1b[0m╔════╝    ║")
+  printlnConsoleOnly("║     ██████╔╝ █████╔╝ █████╗\x1b[38;5;208m██\x1b[0m║         ║")
+  printlnConsoleOnly("║     ██╔══██╗ ██╔═██╗ ╚════╝\x1b[38;5;208m██\x1b[0m║         ║")
+  printlnConsoleOnly("║     ██║  ██║ ██║  ██╗      ╚\x1b[38;5;208m██████\x1b[0m╗    ║")
+  printlnConsoleOnly("║     ╚═╝  ╚═╝ ╚═╝  ╚═╝       ╚═════╝    ║")
+  printlnConsoleOnly("╠════════════════════════════════════════╣")
+  printlnConsoleOnly("║   microkernel-style system on RISC-V   ║")
+  printlnConsoleOnly("║   version: 0.1.1                       ║")
+  printlnConsoleOnly("╚════════════════════════════════════════╝\n")
 
 
 proc waitForInitialServices() =
