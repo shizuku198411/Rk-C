@@ -84,6 +84,9 @@ proc handleSyscall*(frame: ptr TrapFrame) =
   of SysWriteFile:
     frame.a0 = syscallWriteFile(frame.a0, frame.a1, frame.a2)
 
+  of SysFsInfo:
+    frame.a0 = syscallFsInfo(frame.a0, frame.a1)
+
   of SysRename:
     frame.a0 = syscallRename(frame.a0, frame.a1)
 

@@ -73,3 +73,4 @@ const
   SysSignalPoll* = U64(72)
   SysRename* = U64(73)
   SysRawRename* = U64(74)
+  SysFsInfo* = U64(75)

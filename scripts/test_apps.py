@@ -201,6 +201,7 @@ def normal_tests() -> list[TestCase]:
         "touch": "usage: touch",
         "cp": "usage: cp",
         "mv": "usage: mv",
+        "df": "usage: df",
         "capcheck": "usage: capcheck",
         "pollcheck": "usage: pollcheck",
     }
@@ -246,6 +247,8 @@ def normal_tests() -> list[TestCase]:
             TestCase("ps -e -f", "ps -e -f", ["pid", "ppid", "state", "mode", "svcmgtd"]),
             TestCase("ls /proc", "ls /proc", ["uptime", "cpuinfo", "kmsg"], not_contains=["./", "../"], regex=[r"\d+/"]),
             TestCase("ls -a /proc", "ls -a /proc", ["./", "../", "uptime", "cpuinfo", "kmsg"], regex=[r"\d+/"]),
+            TestCase("cat /proc/fsinfo", "cat /proc/fsinfo", ["Filesystem", "rootfs", "tmpfs", "appfs", "/bin"]),
+            TestCase("df", "df", ["Filesystem", "rootfs", "tmpfs", "appfs", "Mounted on"]),
             TestCase("shell cd /proc", "cd /proc", []),
             TestCase("shell pwd after cd /proc", "pwd", ["/proc"]),
             TestCase("shell ls proc cwd", "ls", ["uptime", "cpuinfo", "kmsg"], not_contains=["./", "../"], regex=[r"\d+/"]),

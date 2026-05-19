@@ -30,6 +30,34 @@ proc tmpfsWriteText*(path: cstring, data: cstring): int
 proc tmpfsWriteBytes*(path: cstring, data: pointer, size: U64): int
 
 
+proc tmpfsMaxNodes*(): U64 =
+  U64(TmpfsMaxNodes)
+
+
+proc tmpfsMaxFileBytes*(): U64 =
+  U64(TmpfsFileMax)
+
+
+proc tmpfsUsedNodes*(): U64 =
+  var count = U64(0)
+  var i = 0
+  while i < TmpfsMaxNodes:
+    if nodes[i].used != 0:
+      inc count
+    inc i
+  count
+
+
+proc tmpfsUsedBlocks*(blockSize: U64): U64 =
+  var blocks = U64(0)
+  var i = 0
+  while i < TmpfsMaxNodes:
+    if nodes[i].used != 0 and nodes[i].typ == TmpfsTypeFile:
+      blocks += (U64(nodes[i].size) + blockSize - U64(1)) div blockSize
+    inc i
+  blocks
+
+
 proc hasChildren(idx: int): bool =
   var i = 0
   while i < TmpfsMaxNodes:

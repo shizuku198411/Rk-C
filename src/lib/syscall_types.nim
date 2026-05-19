@@ -7,6 +7,8 @@ const
   SysIpcQueueCap* = 16
   SysFsPathMax* = 128
   SysFsDataMax* = 4096
+  SysFsInfoNameMax* = U32(16)
+  SysFsInfoMaxEntries* = U32(4)
   SysBlockDataSize* = 512
   SysNetMacLen* = 6
   SysNetPacketMax* = 1514
@@ -159,6 +161,19 @@ type
     total*: U64
     used*: U64
     free*: U64
+
+  SysFsInfoEntry* {.packed.} = object
+    name*: array[SysFsInfoNameMax, char]
+    fsType*: array[SysFsInfoNameMax, char]
+    mount*: array[SysFsInfoNameMax, char]
+    blockSize*: U64
+    totalBlocks*: U64
+    usedBlocks*: U64
+    freeBlocks*: U64
+    totalFiles*: U64
+    usedFiles*: U64
+    freeFiles*: U64
+    readonly*: U32
 
   SysCpuInfo* {.packed.} = object
     totalTicks*: U64

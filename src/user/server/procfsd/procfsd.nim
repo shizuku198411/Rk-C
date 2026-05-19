@@ -7,7 +7,7 @@ import ../lib/service_ready
 
 const
   ProcFsBufSize = U32(SysIpcMessageMax)
-  ProcFsEntryCount = 7
+  ProcFsEntryCount = 8
   ProcFsPageSize = U64(4096)
   ProcFsTickMillis = U64(20)
 
@@ -20,6 +20,7 @@ let procEntries = [
   cstring("services"),
   cstring("traps"),
   cstring("kmsg"),
+  cstring("fsinfo"),
 ]
 
 var
@@ -31,6 +32,7 @@ var
   traps: SysTrapCount
   bitmap: SysBitmapInfo
   cpuInfo: SysCpuInfo
+  fsInfos: array[SysFsInfoMaxEntries, SysFsInfoEntry]
 
 
 proc clearOut() =
@@ -90,6 +92,11 @@ proc appendPercent(pos: var U32, value: U32) =
 proc appendPages(pos: var U32, value: U64) =
   appendU64(pos, value)
   appendChar(pos, 'p')
+
+
+proc appendKb(pos: var U32, blocks, blockSize: U64) =
+  let bytes = blocks * blockSize
+  appendU64(pos, (bytes + U64(1023)) div U64(1024))
 
 
 proc appendTwoDigits(pos: var U32, value: U64) =
@@ -631,6 +638,44 @@ proc renderKmsg(): U32 =
   U32(n)
 
 
+proc renderFsinfo(): U32 =
+  clearOut()
+  var pos = U32(0)
+
+  let count = sysFsInfo(addr fsInfos[0], U64(SysFsInfoMaxEntries))
+  if count < 0:
+    appendStr(pos, cstring("error\n"))
+    return pos
+
+  appendStr(pos, cstring("Filesystem\tType\t1K-blocks\tUsed\tAvail\tFiles\tIUsed\tIFree\tRO\tMounted on\n"))
+
+  var i = U32(0)
+  while i < U32(count):
+    appendStr(pos, cast[cstring](addr fsInfos[i].name[0]))
+    appendStr(pos, "\t\t")
+    appendStr(pos, cast[cstring](addr fsInfos[i].fsType[0]))
+    appendChar(pos, '\t')
+    appendKb(pos, fsInfos[i].totalBlocks, fsInfos[i].blockSize)
+    appendStr(pos, "\t\t")
+    appendKb(pos, fsInfos[i].usedBlocks, fsInfos[i].blockSize)
+    appendChar(pos, '\t')
+    appendKb(pos, fsInfos[i].freeBlocks, fsInfos[i].blockSize)
+    appendChar(pos, '\t')
+    appendU64(pos, fsInfos[i].totalFiles)
+    appendChar(pos, '\t')
+    appendU64(pos, fsInfos[i].usedFiles)
+    appendChar(pos, '\t')
+    appendU64(pos, fsInfos[i].freeFiles)
+    appendChar(pos, '\t')
+    appendStr(pos, ynString(fsInfos[i].readonly))
+    appendChar(pos, '\t')
+    appendStr(pos, cast[cstring](addr fsInfos[i].mount[0]))
+    appendChar(pos, '\n')
+    inc i
+
+  pos
+
+
 proc procLsEntryLimit(): U32 =
   var capacity = packet.arg0
   if capacity > U64(SysIpcMessageMax):
@@ -739,6 +784,9 @@ proc renderRead(path: cstring): U32 =
 
   if cstringEq(path, cstring"/proc/kmsg"):
     return renderKmsg()
+
+  if cstringEq(path, cstring"/proc/fsinfo"):
+    return renderFsinfo()
 
   clearOut()
   U32(0)

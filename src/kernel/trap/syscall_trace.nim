@@ -38,6 +38,7 @@ proc syscallName*(num: U64): cstring =
   of SysGetDateTime: cstring("get_date_time")
   of SysReadFile: cstring("read_file")
   of SysWriteFile: cstring("write_file")
+  of SysFsInfo: cstring("fs_info")
   of SysRename: cstring("rename")
   of SysGetCwd: cstring("get_cwd")
   of SysSetCwd: cstring("set_cwd")
@@ -308,6 +309,10 @@ proc printSyscallArgs(frame: ptr TrapFrame) =
     printNamedPtr("out", frame.a0)
   of SysGetBitMap:
     printNamedPtr("info", frame.a0)
+  of SysFsInfo:
+    printNamedPtr("entries", frame.a0)
+    print(", ")
+    printNamedU64("max", frame.a1)
   of SysIpcSend:
     printNamedI64("pid", frame.a0)
     print(", ")

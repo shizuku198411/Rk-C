@@ -64,6 +64,8 @@ elif defined(userApp_cp):
   import apps/cp/cp
 elif defined(userApp_mv):
   import apps/mv/mv
+elif defined(userApp_df):
+  import apps/df/df
 elif defined(userApp_faultcheck):
   import apps/faultcheck/faultcheck
 elif defined(userApp_capcheck):

@@ -92,6 +92,28 @@ proc rawRenameKernel(oldPath, newPath: cstring): int =
   fsRename(oldPath, newPath)
 
 
+proc syscallFsInfo*(outEntriesVal, maxEntriesVal: U64): U64 =
+  if outEntriesVal == 0 or maxEntriesVal == 0:
+    return U64(-1'i64)
+
+  let maxEntries =
+    if maxEntriesVal > U64(SysFsInfoMaxEntries):
+      U64(SysFsInfoMaxEntries)
+    else:
+      maxEntriesVal
+
+  var entries: array[SysFsInfoMaxEntries, SysFsInfoEntry]
+  let count = fsInfo(addr entries[0], maxEntries)
+  if count < 0:
+    return U64(-1'i64)
+
+  let bytes = U64(count) * U64(sizeof(SysFsInfoEntry))
+  if copyToUser(outEntriesVal, addr entries[0], bytes) != 0:
+    return U64(-1'i64)
+
+  U64(count)
+
+
 proc syscallFsServiceRegister*(): U64 =
   if currentIsFsService():
     return 0

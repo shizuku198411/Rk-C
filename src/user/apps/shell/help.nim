@@ -14,6 +14,7 @@ proc printHelp*() =
   write("  touch\n")
   write("  cp\n")
   write("  mv\n")
+  write("  df\n")
   write("  edit\n")
   write("  ps\n")
   write("  date\n")

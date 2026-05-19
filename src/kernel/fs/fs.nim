@@ -1,4 +1,5 @@
 import ../../lib/fixed_string
+import ../../lib/syscall_types
 import ../../lib/types
 import ../dev/console
 import ../fs/dirent
@@ -76,6 +77,16 @@ let devEntryNames = [
 
 proc fsWriteFile*(path: cstring, data: pointer, size: U64): int
 proc fsRename*(oldPath, newPath: cstring): int
+
+
+proc copyInfoString(dst: var array[SysFsInfoNameMax, char], src: cstring) =
+  var i = U32(0)
+  while i + U32(1) < SysFsInfoNameMax and src[i] != '\0':
+    dst[i] = src[i]
+    inc i
+  while i < SysFsInfoNameMax:
+    dst[i] = '\0'
+    inc i
 
 
 proc pathMatchesMount(path: cstring, mountPath: cstring, mountLen: int): bool =
@@ -433,6 +444,115 @@ proc fsInit*() =
   vfsMount("/tmp", vfsTmpfs)
   printBootMsg("  mounted tmpfs on /tmp\n")
   fsReady = true
+
+
+proc rootfsUsedBlocks(): U64 =
+  var blocks = U64(0)
+  var i = 0
+  while i < FsMaxNodes:
+    if superBlock.nodes[i].used != 0 and superBlock.nodes[i].typ == FsTypeFile:
+      blocks += FsFileBlocks
+    inc i
+  blocks
+
+
+proc appfsUsedBytes(): U64 =
+  if not appfsReady:
+    return U64(0)
+
+  var bytes = U64(sizeof(AppfsHeader)) + U64(appfsEntryCount) * U64(sizeof(AppfsEntry))
+  var i = U32(0)
+  while i < appfsEntryCount:
+    let endOff = U64(appfsEntries[i].dataOff) + U64(appfsEntries[i].size)
+    if endOff > bytes:
+      bytes = endOff
+    inc i
+  bytes
+
+
+proc setFsInfo(entry: ptr SysFsInfoEntry, name, fsType, mount: cstring,
+               blockSize, totalBlocks, usedBlocks, totalFiles, usedFiles: U64,
+               readonly: U32) =
+  entry[] = SysFsInfoEntry()
+  copyInfoString(entry.name, name)
+  copyInfoString(entry.fsType, fsType)
+  copyInfoString(entry.mount, mount)
+  entry.blockSize = blockSize
+  entry.totalBlocks = totalBlocks
+  entry.usedBlocks = usedBlocks
+  entry.freeBlocks =
+    if usedBlocks > totalBlocks:
+      U64(0)
+    else:
+      totalBlocks - usedBlocks
+  entry.totalFiles = totalFiles
+  entry.usedFiles = usedFiles
+  entry.freeFiles =
+    if usedFiles > totalFiles:
+      U64(0)
+    else:
+      totalFiles - usedFiles
+  entry.readonly = readonly
+
+
+proc fsInfo*(outEntries: ptr SysFsInfoEntry, maxEntries: U64): I32 =
+  if outEntries == nil or maxEntries == U64(0):
+    return -1
+
+  let entries = cast[ptr UncheckedArray[SysFsInfoEntry]](outEntries)
+  var count = U64(0)
+
+  if count < maxEntries:
+    let totalBlocks = U64(FsMaxNodes) * FsFileBlocks
+    setFsInfo(
+      addr entries[count],
+      cstring"rootfs",
+      cstring"nfs2",
+      cstring"/",
+      BlockSize,
+      totalBlocks,
+      rootfsUsedBlocks(),
+      U64(FsMaxNodes),
+      U64(superBlock.count),
+      U32(0),
+    )
+    inc count
+
+  if count < maxEntries:
+    let blocksPerNode = tmpfsMaxFileBytes() div BlockSize
+    let totalBlocks = tmpfsMaxNodes() * blocksPerNode
+    setFsInfo(
+      addr entries[count],
+      cstring"tmpfs",
+      cstring"tmpfs",
+      cstring"/tmp",
+      BlockSize,
+      totalBlocks,
+      tmpfsUsedBlocks(BlockSize),
+      tmpfsMaxNodes(),
+      tmpfsUsedNodes(),
+      U32(0),
+    )
+    inc count
+
+  if count < maxEntries:
+    let usedBytes = appfsUsedBytes()
+    let usedBlocks = (usedBytes + BlockSize - U64(1)) div BlockSize
+    setFsInfo(
+      addr entries[count],
+      cstring"appfs",
+      cstring"appfs",
+      cstring"/bin",
+      BlockSize,
+      usedBlocks,
+      usedBlocks,
+      U64(AppfsMaxEntries),
+      U64(appfsEntryCount),
+      U32(1),
+    )
+    inc count
+
+  I32(count)
 
 
 proc fillNodeEntry(idx: int, outEntry: ptr FsDirEntry) =

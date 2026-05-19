@@ -164,6 +164,10 @@ proc sysGetBitMap*(info: ptr SysBitmapInfo): I32 =
   I32(rawSyscall3(SysGetBitMap, cast[U64](info), 0, 0))
 
 
+proc sysFsInfo*(entries: ptr SysFsInfoEntry, maxEntries: U64): I32 =
+  I32(rawSyscall3(SysFsInfo, cast[U64](entries), maxEntries, 0))
+
+
 proc sysIpcSend*(pid: I32, msg: cstring): I32 =
   I32(rawSyscall3(SysIpcSend, U64(pid), cast[U64](msg), 0))
 
