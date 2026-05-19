@@ -121,6 +121,22 @@ proc fillDirEntry(idx: int, outEntry: ptr FsDirEntry) =
     inc i
 
 
+proc fillVirtualDirEntry(name: cstring, outEntry: ptr FsDirEntry) =
+  outEntry.typ = FsDirEntryTypeDir
+  outEntry.size = 0
+
+  var i = 0
+  while i < FsDirEntryNameMax:
+    if name[i] == '\0':
+      break
+    outEntry.name[i] = name[i]
+    inc i
+
+  while i < FsDirEntryNameMax:
+    outEntry.name[i] = '\0'
+    inc i
+
+
 proc tmpfsReadDirEntry*(path: cstring, entryIndex: U64, outEntry: ptr FsDirEntry): int =
   if not ready or outEntry == nil:
     return -1
@@ -135,11 +151,20 @@ proc tmpfsReadDirEntry*(path: cstring, entryIndex: U64, outEntry: ptr FsDirEntry
     fillDirEntry(dir, outEntry)
     return 1
 
+  var realEntryIndex = entryIndex
+  if realEntryIndex == U64(0):
+    fillVirtualDirEntry(".", outEntry)
+    return 1
+  if realEntryIndex == U64(1):
+    fillVirtualDirEntry("..", outEntry)
+    return 1
+  realEntryIndex -= U64(2)
+
   var seen = U64(0)
   var i = 0
   while i < TmpfsMaxNodes:
     if nodes[i].used != 0 and nodes[i].parent == U32(dir) and i != dir:
-      if seen == entryIndex:
+      if seen == realEntryIndex:
         fillDirEntry(i, outEntry)
         return 1
       inc seen

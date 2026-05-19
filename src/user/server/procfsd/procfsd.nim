@@ -651,6 +651,9 @@ proc renderLsProcRoot(): I32 =
       writeDirEntry(addr entries[count], name, typ)
       inc count
 
+  add(cstring".", DirEntryTypeDir)
+  add(cstring"..", DirEntryTypeDir)
+
   var staticIndex = 0
   while staticIndex < ProcFsEntryCount:
     add(procEntries[staticIndex], DirEntryTypeFile)
@@ -681,14 +684,20 @@ proc renderLsProcPid(pid: I32): I32 =
     return 0
 
   let entries = cast[ptr UncheckedArray[DirEntry]](addr response.data[0])
-  writeDirEntry(addr entries[0], cstring"status", DirEntryTypeFile)
-  if procLsEntryLimit() > U32(1):
-    writeDirEntry(addr entries[1], cstring"rkx_map", DirEntryTypeFile)
-    response.len = U32(2 * sizeof(DirEntry))
-    return 2
+  var count = U32(0)
 
-  response.len = U32(sizeof(DirEntry))
-  1
+  template add(name: cstring, typ: U32) =
+    if count < procLsEntryLimit():
+      writeDirEntry(addr entries[count], name, typ)
+      inc count
+
+  add(cstring".", DirEntryTypeDir)
+  add(cstring"..", DirEntryTypeDir)
+  add(cstring"status", DirEntryTypeFile)
+  add(cstring"rkx_map", DirEntryTypeFile)
+
+  response.len = count * U32(sizeof(DirEntry))
+  I32(count)
 
 
 proc renderLsProc(path: cstring): I32 =

@@ -39,6 +39,14 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
 
     elif cstringEq(cstr(cmdBuf), "cd"):
       changeDirectory(cstr(argBuf))
+    
+    elif cstringEq(cstr(cmdBuf), "pwd"):
+      var buf: array[SysProcessCwdMax, char]
+      if sysGetCwd(addr buf[0], U64(SysProcessCwdMax)) < 0:
+        write("failed to get cwd\n")
+        continue
+      write(cast[cstring](addr buf[0]))
+      write("\n")
 
     elif cstringEq(cstr(cmdBuf), "ticks"):
       writeUnsigned(sysTicks())
@@ -57,8 +65,7 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
       if sysGetPpid() == 0:
         write("if you want to leave Rk-C, use \"shutdown\".\n")
         continue
-      sysExit(0)
-      
+      sysExit(0)      
 
     elif cstringEq(cstr(cmdBuf), "shutdown"):
       saveHistory()

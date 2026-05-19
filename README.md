@@ -1,17 +1,6 @@
-# Rk-C Nim Kernel
-
-```text
-╔═══════════════════════════════════╗
-║  ██████╗  ██╗  ██╗       ██████╗  ║
-║  ██╔══██╗ ██║ ██╔╝      ██╔════╝  ║
-║  ██████╔╝ █████╔╝ █████╗██║       ║
-║  ██╔══██╗ ██╔═██╗ ╚════╝██║       ║
-║  ██║  ██║ ██║  ██╗      ╚██████╗  ║
-║  ╚═╝  ╚═╝ ╚═╝  ╚═╝       ╚═════╝  ║
-╠═══════════════════════════════════╣
-║  version: 0.1.1                   ║
-╚═══════════════════════════════════╝
-```
+<p>
+  <img src="./assets/Rk-C_logo_tp.png" alt="Rk-C Logo" width="250">
+</p>
 
 Rk-C is an experimental microkernel-style operating system for RISC-V 64-bit,
 implemented mainly in Nim.

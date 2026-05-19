@@ -39,7 +39,7 @@ type
 
   VfsMount = object
     used: bool
-    path: cstring
+    path: array[FsNameMax, char]
     pathLen: int
     backend: VfsBackend
 
@@ -102,7 +102,7 @@ proc vfsMount(path: cstring, backend: VfsBackend) =
     panic("vfs mount table full")
 
   let idx = mountCount
-  mounts[idx].path = path
+  discard copyCString(mounts[idx].path, path)
   mounts[idx].pathLen = int(cstrlen(path))
   mounts[idx].backend = backend
   mounts[idx].used = true
@@ -113,7 +113,8 @@ proc findMount(path: cstring): int =
   var best = -1
   var i = 0
   while i < mountCount:
-    if mounts[i].used and pathMatchesMount(path, mounts[i].path, mounts[i].pathLen):
+    if mounts[i].used and
+        pathMatchesMount(path, cast[cstring](addr mounts[i].path[0]), mounts[i].pathLen):
       if best < 0 or mounts[i].pathLen > mounts[best].pathLen:
         best = i
     inc i
@@ -461,6 +462,22 @@ proc fillDevEntry(idx: int, outEntry: ptr FsDirEntry) =
     inc i
 
 
+proc fillVirtualDirEntry(name: cstring, outEntry: ptr FsDirEntry) =
+  outEntry.typ = FsDirEntryTypeDir
+  outEntry.size = 0
+
+  var i = 0
+  while i < FsDirEntryNameMax:
+    if name[i] == '\0':
+      break
+    outEntry.name[i] = name[i]
+    inc i
+
+  while i < FsDirEntryNameMax:
+    outEntry.name[i] = '\0'
+    inc i
+
+
 proc fsReadDirEntry*(path: cstring, entryIndex: U64, outEntry: ptr FsDirEntry): int =
   if not fsReady:
     return -1
@@ -479,15 +496,31 @@ proc fsReadDirEntry*(path: cstring, entryIndex: U64, outEntry: ptr FsDirEntry): 
   if isBinRoot(path):
     if not appfsReady:
       return -1
-    if entryIndex >= U64(appfsEntryCount):
+    var realEntryIndex = entryIndex
+    if realEntryIndex == U64(0):
+      fillVirtualDirEntry(".", outEntry)
+      return 1
+    if realEntryIndex == U64(1):
+      fillVirtualDirEntry("..", outEntry)
+      return 1
+    realEntryIndex -= U64(2)
+    if realEntryIndex >= U64(appfsEntryCount):
       return 0
-    fillAppfsEntry(int(entryIndex), outEntry)
+    fillAppfsEntry(int(realEntryIndex), outEntry)
     return 1
 
   if isDevRoot(path):
-    if entryIndex >= U64(DevEntryCount):
+    var realEntryIndex = entryIndex
+    if realEntryIndex == U64(0):
+      fillVirtualDirEntry(".", outEntry)
+      return 1
+    if realEntryIndex == U64(1):
+      fillVirtualDirEntry("..", outEntry)
+      return 1
+    realEntryIndex -= U64(2)
+    if realEntryIndex >= U64(DevEntryCount):
       return 0
-    fillDevEntry(int(entryIndex), outEntry)
+    fillDevEntry(int(realEntryIndex), outEntry)
     return 1
 
   let devIdx = resolveDevPath(path)
@@ -510,11 +543,20 @@ proc fsReadDirEntry*(path: cstring, entryIndex: U64, outEntry: ptr FsDirEntry): 
   if superBlock.nodes[dir].typ == FsTypeMount:
     return tmpfsReadDirEntry("/", entryIndex, outEntry)
 
+  var realEntryIndex = entryIndex
+  if realEntryIndex == U64(0):
+    fillVirtualDirEntry(".", outEntry)
+    return 1
+  if realEntryIndex == U64(1):
+    fillVirtualDirEntry("..", outEntry)
+    return 1
+  realEntryIndex -= U64(2)
+
   var seen = U64(0)
   var i = 0
   while i < FsMaxNodes:
     if superBlock.nodes[i].used != 0 and superBlock.nodes[i].parent == U32(dir) and i != dir:
-      if seen == entryIndex:
+      if seen == realEntryIndex:
         fillNodeEntry(i, outEntry)
         return 1
       inc seen

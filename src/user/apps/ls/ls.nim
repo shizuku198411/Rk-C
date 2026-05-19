@@ -9,14 +9,16 @@ const
 
 let optionSpecs = [
   OptionSpec(short: 'l', long: cstring(nil)),
+  OptionSpec(short: 'a', long: cstring("all")),
 ]
 
 var
   parsedArgs: UserArgs
   parsedOptions: ParsedOptions
 
-proc parseLsArgs(arg: cstring, longFormat: var bool): cstring =
+proc parseLsArgs(arg: cstring, longFormat, allEntries: var bool): cstring =
   longFormat = false
+  allEntries = false
   if not parseUserArgs(arg, parsedArgs):
     return nil
 
@@ -27,10 +29,15 @@ proc parseLsArgs(arg: cstring, longFormat: var bool): cstring =
     return nil
 
   longFormat = hasOption(parsedOptions, 'l')
+  allEntries = hasOption(parsedOptions, 'a')
   if parsedOptions.positionalCount == 0:
     return resolvePath("")
 
   resolvePath(positionalAt(parsedOptions, 0))
+
+
+proc isHiddenEntry(entry: ptr DirEntry): bool =
+  entry.name[0] == '.'
 
 
 proc printLongEntry(entry: ptr DirEntry) =
@@ -51,10 +58,14 @@ proc printName(entry: ptr DirEntry) =
     write("/")
 
 
-proc printCompact(entries: ptr UncheckedArray[DirEntry], count: int) =
+proc printCompact(entries: ptr UncheckedArray[DirEntry], count: int, allEntries: bool) =
   var i = 0
   var col = 0
   while i < count:
+    if not allEntries and isHiddenEntry(addr entries[i]):
+      inc i
+      continue
+
     printName(addr entries[i])
     inc i
     inc col
@@ -70,13 +81,15 @@ proc printCompact(entries: ptr UncheckedArray[DirEntry], count: int) =
 
 
 proc printUsage() =
-  write("usage: ls [-l] [path]\n")
+  write("usage: ls [-a] [-l] [path]\n")
+  write("  -a    show entries starting with .\n")
   write("  -l    show entry name and size\n")
 
 
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   var longFormat: bool
-  let path = parseLsArgs(arg, longFormat)
+  var allEntries: bool
+  let path = parseLsArgs(arg, longFormat, allEntries)
   if path == nil:
     printUsage()
     if parsedOptions.help:
@@ -93,9 +106,10 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   if longFormat:
     var i = 0
     while i < int(count):
-      printLongEntry(addr entries[i])
+      if allEntries or not isHiddenEntry(addr entries[i]):
+        printLongEntry(addr entries[i])
       inc i
   else:
-    printCompact(cast[ptr UncheckedArray[DirEntry]](addr entries[0]), int(count))
+    printCompact(cast[ptr UncheckedArray[DirEntry]](addr entries[0]), int(count), allEntries)
 
   sysExit(0)

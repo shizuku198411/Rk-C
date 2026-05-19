@@ -2,17 +2,19 @@ import ../../../lib/fixed_string
 import ../../../lib/syscall_types
 import ../../../lib/types
 import ../../dev/console
-import ../../fs/fs
+import ../../fs/dirent
 import ../../lib/syscall_out
 import ../../mm/usercopy
 import ../../task/exec
 import ../../task/process
+import ../fs/fs_service_ops
 import ../syscall_cap
 
 var
   processEntries: array[MaxProcs, SysProcessInfo]
   pathBuf: array[UserCStringMax, char]
   argBuf: array[UserCStringMax, char]
+  cwdCheckEntries: array[2, FsDirEntry]
 
 
 proc processStateValue(state: ProcessState): U32 =
@@ -164,6 +166,17 @@ proc setCurrentCwd(path: cstring): int =
     -1
 
 
+proc servicePathIsDir(path: cstring): bool =
+  let count = serviceLsToKernel(path, addr cwdCheckEntries[0], U64(cwdCheckEntries.len))
+  if count < 2:
+    return false
+
+  cwdCheckEntries[0].typ == FsDirEntryTypeDir and
+    cwdCheckEntries[1].typ == FsDirEntryTypeDir and
+    fixedCStringEq(cwdCheckEntries[0].name, ".") and
+    fixedCStringEq(cwdCheckEntries[1].name, "..")
+
+
 proc syscallSetCwd*(pathVal: U64): U64 =
   if currentProc == nil:
     panic("setcwd without current process")
@@ -176,7 +189,7 @@ proc syscallSetCwd*(pathVal: U64): U64 =
   let path = cast[cstring](addr pathBuf[0])
   if path[0] != '/':
     return U64(-1'i64)
-  if not fsIsDir(path):
+  if not servicePathIsDir(path):
     return U64(-1'i64)
   if setCurrentCwd(path) != 0:
     return U64(-1'i64)

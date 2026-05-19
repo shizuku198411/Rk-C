@@ -22,6 +22,7 @@ class TestCase:
     name: str
     command: str
     contains: list[str] = field(default_factory=list)
+    not_contains: list[str] = field(default_factory=list)
     regex: list[str] = field(default_factory=list)
     any_of: list[str] = field(default_factory=list)
     timeout: float = 8.0
@@ -171,6 +172,10 @@ def normal_tests() -> list[TestCase]:
         TestCase("shell history", "history", ["history"]),
         TestCase("shell cd", "cd /bin", []),
         TestCase("shell cwd ls", "ls", ["shell", "curl"]),
+        TestCase("shell cd dot", "cd .", []),
+        TestCase("shell pwd after dot", "pwd", ["/bin"]),
+        TestCase("shell cd parent", "cd ..", []),
+        TestCase("shell pwd after parent", "pwd", ["/"]),
         TestCase("shell cd root", "cd /", []),
     ]
 
@@ -200,7 +205,10 @@ def normal_tests() -> list[TestCase]:
 
     tests.extend(
         [
-            TestCase("ls /bin", "ls /bin", ["shell", "svcmgtd", "curl", "dmesg"]),
+            TestCase("ls /bin", "ls /bin", ["shell", "svcmgtd", "curl", "dmesg"], not_contains=["./", "../"]),
+            TestCase("ls -a dot entries", "ls -a /bin", ["./", "../", "shell"]),
+            TestCase("ls -al dot entries", "ls -al /bin", ["./", "../", "shell", "bytes"]),
+            TestCase("ls parent path", "ls /bin/..", ["bin/", "tmp/"]),
             TestCase("ls -l /bin", "ls -l /bin", ["shell", "bytes"]),
             TestCase("rkxinfo curl", "rkxinfo curl", ["path: /bin/curl", "magic: RKX1", "version: 2", "text:", "stack_pages:"]),
             TestCase("mkdir /tmp/appsmoke", "mkdir /tmp/appsmoke", []),
@@ -216,11 +224,21 @@ def normal_tests() -> list[TestCase]:
             TestCase("ps -l", "ps -l", ["pid", "ppid", "cpu", "mem", "shell"]),
             TestCase("ps -ef", "ps -ef", ["pid", "ppid", "state", "mode", "svcmgtd"]),
             TestCase("ps -e -f", "ps -e -f", ["pid", "ppid", "state", "mode", "svcmgtd"]),
-            TestCase("ls /proc", "ls /proc", ["uptime", "cpuinfo", "kmsg"], regex=[r"\d+/"]),
+            TestCase("ls /proc", "ls /proc", ["uptime", "cpuinfo", "kmsg"], not_contains=["./", "../"], regex=[r"\d+/"]),
+            TestCase("ls -a /proc", "ls -a /proc", ["./", "../", "uptime", "cpuinfo", "kmsg"], regex=[r"\d+/"]),
+            TestCase("shell cd /proc", "cd /proc", []),
+            TestCase("shell pwd after cd /proc", "pwd", ["/proc"]),
+            TestCase("shell ls proc cwd", "ls", ["uptime", "cpuinfo", "kmsg"], not_contains=["./", "../"], regex=[r"\d+/"]),
+            TestCase("shell cd proc pid", "cd 1", []),
+            TestCase("shell pwd after cd proc pid", "pwd", ["/proc/1"]),
+            TestCase("shell ls proc pid cwd", "ls", ["status", "rkx_map"], not_contains=["./", "../"]),
+            TestCase("shell cd proc parent", "cd ..", []),
+            TestCase("shell pwd after cd proc parent", "pwd", ["/proc"]),
+            TestCase("shell cd root after proc", "cd /", []),
             TestCase("dmesg", "dmesg", ["[boot]", "set trap vector"]),
             TestCase("cat /proc/kmsg", "cat /proc/kmsg", ["[boot]"]),
             TestCase("cat /proc/uptime", "cat /proc/uptime", ["ticks:"], regex=[r"uptime: \d{2}:\d{2}:\d{2}"]),
-            TestCase("ls /proc/1", "ls /proc/1", ["status", "rkx_map"]),
+            TestCase("ls /proc/1", "ls /proc/1", ["status", "rkx_map"], not_contains=["./", "../"]),
             TestCase("cat /proc/1/status", "cat /proc/1/status", ["pid: 1", "cpu:", "mem:", "exe: init"]),
             TestCase("cat /proc/3/rkx_map", "cat /proc/3/rkx_map", ["r-x text", "r-- rodata", "rw- stack"]),
             TestCase("svc list", "svc list", ["service", "procmgtd", "blockd", "fsd", "netd"]),
@@ -350,6 +368,9 @@ def validate(case: TestCase, output: str) -> list[str]:
     for expected in case.contains:
         if expected not in clean:
             errors.append(f"missing substring {expected!r}")
+    for unexpected in case.not_contains:
+        if unexpected in clean:
+            errors.append(f"unexpected substring {unexpected!r}")
     for pattern in case.regex:
         if not re.search(pattern, clean):
             errors.append(f"missing regex {pattern!r}")
@@ -362,6 +383,8 @@ def expected_summary(case: TestCase) -> str:
     parts = []
     if case.contains:
         parts.append("contains=" + repr(case.contains))
+    if case.not_contains:
+        parts.append("not_contains=" + repr(case.not_contains))
     if case.regex:
         parts.append("regex=" + repr(case.regex))
     if case.any_of:

@@ -167,6 +167,42 @@ proc serviceLs*(path: cstring, entriesVal, maxEntries: U64): U64 =
   outValue
 
 
+proc serviceLsToKernel*(path: cstring, dst: ptr FsDirEntry, maxEntries: U64): I32 =
+  if dst == nil or maxEntries == 0:
+    return -1
+
+  let entryBytes = maxEntries * U64(sizeof(FsDirEntry))
+  if entryBytes > SysFsDataMax:
+    return -1
+
+  let req = queueFsRequest(SysFsOpLs, path, nil, 0, entryBytes)
+  if req == nil:
+    if not canFallbackToRawFs():
+      return -1
+
+    let rawMax =
+      if maxEntries > U64(FsRawDirEntryMax):
+        U64(FsRawDirEntryMax)
+      else:
+        maxEntries
+    return I32(rawLsKernel(path, dst, rawMax))
+
+  let resp = waitFsResponse(req)
+  if resp == nil or resp.result < 0:
+    finishPending(req)
+    return -1
+
+  let bytes = U64(resp.result) * U64(sizeof(FsDirEntry))
+  if bytes > entryBytes or bytes > SysFsDataMax:
+    finishPending(req)
+    return -1
+
+  discard copyMem(dst, addr resp.data[0], bytes)
+  let outValue = resp.result
+  finishPending(req)
+  outValue
+
+
 proc serviceMkdir*(path: cstring): U64 =
   let req = queueFsRequest(SysFsOpMkdir, path, nil, 0, 0)
   if req == nil:
