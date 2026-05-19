@@ -14,6 +14,7 @@ const
   VqBytes = U64(8192)
   VqAlign = U64(4096)
   IoSpinLimit = U64(30000000)
+  IoRetryMax = 1
 
 type
   VirtioBlkReqHdr {.packed.} = object
@@ -96,7 +97,20 @@ proc readCapacity(): bool =
   capacityBlocks != 0
 
 
-proc doIo(typ: U32, blockIndex: U64, buf: pointer): int =
+proc recoverDevice(): bool =
+  initialized = false
+  setupVqLayout()
+  if not configureDevice():
+    mmioWrite(RegStatus, StatusFailed)
+    return false
+  if not readCapacity():
+    mmioWrite(RegStatus, StatusFailed)
+    return false
+  initialized = true
+  true
+
+
+proc doIoOnce(typ: U32, blockIndex: U64, buf: pointer): int =
   reqHdr.typ = typ
   reqHdr.reserved = 0
   reqHdr.sector = blockIndex
@@ -141,7 +155,7 @@ proc doIo(typ: U32, blockIndex: U64, buf: pointer): int =
       print(" last=")
       printUnsigned(U64(vq.lastUsedIdx))
       putChar('\n')
-      return -1
+      return -2
 
   vq.lastUsedIdx = volatileLoad(addr vq.used.idx)
   arch.fenceRwRw()
@@ -156,6 +170,24 @@ proc doIo(typ: U32, blockIndex: U64, buf: pointer): int =
     putChar('\n')
     return -1
   0
+
+
+proc doIo(typ: U32, blockIndex: U64, buf: pointer): int =
+  var attempt = 0
+  while attempt <= IoRetryMax:
+    let rc = doIoOnce(typ, blockIndex, buf)
+    if rc == 0:
+      return 0
+    if rc != -2:
+      return rc
+
+    print("[blk] recovering virtio-blk queue\n")
+    if not recoverDevice():
+      print("[blk] recover failed\n")
+      return -1
+    inc attempt
+
+  -1
 
 
 proc blockdevInit*() =
