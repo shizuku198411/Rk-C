@@ -12,6 +12,7 @@ proc printHelp*() =
   write("  rmdir\n")
   write("  echo\n")
   write("  touch\n")
+  write("  ec\n")
   write("  cp\n")
   write("  mv\n")
   write("  df\n")

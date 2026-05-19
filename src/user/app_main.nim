@@ -66,6 +66,9 @@ elif defined(userApp_mv):
   import apps/mv/mv
 elif defined(userApp_df):
   import apps/df/df
+elif defined(userApp_wc):
+  import apps/wc/wc
+# == test use only apps ==
 elif defined(userApp_faultcheck):
   import apps/faultcheck/faultcheck
 elif defined(userApp_capcheck):
