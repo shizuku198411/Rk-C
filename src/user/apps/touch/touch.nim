@@ -34,7 +34,7 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
       write("path too long\n")
       sysExit(1)
     
-    if sysWriteFile(path, addr buffer[0], 0) != 0:
+    if sysWriteFileMode(path, addr buffer[0], 0, SysFsWriteCreate or SysFsWriteOverwrite) != 0:
       write("failed to create file\n")
       sysExit(1)
     inc i

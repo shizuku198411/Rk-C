@@ -1,4 +1,5 @@
 import ../../lib/fixed_string
+import ../../lib/syscall_types
 import ../../lib/types
 import ../fs/dirent
 import ../lib/path
@@ -28,6 +29,7 @@ var
 
 proc tmpfsWriteText*(path: cstring, data: cstring): int
 proc tmpfsWriteBytes*(path: cstring, data: pointer, size: U64): int
+proc tmpfsWriteBytesWithFlags*(path: cstring, data: pointer, size: U64, flags: U32): int
 
 
 proc tmpfsMaxNodes*(): U64 =
@@ -330,13 +332,26 @@ proc tmpfsWriteText*(path: cstring, data: cstring): int =
 
 
 proc tmpfsWriteBytes*(path: cstring, data: pointer, size: U64): int =
+  tmpfsWriteBytesWithFlags(path, data, size, SysFsWriteDefault)
+
+
+proc tmpfsWriteBytesWithFlags*(path: cstring, data: pointer, size: U64, flags: U32): int =
   if data == nil and size > 0:
     return -1
   if size > U64(TmpfsFileMax):
     return -1
+  if (flags and (not SysFsWriteKnownFlags)) != U32(0):
+    return -1
+
+  let mode = flags and (SysFsWriteOverwrite or SysFsWriteAppend)
+  if mode == U32(0) or mode == (SysFsWriteOverwrite or SysFsWriteAppend):
+    return -1
 
   var idx = resolvePath(path)
   if idx < 0:
+    if (flags and SysFsWriteCreate) == U32(0):
+      return -1
+
     var leaf: array[TmpfsNameMax, char]
     let parent = resolveParent(path, leaf)
     if parent < 0 or nodes[parent].typ != TmpfsTypeDir:
@@ -347,9 +362,20 @@ proc tmpfsWriteBytes*(path: cstring, data: pointer, size: U64): int =
     return -1
 
   let src = cast[ptr UncheckedArray[char]](data)
+  var dstOffset = U64(0)
+  if (mode and SysFsWriteAppend) != U32(0):
+    dstOffset = U64(nodes[idx].size)
+
+  if dstOffset + size > U64(TmpfsFileMax):
+    return -1
+
   var i = U64(0)
   while i < size:
-    nodes[idx].data[i] = src[i]
+    nodes[idx].data[dstOffset + i] = src[i]
     inc i
-  nodes[idx].size = U32(size)
+
+  if (mode and SysFsWriteAppend) != U32(0):
+    nodes[idx].size = U32(dstOffset + size)
+  else:
+    nodes[idx].size = U32(size)
   0

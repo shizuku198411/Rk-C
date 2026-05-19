@@ -39,16 +39,21 @@ proc syscallLs*(pathVal, entriesVal, maxEntries: U64): U64 =
   if entriesVal == 0 or maxEntries == 0:
     return U64(-1'i64)
 
+  let requestedOffset = maxEntries shr U64(32)
+  let requestedMax = maxEntries and U64(0xffffffff'u64)
+  if requestedMax == U64(0):
+    return U64(-1'i64)
+
   let path = readPath(pathVal, true)
   if path == nil:
     return U64(-1'i64)
 
   let countMax =
-    if maxEntries > SysDirEntryMax:
+    if requestedMax > SysDirEntryMax:
       SysDirEntryMax
     else:
-      maxEntries
-  serviceLs(path, entriesVal, countMax)
+      requestedMax
+  serviceLs(path, entriesVal, countMax, requestedOffset)
 
 
 proc syscallMkdir*(path: U64): U64 =
@@ -86,7 +91,18 @@ proc syscallReadFile*(path, buf, capacity: U64): U64 =
   serviceReadFile(copiedPath, buf, capacity)
 
 
-proc syscallWriteFile*(path, buf, size: U64): U64 =
+proc unpackWriteSizeFlags(value: U64, size: var U64, flags: var U32) =
+  size = value and U64(0xffffffff'u64)
+  flags = U32(value shr U64(32))
+  if flags == U32(0):
+    flags = SysFsWriteDefault
+
+
+proc syscallWriteFile*(path, buf, sizeFlags: U64): U64 =
+  var size: U64
+  var flags: U32
+  unpackWriteSizeFlags(sizeFlags, size, flags)
+
   if size > SysFileIoMax:
     return U64(-1'i64)
 
@@ -96,7 +112,7 @@ proc syscallWriteFile*(path, buf, size: U64): U64 =
   if copyFromUser(addr fileBuf[0], buf, size) != 0:
     return U64(-1'i64)
 
-  serviceWriteFile(copiedPath, addr fileBuf[0], size)
+  serviceWriteFile(copiedPath, addr fileBuf[0], size, flags)
 
 
 proc syscallRename*(oldPathVal, newPathVal: U64): U64 =

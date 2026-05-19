@@ -5,7 +5,7 @@ import ../../lib/core/pathutils
 import ../../lib/core/syscall
 
 const
-  LsMaxEntries = 32
+  LsChunkEntries = 16
 
 let optionSpecs = [
   OptionSpec(short: 'l', long: cstring(nil)),
@@ -58,24 +58,18 @@ proc printName(entry: ptr DirEntry) =
     write("/")
 
 
-proc printCompact(entries: ptr UncheckedArray[DirEntry], count: int, allEntries: bool) =
-  var i = 0
-  var col = 0
-  while i < count:
-    if not allEntries and isHiddenEntry(addr entries[i]):
-      inc i
-      continue
+proc printCompactEntry(entry: ptr DirEntry, col: var int) =
+  printName(entry)
+  inc col
 
-    printName(addr entries[i])
-    inc i
-    inc col
+  if col == 10:
+    write("\n")
+    col = 0
+  else:
+    write("\t")
 
-    if col == 10:
-      write("\n")
-      col = 0
-    elif i < count:
-      write("\t")
 
+proc finishCompact(col: int) =
   if col != 0:
     write("\n")
 
@@ -97,19 +91,37 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
     else:
       sysExit(1)
 
-  var entries: array[LsMaxEntries, DirEntry]
-  let count = sysLs(path, addr entries[0], U64(LsMaxEntries))
-  if count < 0:
-    write("ls: not found\n")
-    sysExit(1)
+  var entries: array[LsChunkEntries, DirEntry]
+  var offset = U64(0)
+  var printed = false
+  var col = 0
 
-  if longFormat:
+  while true:
+    let count = sysLsAt(path, addr entries[0], U64(LsChunkEntries), offset)
+    if count < 0:
+      if offset == U64(0):
+        write("ls: not found\n")
+        sysExit(1)
+      break
+
+    if count == 0:
+      break
+
     var i = 0
     while i < int(count):
       if allEntries or not isHiddenEntry(addr entries[i]):
-        printLongEntry(addr entries[i])
+        printed = true
+        if longFormat:
+          printLongEntry(addr entries[i])
+        else:
+          printCompactEntry(addr entries[i], col)
       inc i
-  else:
-    printCompact(cast[ptr UncheckedArray[DirEntry]](addr entries[0]), int(count), allEntries)
+
+    offset += U64(count)
+    if count < I32(LsChunkEntries):
+      break
+
+  if not longFormat and printed:
+    finishCompact(col)
 
   sysExit(0)

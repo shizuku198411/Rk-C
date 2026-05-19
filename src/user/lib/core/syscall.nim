@@ -74,6 +74,15 @@ proc sysLs*(path: cstring, entries: ptr DirEntry, maxEntries: U64): I32 =
   I32(rawSyscall3(SysLs, cast[U64](path), cast[U64](entries), maxEntries))
 
 
+proc packLsLimitOffset(maxEntries, offset: U64): U64 =
+  ((offset and U64(0xffffffff'u64)) shl U64(32)) or
+    (maxEntries and U64(0xffffffff'u64))
+
+
+proc sysLsAt*(path: cstring, entries: ptr DirEntry, maxEntries, offset: U64): I32 =
+  I32(rawSyscall3(SysLs, cast[U64](path), cast[U64](entries), packLsLimitOffset(maxEntries, offset)))
+
+
 proc sysMkdir*(path: cstring): I32 =
   I32(rawSyscall3(SysMkdir, cast[U64](path), 0, 0))
 
@@ -114,6 +123,14 @@ proc sysReadFile*(path: cstring, buf: pointer, capacity: U64): I32 =
 
 proc sysWriteFile*(path: cstring, buf: pointer, size: U64): I32 =
   I32(rawSyscall3(SysWriteFile, cast[U64](path), cast[U64](buf), size))
+
+
+proc packWriteSizeFlags(size: U64, flags: U32): U64 =
+  (U64(flags) shl U64(32)) or size
+
+
+proc sysWriteFileMode*(path: cstring, buf: pointer, size: U64, flags: U32): I32 =
+  I32(rawSyscall3(SysWriteFile, cast[U64](path), cast[U64](buf), packWriteSizeFlags(size, flags)))
 
 
 proc sysRename*(oldPath, newPath: cstring): I32 =
@@ -216,6 +233,10 @@ proc sysRawLs*(path: cstring, entries: pointer, maxEntries: U64): I32 =
   I32(rawSyscall3(SysRawLs, cast[U64](path), cast[U64](entries), maxEntries))
 
 
+proc sysRawLsAt*(path: cstring, entries: pointer, maxEntries, offset: U64): I32 =
+  I32(rawSyscall3(SysRawLs, cast[U64](path), cast[U64](entries), packLsLimitOffset(maxEntries, offset)))
+
+
 proc sysRawMkdir*(path: cstring): I32 =
   I32(rawSyscall3(SysRawMkdir, cast[U64](path), 0, 0))
 
@@ -234,6 +255,10 @@ proc sysRawReadFile*(path: cstring, buf: pointer, capacity: U64): I32 =
 
 proc sysRawWriteFile*(path: cstring, buf: pointer, size: U64): I32 =
   I32(rawSyscall3(SysRawWriteFile, cast[U64](path), cast[U64](buf), size))
+
+
+proc sysRawWriteFileMode*(path: cstring, buf: pointer, size: U64, flags: U32): I32 =
+  I32(rawSyscall3(SysRawWriteFile, cast[U64](path), cast[U64](buf), packWriteSizeFlags(size, flags)))
 
 
 proc sysRawRename*(oldPath, newPath: cstring): I32 =

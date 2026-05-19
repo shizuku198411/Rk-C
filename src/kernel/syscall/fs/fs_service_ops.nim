@@ -72,8 +72,23 @@ proc finishPending(p: ptr PendingFsRequest) =
   finishIpcPending(p)
 
 
-proc rawLsKernel(path: cstring, outEntries: ptr FsDirEntry, maxEntries: U64): int =
-  fsReadDirEntries(path, outEntries, maxEntries)
+proc rawLsKernel(path: cstring, outEntries: ptr FsDirEntry, maxEntries: U64, offset: U64 = 0): int =
+  if outEntries == nil or maxEntries == 0:
+    return -1
+
+  let entries = cast[ptr UncheckedArray[FsDirEntry]](outEntries)
+  var count = U64(0)
+  while count < maxEntries:
+    let readResult = fsReadDirEntry(path, offset + count, addr entries[count])
+    if readResult < 0:
+      if count == 0:
+        return -1
+      return int(count)
+    if readResult == 0:
+      return int(count)
+    inc count
+
+  int(count)
 
 
 proc rawReadFileKernel(path: cstring, buf: pointer, capacity: U64): int =
@@ -90,6 +105,18 @@ proc rawReadFileRangeKernel(path: cstring, buf: pointer, offset, capacity: U64):
 
 proc rawRenameKernel(oldPath, newPath: cstring): int =
   fsRename(oldPath, newPath)
+
+
+proc unpackWriteSizeFlags(value: U64, size: var U64, flags: var U32) =
+  size = value and U64(0xffffffff'u64)
+  flags = U32(value shr U64(32))
+  if flags == U32(0):
+    flags = SysFsWriteDefault
+
+
+proc unpackLsLimitOffset(value: U64, maxEntries: var U64, offset: var U64) =
+  maxEntries = value and U64(0xffffffff'u64)
+  offset = value shr U64(32)
 
 
 proc syscallFsInfo*(outEntriesVal, maxEntriesVal: U64): U64 =
@@ -159,19 +186,22 @@ proc syscallFsServiceReply*(respVal: U64): U64 =
   0
 
 
-proc serviceLs*(path: cstring, entriesVal, maxEntries: U64): U64 =
-  let entryBytes = maxEntries * U64(sizeof(FsDirEntry))
-  let req = queueFsRequest(SysFsOpLs, path, nil, 0, entryBytes)
+proc serviceLs*(path: cstring, entriesVal, maxEntries: U64, offset: U64 = 0): U64 =
+  if maxEntries == 0:
+    return 0
+
+  let chunkMax =
+    if maxEntries > U64(FsRawDirEntryMax):
+      U64(FsRawDirEntryMax)
+    else:
+      maxEntries
+  let entryBytes = chunkMax * U64(sizeof(FsDirEntry))
+  let req = queueFsRequest(SysFsOpLs, path, nil, offset, entryBytes)
   if req == nil:
     if not canFallbackToRawFs():
       return U64(-1'i64)
 
-    let rawMax =
-      if maxEntries > U64(FsRawDirEntryMax):
-        U64(FsRawDirEntryMax)
-      else:
-        maxEntries
-    let count = rawLsKernel(path, addr rawEntries[0], rawMax)
+    let count = rawLsKernel(path, addr rawEntries[0], chunkMax, offset)
     if count < 0:
       return U64(-1'i64)
     let bytes = U64(count) * U64(sizeof(FsDirEntry))
@@ -194,25 +224,25 @@ proc serviceLs*(path: cstring, entriesVal, maxEntries: U64): U64 =
   outValue
 
 
-proc serviceLsToKernel*(path: cstring, dst: ptr FsDirEntry, maxEntries: U64): I32 =
+proc serviceLsToKernel*(path: cstring, dst: ptr FsDirEntry, maxEntries: U64, offset: U64 = 0): I32 =
   if dst == nil or maxEntries == 0:
     return -1
 
-  let entryBytes = maxEntries * U64(sizeof(FsDirEntry))
+  let chunkMax =
+    if maxEntries > U64(FsRawDirEntryMax):
+      U64(FsRawDirEntryMax)
+    else:
+      maxEntries
+  let entryBytes = chunkMax * U64(sizeof(FsDirEntry))
   if entryBytes > SysFsDataMax:
     return -1
 
-  let req = queueFsRequest(SysFsOpLs, path, nil, 0, entryBytes)
+  let req = queueFsRequest(SysFsOpLs, path, nil, offset, entryBytes)
   if req == nil:
     if not canFallbackToRawFs():
       return -1
 
-    let rawMax =
-      if maxEntries > U64(FsRawDirEntryMax):
-        U64(FsRawDirEntryMax)
-      else:
-        maxEntries
-    return I32(rawLsKernel(path, dst, rawMax))
+    return I32(rawLsKernel(path, dst, chunkMax, offset))
 
   let resp = waitFsResponse(req)
   if resp == nil or resp.result < 0:
@@ -377,13 +407,13 @@ proc serviceReadFileRangeToKernel*(path: cstring, dst: pointer, offset, capacity
   outValue
 
 
-proc serviceWriteFile*(path: cstring, data: pointer, size: U64): U64 =
-  let req = queueFsRequest(SysFsOpWriteFile, path, data, size, 0)
+proc serviceWriteFile*(path: cstring, data: pointer, size: U64, flags: U32 = SysFsWriteDefault): U64 =
+  let req = queueFsRequest(SysFsOpWriteFile, path, data, size, U64(flags))
   if req == nil:
     if not canFallbackToRawFs():
       return U64(-1'i64)
 
-    return U64(fsWriteFile(path, data, size))
+    return U64(fsWriteFileWithFlags(path, data, size, flags))
 
   let resp = waitFsResponse(req)
   let outValue =
@@ -424,8 +454,12 @@ proc serviceRename*(oldPath, newPath: cstring): U64 =
   outValue
 
 
-proc syscallRawLs*(pathVal, entriesVal, maxEntries: U64): U64 =
-  if not canSyscallRawFs() or pathVal == 0 or entriesVal == 0:
+proc syscallRawLs*(pathVal, entriesVal, maxEntriesVal: U64): U64 =
+  var maxEntries: U64
+  var offset: U64
+  unpackLsLimitOffset(maxEntriesVal, maxEntries, offset)
+
+  if not canSyscallRawFs() or pathVal == 0 or entriesVal == 0 or maxEntries == 0:
     return U64(-1'i64)
 
   var pathBuf: array[SysFsPathMax, char]
@@ -437,7 +471,7 @@ proc syscallRawLs*(pathVal, entriesVal, maxEntries: U64): U64 =
       U64(FsRawDirEntryMax)
     else:
       maxEntries
-  let count = rawLsKernel(cast[cstring](addr pathBuf[0]), addr rawEntries[0], countMax)
+  let count = rawLsKernel(cast[cstring](addr pathBuf[0]), addr rawEntries[0], countMax, offset)
   if count < 0:
     return U64(-1'i64)
 
@@ -537,7 +571,11 @@ proc syscallRawReadRange*(reqVal: U64): U64 =
   U64(readLen)
 
 
-proc syscallRawWriteFile*(pathVal, bufVal, size: U64): U64 =
+proc syscallRawWriteFile*(pathVal, bufVal, sizeFlags: U64): U64 =
+  var size: U64
+  var flags: U32
+  unpackWriteSizeFlags(sizeFlags, size, flags)
+
   if not canSyscallRawFs() or pathVal == 0 or size > SysFsDataMax:
     return U64(-1'i64)
 
@@ -547,7 +585,7 @@ proc syscallRawWriteFile*(pathVal, bufVal, size: U64): U64 =
   if copyFromUser(addr rawFileBuf[0], bufVal, size) != 0:
     return U64(-1'i64)
 
-  U64(fsWriteFile(cast[cstring](addr pathBuf[0]), addr rawFileBuf[0], size))
+  U64(fsWriteFileWithFlags(cast[cstring](addr pathBuf[0]), addr rawFileBuf[0], size, flags))
 
 
 proc syscallRawRename*(oldPathVal, newPathVal: U64): U64 =

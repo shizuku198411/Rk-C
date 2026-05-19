@@ -7,6 +7,11 @@ const
   SysIpcQueueCap* = 16
   SysFsPathMax* = 128
   SysFsDataMax* = 4096
+  SysFsWriteCreate* = U32(1)
+  SysFsWriteOverwrite* = U32(2)
+  SysFsWriteAppend* = U32(4)
+  SysFsWriteDefault* = SysFsWriteCreate or SysFsWriteOverwrite
+  SysFsWriteKnownFlags* = SysFsWriteCreate or SysFsWriteOverwrite or SysFsWriteAppend
   SysFsInfoNameMax* = U32(16)
   SysFsInfoMaxEntries* = U32(4)
   SysBlockDataSize* = 512

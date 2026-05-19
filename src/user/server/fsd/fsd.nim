@@ -58,7 +58,7 @@ proc copyPathToFsRequest(outReq: var SysFsRequest, path: cstring) =
   outReq.path[i] = '\0'
 
 
-proc requestProcFs(op: U32, path: cstring, capacity: U64): I32 =
+proc requestProcFs(op: U32, path: cstring, capacity: U64, offset: U64 = 0): I32 =
   let pid = servicePidByKind(SysServiceKindProcFs)
   if pid <= 0:
     return -1
@@ -66,6 +66,7 @@ proc requestProcFs(op: U32, path: cstring, capacity: U64): I32 =
   procPacket = SysIpcPacket()
   procPacket.op = op
   procPacket.arg0 = capacity
+  procPacket.arg1 = offset
   copyPathToPacket(procPacket, path)
 
   if sysIpcSendPacket(pid, addr procPacket) < 0:
@@ -94,7 +95,7 @@ proc writeDirEntry(entry: ptr DirEntry, name: cstring, typ: U32) =
 
 
 proc handleProcLs() =
-  let count = requestProcFs(SysIpcOpProcFsLsRequest, reqPath(), req.capacity)
+  let count = requestProcFs(SysIpcOpProcFsLsRequest, reqPath(), req.capacity, req.size)
   if count < 0:
     resp.result = -1
     return
@@ -115,15 +116,40 @@ proc handleLs() =
       return
 
   let maxEntries = req.capacity div U64(sizeof(DirEntry))
-  resp.result = sysRawLs(reqPath(), addr resp.data[0], maxEntries)
-  if resp.result >= 0:
-    var count = U64(resp.result)
-    if isRootPath(reqPath()) and count < maxEntries:
+  if isRootPath(reqPath()):
+    let rawTotal = sysRawLsAt(reqPath(), addr resp.data[0], U64(32), U64(0))
+    if rawTotal < 0:
+      resp.result = -1
+      return
+
+    if req.size < U64(rawTotal):
+      resp.result = sysRawLsAt(reqPath(), addr resp.data[0], maxEntries, req.size)
+      if resp.result < 0:
+        return
+
+      var count = U64(resp.result)
+      if count < maxEntries and req.size + count == U64(rawTotal):
+        let outBuf = cast[ptr UncheckedArray[DirEntry]](addr resp.data[0])
+        writeDirEntry(addr outBuf[count], cstring"proc", DirEntryTypeMount)
+        inc count
+        resp.result = I32(count)
+      resp.size = count * U64(sizeof(DirEntry))
+      return
+
+    if req.size == U64(rawTotal) and maxEntries > U64(0):
       let outBuf = cast[ptr UncheckedArray[DirEntry]](addr resp.data[0])
-      writeDirEntry(addr outBuf[count], cstring"proc", DirEntryTypeMount)
-      count += 1.U64
-      resp.result = I32(count)
-    resp.size = count * U64(sizeof(DirEntry))
+      writeDirEntry(addr outBuf[0], cstring"proc", DirEntryTypeMount)
+      resp.result = 1
+      resp.size = U64(sizeof(DirEntry))
+      return
+
+    resp.result = 0
+    resp.size = 0
+    return
+
+  resp.result = sysRawLsAt(reqPath(), addr resp.data[0], maxEntries, req.size)
+  if resp.result >= 0:
+    resp.size = U64(resp.result) * U64(sizeof(DirEntry))
 
 
 proc handleMkdir() =
@@ -221,7 +247,7 @@ proc handleReadRange() =
 
 
 proc handleWriteFile() =
-  resp.result = sysRawWriteFile(reqPath(), addr req.data[0], req.size)
+  resp.result = sysRawWriteFileMode(reqPath(), addr req.data[0], req.size, U32(req.capacity))
 
 
 proc handleRename() =

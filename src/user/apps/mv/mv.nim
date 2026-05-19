@@ -6,10 +6,12 @@ import ../../lib/core/strutils
 
 const
   MvMaxEntries = 2
+  MoveBufferSize = 4096
 
 var
   parsedArgs: UserArgs
   entries: array[MvMaxEntries, DirEntry]
+  moveBuffer: array[MoveBufferSize, char]
   srcPathBuf: array[PathMax, char]
   dstPathBuf: array[PathMax, char]
   targetPathBuf: array[PathMax, char]
@@ -38,10 +40,7 @@ proc copyChar(dst: var array[PathMax, char], pos: var int, ch: char): bool =
 
 proc isDir(path: cstring): bool =
   let count = sysLs(path, addr entries[0], U64(MvMaxEntries))
-  if count < 0:
-    return false
-
-  entries[0].typ == DirEntryTypeDir or entries[0].typ == DirEntryTypeMount
+  count >= 0
 
 
 proc basename(path: cstring): cstring =
@@ -89,7 +88,24 @@ proc joinPath(dir, name: cstring, dst: var array[PathMax, char]): cstring =
 
 
 proc moveOne(srcPath, dstPath: cstring): bool =
-  sysRename(srcPath, dstPath) == 0
+  if sysRename(srcPath, dstPath) == 0:
+    return true
+
+  if isDir(dstPath):
+    return false
+
+  let existingLen = sysReadFile(dstPath, addr moveBuffer[0], U64(1))
+  if existingLen >= 0:
+    return false
+
+  let srcLen = sysReadFile(srcPath, addr moveBuffer[0], U64(MoveBufferSize))
+  if srcLen < 0:
+    return false
+
+  if sysWriteFileMode(dstPath, addr moveBuffer[0], U64(srcLen), SysFsWriteCreate or SysFsWriteOverwrite) != 0:
+    return false
+
+  sysUnlink(srcPath) == 0
 
 
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =

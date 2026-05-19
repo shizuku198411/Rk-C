@@ -82,7 +82,7 @@ proc restoreHistoryFromBuf(size: I32) =
 proc saveHistory*() =
   let size = buildHistorySaveBuf()
 
-  if sysWriteFile(cstring(HistoryPath), addr historySaveBuf[0], size) != 0:
+  if sysWriteFileMode(cstring(HistoryPath), addr historySaveBuf[0], size, SysFsWriteCreate or SysFsWriteOverwrite) != 0:
     write("failed to write .history\n")
 
 

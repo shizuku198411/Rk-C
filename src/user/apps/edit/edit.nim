@@ -30,7 +30,7 @@ proc printUsage() =
 
 
 proc save(path: cstring, len: U64): bool =
-  sysWriteFile(path, addr buffer[0], len) == 0
+  sysWriteFileMode(path, addr buffer[0], len, SysFsWriteCreate or SysFsWriteOverwrite) == 0
 
 
 proc load(path: cstring): U64 =

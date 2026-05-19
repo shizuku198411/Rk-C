@@ -14,7 +14,7 @@ from pathlib import Path
 
 ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
 PROMPT_MARKER = "$ "
-TEST_APP_NAMES = ["faultcheck", "capcheck", "pollcheck", "signalcheck"]
+TEST_APP_NAMES = ["faultcheck", "capcheck", "pollcheck", "signalcheck", "writecheck"]
 
 
 @dataclass
@@ -171,12 +171,15 @@ def normal_tests() -> list[TestCase]:
         TestCase("shell bitmap", "bitmap", ["bitmap:", "free"]),
         TestCase("shell history", "history", ["history"]),
         TestCase("shell cd", "cd /bin", []),
-        TestCase("shell cwd ls", "ls", ["shell", "curl"]),
+        TestCase("shell cwd ls", "ls", ["shell", "tcpcheck", "curl"]),
         TestCase("shell cd dot", "cd .", []),
         TestCase("shell pwd after dot", "pwd", ["/bin"]),
         TestCase("shell cd parent", "cd ..", []),
         TestCase("shell pwd after parent", "pwd", ["/"]),
         TestCase("shell cd root", "cd /", []),
+        TestCase("shell cd etc", "cd /etc", []),
+        TestCase("wc relative path", "wc interface.conf", ["/etc/interface.conf"], regex=[r"\d+ \d+ \d+ /etc/interface\.conf"]),
+        TestCase("shell cd root after wc", "cd /", []),
     ]
 
     help_cases = {
@@ -204,13 +207,14 @@ def normal_tests() -> list[TestCase]:
         "df": "usage: df",
         "capcheck": "usage: capcheck",
         "pollcheck": "usage: pollcheck",
+        "writecheck": "usage: writecheck",
     }
     for app, expected in help_cases.items():
         tests.append(TestCase(f"{app} --help", f"{app} --help", [expected]))
 
     tests.extend(
         [
-            TestCase("ls /bin", "ls /bin", ["shell", "svcmgtd", "curl", "dmesg"], not_contains=["./", "../"]),
+            TestCase("ls /bin", "ls /bin", ["shell", "svcmgtd", "tcpcheck", "curl", "dmesg"], not_contains=["./", "../"]),
             TestCase("ls -a dot entries", "ls -a /bin", ["./", "../", "shell"]),
             TestCase("ls -al dot entries", "ls -al /bin", ["./", "../", "shell", "bytes"]),
             TestCase("ls parent path", "ls /bin/..", ["bin/", "tmp/"]),
@@ -228,6 +232,14 @@ def normal_tests() -> list[TestCase]:
             TestCase("mv rename file", "mv /tmp/date_copy /tmp/date_moved", []),
             TestCase("cat renamed file", "cat /tmp/date_moved", regex=[r"\d{4}/\d{2}/\d{2}"]),
             TestCase("mkdir /tmp/mvdir", "mkdir /tmp/mvdir", []),
+            TestCase("prepare rootfs mv file", "date > /mv_cross", []),
+            TestCase("mv rootfs file into tmpfs directory", "mv /mv_cross /tmp", []),
+            TestCase("cat rootfs file moved into tmpfs", "cat /tmp/mv_cross", regex=[r"\d{4}/\d{2}/\d{2}"]),
+            TestCase("mv tmpfs file with new name", "mv /tmp/mv_cross /tmp/mv_cross_renamed", []),
+            TestCase("cat renamed tmpfs file", "cat /tmp/mv_cross_renamed", regex=[r"\d{4}/\d{2}/\d{2}"]),
+            TestCase("prepare rootfs mv file explicit dst", "date > /mv_cross2", []),
+            TestCase("mv rootfs file to explicit tmpfs path", "mv /mv_cross2 /tmp/mv_cross2_renamed", []),
+            TestCase("cat explicit tmpfs path", "cat /tmp/mv_cross2_renamed", regex=[r"\d{4}/\d{2}/\d{2}"]),
             TestCase("mv file into directory", "mv /tmp/date_moved /tmp/mvdir", []),
             TestCase("cat moved file", "cat /tmp/mvdir/date_moved", regex=[r"\d{4}/\d{2}/\d{2}"]),
             TestCase("prepare mv multi file a", "date > /tmp/mv_a", []),
@@ -238,6 +250,8 @@ def normal_tests() -> list[TestCase]:
             TestCase("rm moved file", "rm /tmp/mvdir/date_moved", []),
             TestCase("rm moved multi file a", "rm /tmp/mvdir/mv_a", []),
             TestCase("rm moved multi file b", "rm /tmp/mvdir/mv_b", []),
+            TestCase("rm cross moved file", "rm /tmp/mv_cross_renamed", []),
+            TestCase("rm explicit cross moved file", "rm /tmp/mv_cross2_renamed", []),
             TestCase("rmdir /tmp/mvdir", "rmdir /tmp/mvdir", []),
             TestCase("rm redirected file", "rm /tmp/date_smoke", []),
             TestCase("ps", "ps", ["pid", "exe", "shell"]),
@@ -269,7 +283,7 @@ def normal_tests() -> list[TestCase]:
             TestCase("svc status netd", "svc status netd", ["netd", "reason"]),
             TestCase("svc degraded", "svc degraded", ["service", "state"]),
             TestCase("svc logs", "svc logs", ["started", "ready"]),
-            TestCase("stracectl app", "stracectl ls /bin", ["shell", "curl"], timeout=12.0),
+            TestCase("stracectl app", "stracectl ls /bin", ["shell", "tcpcheck", "curl"], timeout=12.0),
             TestCase("stracectl on", "stracectl on", ["strace on"]),
             TestCase("stracectl off", "stracectl off", ["strace off"]),
         ]
@@ -307,6 +321,20 @@ def abnormal_tests() -> list[TestCase]:
                 "signalcheck: child_exited signal ok",
                 "signalcheck: empty signal queue ok",
                 "signalcheck: ok",
+            ],
+            timeout=12.0,
+        ),
+        TestCase(
+            "writecheck file write modes",
+            "writecheck",
+            [
+                "writecheck: create overwrite ok",
+                "writecheck: append existing ok",
+                "writecheck: overwrite existing ok",
+                "writecheck: append missing denied ok",
+                "writecheck: create append ok",
+                "writecheck: invalid flags denied ok",
+                "writecheck: ok",
             ],
             timeout=12.0,
         ),

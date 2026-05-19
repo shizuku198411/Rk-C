@@ -1,4 +1,5 @@
 import ../../lib/fixed_string
+import ../../lib/mem
 import ../../lib/syscall_types
 import ../../lib/types
 import ../dev/console
@@ -60,6 +61,7 @@ type
 var
   superBlock: FsSuper
   blockBuf: array[512, U8]
+  fsWriteBuf: array[SysFsDataMax, U8]
   fsReady: bool
   mounts: array[VfsMaxMounts, VfsMount]
   mountCount: int
@@ -76,6 +78,7 @@ let devEntryNames = [
 
 
 proc fsWriteFile*(path: cstring, data: pointer, size: U64): int
+proc fsWriteFileWithFlags*(path: cstring, data: pointer, size: U64, flags: U32): int
 proc fsRename*(oldPath, newPath: cstring): int
 
 
@@ -391,6 +394,33 @@ proc writeFileBytes(node: FsNode, data: pointer, size: U64): int =
       return -1
     inc blk
   0
+
+
+proc readNodeBytes(node: FsNode, dst: pointer, capacity: U64): int =
+  if dst == nil:
+    return -1
+  if U64(node.size) > capacity:
+    return -1
+
+  let outBuf = cast[ptr UncheckedArray[U8]](dst)
+  var done = U64(0)
+  while done < U64(node.size):
+    let blockIndex = done div BlockSize
+    let inBlock = done mod BlockSize
+    if serviceBlockRead(U64(node.startBlock) + blockIndex, addr blockBuf[0]) < 0:
+      return -1
+
+    var chunk = BlockSize - inBlock
+    if chunk > U64(node.size) - done:
+      chunk = U64(node.size) - done
+
+    var i = U64(0)
+    while i < chunk:
+      outBuf[done + i] = blockBuf[inBlock + i]
+      inc i
+    done += chunk
+
+  int(node.size)
 
 
 proc formatFs() =
@@ -790,6 +820,10 @@ proc fsWriteText*(path: cstring, data: cstring): int =
 
 
 proc fsWriteFile*(path: cstring, data: pointer, size: U64): int =
+  fsWriteFileWithFlags(path, data, size, SysFsWriteDefault)
+
+
+proc fsWriteFileWithFlags*(path: cstring, data: pointer, size: U64, flags: U32): int =
   if not fsReady:
     return -1
   if isBinPath(path):
@@ -798,13 +832,22 @@ proc fsWriteFile*(path: cstring, data: pointer, size: U64): int =
     return -1
   if size > FsFileBlocks * BlockSize:
     return -1
+  if (flags and (not SysFsWriteKnownFlags)) != U32(0):
+    return -1
+
+  let mode = flags and (SysFsWriteOverwrite or SysFsWriteAppend)
+  if mode == U32(0) or mode == (SysFsWriteOverwrite or SysFsWriteAppend):
+    return -1
 
   let mountIdx = findMount(path)
   if mountIdx >= 0 and mounts[mountIdx].backend == vfsTmpfs:
-    return tmpfsWriteBytes(mountLocalPath(path, mounts[mountIdx].pathLen), data, size)
+    return tmpfsWriteBytesWithFlags(mountLocalPath(path, mounts[mountIdx].pathLen), data, size, flags)
 
   var idx = resolvePath(path)
   if idx < 0:
+    if (flags and SysFsWriteCreate) == U32(0):
+      return -1
+
     var leaf: array[FsNameMax, char]
     let parent = resolveParent(path, leaf)
     if parent < 0 or superBlock.nodes[parent].typ != FsTypeDir:
@@ -814,9 +857,22 @@ proc fsWriteFile*(path: cstring, data: pointer, size: U64): int =
   if idx < 0 or superBlock.nodes[idx].typ != FsTypeFile:
     return -1
 
-  superBlock.nodes[idx].size = U32(size)
+  let writeData =
+    if (mode and SysFsWriteAppend) != U32(0):
+      if readNodeBytes(superBlock.nodes[idx], addr fsWriteBuf[0], U64(SysFsDataMax)) < 0:
+        return -1
+      let currentSize = U64(superBlock.nodes[idx].size)
+      if currentSize + size > FsFileBlocks * BlockSize:
+        return -1
+      if size > 0:
+        discard copyMem(addr fsWriteBuf[currentSize], data, size)
+      superBlock.nodes[idx].size = U32(currentSize + size)
+      cast[pointer](addr fsWriteBuf[0])
+    else:
+      superBlock.nodes[idx].size = U32(size)
+      data
 
-  if writeFileBytes(superBlock.nodes[idx], data, size) < 0:
+  if writeFileBytes(superBlock.nodes[idx], writeData, U64(superBlock.nodes[idx].size)) < 0:
     return -1
   writeSuper()
 

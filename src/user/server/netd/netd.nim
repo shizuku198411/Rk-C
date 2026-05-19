@@ -255,7 +255,7 @@ proc checkResolveConf(): bool =
 
 proc createResolveConf() =
   let contents: cstring = "nameserver 8.8.8.8"
-  if sysWriteFile(cstring(ResolveConfPath), addr contents[0], cstrlen(contents)) != 0:
+  if sysWriteFileMode(cstring(ResolveConfPath), addr contents[0], cstrlen(contents), SysFsWriteCreate or SysFsWriteOverwrite) != 0:
     write("failed to create ")
     write(cstring(ResolveConfPath))
     write("\n")
@@ -269,7 +269,7 @@ proc checkInterfaceConf(): bool =
 
 proc createInterfaceConf() =
   let contents: cstring = "address 10.0.1.10\nsubnet 255.255.255.0\ngateway 10.0.1.1"
-  if sysWriteFile(cstring(InterfaceConfPath), addr contents[0], cstrlen(contents)) != 0:
+  if sysWriteFileMode(cstring(InterfaceConfPath), addr contents[0], cstrlen(contents), SysFsWriteCreate or SysFsWriteOverwrite) != 0:
     write("failed to create ")
     write(cstring(InterfaceConfPath))
     write("\n")

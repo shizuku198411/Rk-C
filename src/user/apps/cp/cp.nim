@@ -42,7 +42,7 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
     write("failed to read file\n")
     sysExit(1)
   
-  if sysWriteFile(dstPath, addr buffer[0], U64(srcLen)) != 0:
+  if sysWriteFileMode(dstPath, addr buffer[0], U64(srcLen), SysFsWriteCreate or SysFsWriteOverwrite) != 0:
     write("failed to write file\n")
     sysExit(1)
 

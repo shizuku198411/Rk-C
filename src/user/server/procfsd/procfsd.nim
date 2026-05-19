@@ -684,17 +684,24 @@ proc procLsEntryLimit(): U32 =
   U32(capacity div U64(sizeof(DirEntry)))
 
 
+proc procLsOffset(): U32 =
+  U32(packet.arg1)
+
+
 proc renderLsProcRoot(): I32 =
   clearResponseData()
 
   let maxEntries = procLsEntryLimit()
+  let offset = procLsOffset()
   var count = U32(0)
+  var seen = U32(0)
   let entries = cast[ptr UncheckedArray[DirEntry]](addr response.data[0])
 
   template add(name: cstring, typ: U32) =
-    if count < maxEntries:
+    if seen >= offset and count < maxEntries:
       writeDirEntry(addr entries[count], name, typ)
       inc count
+    inc seen
 
   add(cstring".", DirEntryTypeDir)
   add(cstring"..", DirEntryTypeDir)
@@ -710,9 +717,11 @@ proc renderLsProcRoot(): I32 =
 
   var i = I32(0)
   while i < procCount:
-    if procInfos[i].state != SysProcessUnused and count < maxEntries:
-      writePidDirEntry(addr entries[count], procInfos[i].pid)
-      inc count
+    if procInfos[i].state != SysProcessUnused:
+      if seen >= offset and count < maxEntries:
+        writePidDirEntry(addr entries[count], procInfos[i].pid)
+        inc count
+      inc seen
     inc i
 
   response.len = count * U32(sizeof(DirEntry))
@@ -724,17 +733,21 @@ proc renderLsProcPid(pid: I32): I32 =
     return -1
 
   clearResponseData()
-  if procLsEntryLimit() == U32(0):
+  let maxEntries = procLsEntryLimit()
+  let offset = procLsOffset()
+  if maxEntries == U32(0):
     response.len = 0
     return 0
 
   let entries = cast[ptr UncheckedArray[DirEntry]](addr response.data[0])
   var count = U32(0)
+  var seen = U32(0)
 
   template add(name: cstring, typ: U32) =
-    if count < procLsEntryLimit():
+    if seen >= offset and count < maxEntries:
       writeDirEntry(addr entries[count], name, typ)
       inc count
+    inc seen
 
   add(cstring".", DirEntryTypeDir)
   add(cstring"..", DirEntryTypeDir)

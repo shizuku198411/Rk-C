@@ -77,5 +77,7 @@ elif defined(userApp_pollcheck):
   import apps/pollcheck/pollcheck
 elif defined(userApp_signalcheck):
   import apps/signalcheck/signalcheck
+elif defined(userApp_writecheck):
+  import apps/writecheck/writecheck
 else:
   {.error: "missing user app define".}
