@@ -3,6 +3,9 @@ import ../../lib/core/args
 import ../../lib/core/options
 import ../../lib/core/pathutils
 import ../../lib/core/syscall
+import ../../lib/core/passwd
+import ../../lib/core/group
+import ../../lib/core/userdb
 
 const
   LsChunkEntries = 16
@@ -53,6 +56,9 @@ proc printLongEntry(entry: ptr DirEntry) =
   ]
   let chars = ['r', 'w', 'x', 'r', 'w', 'x', 'r', 'w', 'x']
   var bitIndex = 0
+  var
+    userEntry: PasswdEntry
+    groupEntry: GroupEntry
   while bitIndex < 9:
     if (entry.mode and bits[bitIndex]) != U32(0):
       writeChar(chars[bitIndex])
@@ -61,9 +67,15 @@ proc printLongEntry(entry: ptr DirEntry) =
     inc bitIndex
 
   write("\t")
-  writeUnsigned(U64(entry.uid))
+  if resolveUid(entry.uid, userEntry):
+    write(cast[cstring](addr userEntry.name[0]))
+  else:
+    writeUnsigned(U64(entry.uid))
   write(":")
-  writeUnsigned(U64(entry.gid))
+  if resolveGid(entry.gid, groupEntry):
+    write(cast[cstring](addr groupEntry.name[0]))
+  else:
+    writeUnsigned(U64(entry.gid))
   write("\t")
   writeUnsigned(U64(entry.size))
   write(" bytes")

@@ -1,6 +1,9 @@
 import ../../lib/core/io
 import ../../lib/core/syscall
 import ../../lib/core/strutils
+import ../../lib/core/passwd
+import ../../lib/core/group
+import ../../lib/core/userdb
 import ../../../lib/syscall_caps
 import ../lib/service_ready
 
@@ -375,16 +378,26 @@ proc renderProcesses(): U32 =
 
   appendStr(pos, cstring("pid\tppid\tuid\tgid\tstate\tuser\tcpu\tmem\texe\n"))
 
-  var i = I32(0)
+  var
+    i = I32(0)
+    entry: PasswdEntry
+    group: GroupEntry
+
   while i < count:
     if procInfos[i].state != SysProcessUnused:
       appendI32(pos, procInfos[i].pid)
       appendChar(pos, '\t')
       appendI32(pos, procInfos[i].ppid)
       appendChar(pos, '\t')
-      appendU64(pos, U64(procInfos[i].uid))
+      if resolveUid(procInfos[i].uid, entry):
+        appendStr(pos, cast[cstring](addr entry.name[0]))
+      else:
+        appendU64(pos, U64(procInfos[i].uid))
       appendChar(pos, '\t')
-      appendU64(pos, U64(procInfos[i].gid))
+      if resolveGid(procInfos[i].gid, group):
+        appendStr(pos, cast[cstring](addr group.name[0]))
+      else:
+        appendU64(pos, U64(procInfos[i].gid))
       appendChar(pos, '\t')
       appendStr(pos, stateName(procInfos[i].state))
       appendChar(pos, '\t')

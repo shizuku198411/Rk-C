@@ -5,6 +5,9 @@ import ../../lib/ipc/service_client
 import ../../lib/core/args
 import ../../lib/core/options
 import ../../lib/core/syscall
+import ../../lib/core/passwd
+import ../../lib/core/group
+import ../../lib/core/userdb
 
 const
   PsMaxEntries = int(SysProcessMaxSlots)
@@ -62,6 +65,10 @@ proc printMemoryPages(value: U64) =
 
 
 proc printProcess(entry: ptr SysProcessInfo, full, longFormat: bool) =
+  var
+    userEntry: PasswdEntry
+    groupEntry: GroupEntry
+
   printPid(entry.pid)
   if not full and not longFormat:
     write("\t")
@@ -72,9 +79,15 @@ proc printProcess(entry: ptr SysProcessInfo, full, longFormat: bool) =
   write("\t")
   printPid(entry.ppid)
   write("\t")
-  writeUnsigned(U64(entry.uid))
+  if resolveUid(entry.uid, userEntry):
+    write(cast[cstring](addr userEntry.name[0]))
+  else:
+    writeUnsigned(U64(entry.uid))
   write("\t")
-  writeUnsigned(U64(entry.gid))
+  if resolveGid(entry.gid, groupEntry):
+    write(cast[cstring](addr groupEntry.name[0]))
+  else:
+    writeUnsigned(U64(entry.gid))
   write("\t")
   write(stateName(entry.state))
   write("\t")
