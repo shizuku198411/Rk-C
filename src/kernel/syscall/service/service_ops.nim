@@ -36,6 +36,10 @@ proc serviceKindFromValue(value: U64, kind: var ServiceKind): bool =
     kind = serviceProcFs
     return true
 
+  if value == U64(SysServiceKindUser):
+    kind = serviceUser
+    return true
+
   false
 
 
@@ -58,6 +62,8 @@ proc serviceKindValue(kind: ServiceKind): U32 =
     SysServiceKindNet
   of serviceProcFs:
     SysServiceKindProcFs
+  of serviceUser:
+    SysServiceKindUser
   of serviceMax:
     U32(0xffffffff'u32)
 

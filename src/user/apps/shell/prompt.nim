@@ -1,5 +1,7 @@
 import ../../lib/core/io
+import ../../lib/core/passwd
 import ../../lib/core/syscall
+import ../../lib/core/userdb
 import ./state
 
 
@@ -9,11 +11,12 @@ proc printPrompt*() =
     cwdBuf[1] = '\0'
 
   let uid = sysGetUid()
-  var username: cstring
-  if uid == 0:
-    username = "root"
-  elif uid == 1000:
-    username = "user"
+  var entry: PasswdEntry
+  let username =
+    if resolveUid(uid, entry):
+      cast[cstring](addr entry.name[0])
+    else:
+      cstring"unknown"
 
   write(PromptOrange)
   write(username)

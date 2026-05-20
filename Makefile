@@ -44,7 +44,7 @@ USER_SHELL_RKX := $(BIN_DIR)/shell.rkx
 USER_APP_NAMES := \
 	ls cat mkdir ps rm rmdir date edit ipc kill svc ping nslookup tcpcheck \
 	curl stracectl dmesg rkxinfo echo touch cp mv df wc paniclog id chmod chown
-USER_SERVER_NAMES := svcmgtd procmgtd fsd blockd procfsd netd
+USER_SERVER_NAMES := svcmgtd procmgtd fsd blockd procfsd netd userd
 TEST_APP_NAMES := faultcheck capcheck pollcheck signalcheck writecheck
 APPFS_EXTRA_APPS ?=
 

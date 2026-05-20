@@ -216,10 +216,6 @@ proc unpackUidGid(value: U64, uid, gid: var U32) =
   gid = U32(value shr U64(32))
 
 
-proc validChownTarget(uid, gid: U32): bool =
-  (uid == RootUid and gid == RootGid) or (uid == UserUid and gid == UserGid)
-
-
 proc syscallChown*(pathVal, uidGidVal: U64): U64 =
   if currentProc == nil:
     setLastError(SysErrInval)
@@ -237,9 +233,6 @@ proc syscallChown*(pathVal, uidGidVal: U64): U64 =
   var uid: U32
   var gid: U32
   unpackUidGid(uidGidVal, uid, gid)
-  if not validChownTarget(uid, gid):
-    setLastError(SysErrInval)
-    return U64(-1'i64)
 
   let rc = serviceChown(path, uid, gid)
   if rc != U64(0):

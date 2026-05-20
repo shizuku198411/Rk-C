@@ -241,20 +241,13 @@ proc syscallLastError*(): U64 =
   U64(currentProc.lastError)
 
 
-proc validUser(uid, gid: U32): bool =
-  (uid == RootUid and gid == RootGid) or (uid == UserUid and gid == UserGid)
-
-
 proc syscallSetUser*(uidVal, gidVal: U64): U64 =
   if currentProc == nil:
     return U64(-1'i64)
 
   let uid = U32(uidVal)
   let gid = U32(gidVal)
-  if not validUser(uid, gid):
-    setLastError(SysErrInval)
-    return U64(-1'i64)
-  if currentProc.identity.uid != RootUid and uid == RootUid:
+  if currentProc.identity.uid != RootUid and (uid != currentProc.identity.uid or gid != currentProc.identity.gid):
     setLastError(SysErrPerm)
     return U64(-2'i64)
 

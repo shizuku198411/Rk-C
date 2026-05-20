@@ -50,6 +50,8 @@ elif defined(userApp_procfsd):
   import server/procfsd/procfsd
 elif defined(userApp_netd):
   import server/netd/netd
+elif defined(userApp_userd):
+  import server/userd/userd
 elif defined(userApp_stracectl):
   import apps/stracectl/stracectl
 elif defined(userApp_dmesg):

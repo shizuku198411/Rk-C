@@ -11,6 +11,7 @@ type
     serviceProcess
     serviceNet
     serviceProcFs
+    serviceUser
     serviceMax
 
   ServiceEntry = object
@@ -94,6 +95,8 @@ proc sysServiceKindValue(kind: ServiceKind): U32 =
     SysServiceKindNet
   of serviceProcFs:
     SysServiceKindProcFs
+  of serviceUser:
+    SysServiceKindUser
   of serviceMax:
     U32(0xffffffff'u32)
 

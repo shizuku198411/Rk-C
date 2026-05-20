@@ -1,9 +1,10 @@
 import ../../lib/core/args
 import ../../lib/core/io
+import ../../lib/core/passwd
 import ../../lib/core/pathutils
 import ../../lib/core/strutils
 import ../../lib/core/syscall
-import ../../../lib/user_ids
+import ../../lib/core/userdb
 
 
 var parsedArgs: UserArgs
@@ -11,7 +12,7 @@ var parsedArgs: UserArgs
 
 proc printUsage() =
   write("usage: chown <uid>:<gid> <path>\n")
-  write("       chown <root|user> <path>\n")
+  write("       chown <user> <path>\n")
   write("       chown --help\n")
 
 
@@ -33,14 +34,10 @@ proc parseDecimal(s: cstring, value: var U32): bool =
 
 
 proc parseOwnerSpec(spec: cstring, uid, gid: var U32): bool =
-  if cstringEq(spec, "root"):
-    uid = RootUid
-    gid = RootGid
-    return true
-
-  if cstringEq(spec, "user"):
-    uid = UserUid
-    gid = UserGid
+  var entry: PasswdEntry
+  if resolveUser(spec, entry):
+    uid = entry.uid
+    gid = entry.gid
     return true
 
   var sep = U32(0)
@@ -66,8 +63,14 @@ proc parseOwnerSpec(spec: cstring, uid, gid: var U32): bool =
     inc pos
   gidBuf[i] = '\0'
 
-  parseDecimal(cast[cstring](addr uidBuf[0]), uid) and
-    parseDecimal(cast[cstring](addr gidBuf[0]), gid)
+  if not parseDecimal(cast[cstring](addr uidBuf[0]), uid) or
+      not parseDecimal(cast[cstring](addr gidBuf[0]), gid):
+    return false
+
+  if not resolveUid(uid, entry):
+    return false
+
+  entry.gid == gid
 
 
 proc printError() =
@@ -96,7 +99,7 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   var uid: U32
   var gid: U32
   if not parseOwnerSpec(argAt(parsedArgs, 0), uid, gid):
-    write("chown: invalid owner\n")
+    write("chown: invalid argument\n")
     sysExit(1)
 
   let path = resolvePath(argAt(parsedArgs, 1))

@@ -66,6 +66,12 @@ const
   SysIpcOpSvcStart* = U32(31)
   SysIpcOpSvcStop* = U32(32)
   SysIpcOpSvcCommandResponse* = U32(33)
+  SysIpcOpUserResolveNameRequest* = U32(34)
+  SysIpcOpUserResolveUidRequest* = U32(35)
+  SysIpcOpUserResolveResponse* = U32(36)
+  SysIpcOpGroupResolveNameRequest* = U32(37)
+  SysIpcOpGroupResolveGidRequest* = U32(38)
+  SysIpcOpGroupResolveResponse* = U32(39)
 
   SysFdMax* = U32(8)
   SysFdPathMax* = U32(128)
@@ -125,6 +131,7 @@ const
   SysServiceKindProcess* = U32(3)
   SysServiceKindNet* = U32(4)
   SysServiceKindProcFs* = U32(5)
+  SysServiceKindUser* = U32(6)
   SysServiceNameMax* = U32(16)
 
 type
