@@ -549,7 +549,10 @@ def actual_summary(output: str, limit: int = 420) -> str:
 
 
 def print_result(status: str, case: TestCase, output: str) -> None:
-    print(f"[{status}] {case.name}")
+    if status == "PASS":
+        print("[" + "\033[32m" + "PASS" + "\033[0m" + "] " + case.name)
+    else:
+        print("[" + "\033[31m" + "FAIL" + "\033[0m" + "] " + case.name)
     print(f"       expected: {expected_summary(case)}")
     print(f"       actual  : {actual_summary(output)}")
 
