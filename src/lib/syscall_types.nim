@@ -29,6 +29,7 @@ const
   SysFsOpReadRange* = U32(8)
   SysFsOpRename* = U32(9)
   SysFsOpChmod* = U32(10)
+  SysFsOpChown* = U32(11)
   SysBlockOpRead* = U32(1)
   SysBlockOpWrite* = U32(2)
 
@@ -99,6 +100,15 @@ const
   SysSignalMax* = U32(31)
 
   SysSetUserRootOnly* = I32(-2)
+
+  SysErrOk* = I32(0)
+  SysErrPerm* = I32(1)
+  SysErrNoEnt* = I32(2)
+  SysErrAccess* = I32(13)
+  SysErrNotDir* = I32(20)
+  SysErrIsDir* = I32(21)
+  SysErrInval* = I32(22)
+  SysErrCap* = I32(100)
 
   SysProcessMaxSlots* = U32(32)
   SysProcessUnused* = U32(0)
@@ -222,6 +232,8 @@ type
   SysFsRequest* {.packed.} = object
     id*: U64
     op*: U32
+    uid*: U32
+    gid*: U32
     path*: array[SysFsPathMax, char]
     size*: U64
     capacity*: U64

@@ -1,4 +1,5 @@
 import ../../lib/syscall_ids
+import ../../lib/syscall_types
 import ../../lib/types
 import ../syscall/blk/block_service_ops
 import ../syscall/fs/file_ops
@@ -11,6 +12,7 @@ import ../syscall/system/system_ops
 import ../syscall/system/trap_ops
 import ../syscall/task/process_ops
 import ../syscall/syscall_cap
+import ../task/process
 import ../trap/trap_types
 import ../trap/syscall_trace
 
@@ -19,6 +21,7 @@ proc handleSyscall*(frame: ptr TrapFrame) =
   traceSyscallEnter(frame)
 
   if not canSyscallByNumber(frame.a3):
+    setLastError(SysErrCap)
     frame.a0 = U64(-1'i64)
     traceSyscallExit(frame)
     return
@@ -92,6 +95,9 @@ proc handleSyscall*(frame: ptr TrapFrame) =
 
   of SysChmod:
     frame.a0 = syscallChmod(frame.a0, frame.a1)
+
+  of SysChown:
+    frame.a0 = syscallChown(frame.a0, frame.a1)
 
   of SysOpen:
     frame.a0 = syscallOpen(frame.a0, frame.a1)
@@ -201,6 +207,9 @@ proc handleSyscall*(frame: ptr TrapFrame) =
   of SysRawChmod:
     frame.a0 = syscallRawChmod(frame.a0, frame.a1)
 
+  of SysRawChown:
+    frame.a0 = syscallRawChown(frame.a0, frame.a1)
+
   of SysBlockServiceRegister:
     frame.a0 = syscallBlockServiceRegister()
 
@@ -249,6 +258,9 @@ proc handleSyscall*(frame: ptr TrapFrame) =
   of SysGetGid:
     frame.a0 = syscallGetGid()
 
+  of SysLastError:
+    frame.a0 = syscallLastError()
+
   of SysSetUser:
     frame.a0 = syscallSetUser(frame.a0, frame.a1)
 
@@ -259,6 +271,14 @@ proc handleSyscall*(frame: ptr TrapFrame) =
     frame.a0 = syscallSignalPoll(frame.a0)
 
   else:
+    setLastError(SysErrInval)
     frame.a0 = U64(-1'i64)
+
+  if frame.a3 != SysLastError:
+    if (frame.a0 and (U64(1) shl U64(63))) != 0:
+      if currentProc != nil and currentProc.lastError == SysErrOk:
+        setLastError(SysErrInval)
+    else:
+      clearLastError()
   
   traceSyscallExit(frame)

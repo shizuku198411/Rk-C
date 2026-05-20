@@ -32,8 +32,8 @@ proc fillProcessInfo(entry: var SysProcessInfo, p: ptr Process) =
   entry = SysProcessInfo()
   entry.pid = p.pid
   entry.ppid = p.parentPid
-  entry.uid = p.uid
-  entry.gid = p.gid
+  entry.uid = p.identity.uid
+  entry.gid = p.identity.gid
   entry.state = processStateValue(p.state)
   entry.cpuTicks = p.cpuTicks
   entry.memoryPages =
@@ -131,7 +131,7 @@ proc syscallExec*(path, arg, detachedVal: U64): U64 =
   if copyUserCString(addr pathBuf[0], path, UserCStringMax) < 0:
     return U64(-1'i64)
   if currentProc == nil or
-      not fsCanExecutePath(currentProc.uid, currentProc.gid, cast[cstring](addr pathBuf[0])):
+      not fsCanExecutePath(currentProc.identity.uid, currentProc.identity.gid, cast[cstring](addr pathBuf[0])):
     return U64(-1'i64)
 
   let copiedArg =
@@ -196,7 +196,7 @@ proc syscallSetCwd*(pathVal: U64): U64 =
   let path = cast[cstring](addr pathBuf[0])
   if path[0] != '/':
     return U64(-1'i64)
-  if not fsCanSearchDirPath(currentProc.uid, currentProc.gid, path):
+  if not fsCanSearchDirPath(currentProc.identity.uid, currentProc.identity.gid, path):
     return U64(-1'i64)
   if not servicePathIsDir(path):
     return U64(-1'i64)
@@ -224,14 +224,21 @@ proc syscallGetUid*(): U64 =
   if currentProc == nil:
     return U64(-1'i64)
 
-  U64(currentProc.uid)
+  U64(currentProc.identity.uid)
 
 
 proc syscallGetGid*(): U64 =
   if currentProc == nil:
     return U64(-1'i64)
 
-  U64(currentProc.gid)
+  U64(currentProc.identity.gid)
+
+
+proc syscallLastError*(): U64 =
+  if currentProc == nil:
+    return U64(SysErrInval)
+
+  U64(currentProc.lastError)
 
 
 proc validUser(uid, gid: U32): bool =
@@ -245,12 +252,15 @@ proc syscallSetUser*(uidVal, gidVal: U64): U64 =
   let uid = U32(uidVal)
   let gid = U32(gidVal)
   if not validUser(uid, gid):
+    setLastError(SysErrInval)
     return U64(-1'i64)
-  if currentProc.uid != RootUid and uid == RootUid:
+  if currentProc.identity.uid != RootUid and uid == RootUid:
+    setLastError(SysErrPerm)
     return U64(-2'i64)
 
-  currentProc.uid = uid
-  currentProc.gid = gid
+  currentProc.identity.uid = uid
+  currentProc.identity.gid = gid
+  clearLastError()
   0
 
 

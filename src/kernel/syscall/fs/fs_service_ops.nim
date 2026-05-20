@@ -50,6 +50,9 @@ proc queueFsRequest(op: U32, path: cstring, data: pointer, size, capacity: U64):
 
   p.request.id = assignIpcRequestId(requestDomain, addr p.ipc)
   p.request.op = op
+  if currentProc != nil:
+    p.request.uid = currentProc.identity.uid
+    p.request.gid = currentProc.identity.gid
   p.request.size = size
   p.request.capacity = capacity
   discard copyCString(p.request.path, path)
@@ -109,6 +112,10 @@ proc rawRenameKernel(oldPath, newPath: cstring): int =
 
 proc rawChmodKernel(path: cstring, mode: U32): int =
   fsChmod(path, mode)
+
+
+proc rawChownKernel(path: cstring, uid, gid: U32): int =
+  fsChown(path, uid, gid)
 
 
 proc unpackWriteSizeFlags(value: U64, size: var U64, flags: var U32) =
@@ -270,7 +277,12 @@ proc serviceMkdir*(path: cstring): U64 =
     if not canFallbackToRawFs():
       return U64(-1'i64)
 
-    return U64(fsMkdir(path))
+    let rc = fsMkdir(path)
+    if rc == 0 and currentProc != nil and rawChownKernel(path, currentProc.identity.uid, currentProc.identity.gid) < 0:
+      discard fsRmdir(path)
+      return U64(-1'i64)
+
+    return U64(rc)
 
   let resp = waitFsResponse(req)
   let outValue =
@@ -417,7 +429,14 @@ proc serviceWriteFile*(path: cstring, data: pointer, size: U64, flags: U32 = Sys
     if not canFallbackToRawFs():
       return U64(-1'i64)
 
-    return U64(fsWriteFileWithFlags(path, data, size, flags))
+    let created = rawFileSizeKernel(path) < 0
+    let rc = fsWriteFileWithFlags(path, data, size, flags)
+    if rc == 0 and created and currentProc != nil and
+        rawChownKernel(path, currentProc.identity.uid, currentProc.identity.gid) < 0:
+      discard fsUnlink(path)
+      return U64(-1'i64)
+
+    return U64(rc)
 
   let resp = waitFsResponse(req)
   let outValue =
@@ -465,6 +484,25 @@ proc serviceChmod*(path: cstring, mode: U32): U64 =
       return U64(-1'i64)
 
     return U64(rawChmodKernel(path, mode))
+
+  let resp = waitFsResponse(req)
+  let outValue =
+    if resp == nil:
+      U64(-1'i64)
+    else:
+      U64(resp.result)
+
+  finishPending(req)
+  outValue
+
+
+proc serviceChown*(path: cstring, uid, gid: U32): U64 =
+  let req = queueFsRequest(SysFsOpChown, path, nil, U64(uid), U64(gid))
+  if req == nil:
+    if not canFallbackToRawFs():
+      return U64(-1'i64)
+
+    return U64(rawChownKernel(path, uid, gid))
 
   let resp = waitFsResponse(req)
   let outValue =
@@ -634,3 +672,16 @@ proc syscallRawChmod*(pathVal, modeVal: U64): U64 =
     return U64(-1'i64)
 
   U64(rawChmodKernel(cast[cstring](addr pathBuf[0]), U32(modeVal)))
+
+
+proc syscallRawChown*(pathVal, uidGidVal: U64): U64 =
+  if not canSyscallRawFs() or pathVal == 0:
+    return U64(-1'i64)
+
+  var pathBuf: array[SysFsPathMax, char]
+  if copyUserCString(addr pathBuf[0], pathVal, U64(SysFsPathMax)) < 0:
+    return U64(-1'i64)
+
+  let uid = U32(uidGidVal and U64(0xffffffff'u64))
+  let gid = U32(uidGidVal shr U64(32))
+  U64(rawChownKernel(cast[cstring](addr pathBuf[0]), uid, gid))

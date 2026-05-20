@@ -3,6 +3,9 @@ import user_ids
 
 const
   FsModeNone* = U32(0)
+  FsModePermMask* = U32(0o777)
+  FsModeSticky* = U32(0o1000)
+  FsModeChmodMask* = FsModePermMask or FsModeSticky
 
   FsPermOwnerRead* = U32(256)  # 0400
   FsPermOwnerWrite* = U32(128) # 0200
@@ -17,6 +20,7 @@ const
   FsModeDirDefault* = U32(493)      # 0755
   FsModeFileDefault* = U32(420)     # 0644
   FsModePublicDir* = U32(511)       # 0777
+  FsModeStickyPublicDir* = FsModeSticky or FsModePublicDir # 01777
   FsModeReadonlyDir* = U32(365)     # 0555
   FsModeReadonlyFile* = U32(365)    # 0555
   FsModeDeviceFile* = U32(438)      # 0666

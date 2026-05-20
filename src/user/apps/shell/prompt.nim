@@ -8,6 +8,17 @@ proc printPrompt*() =
     cwdBuf[0] = '/'
     cwdBuf[1] = '\0'
 
+  let uid = sysGetUid()
+  var username: cstring
+  if uid == 0:
+    username = "root"
+  elif uid == 1000:
+    username = "user"
+
+  write(PromptOrange)
+  write(username)
+  write(PromptReset)
+  write("@")
   write(PromptOrange)
   write("Rk-C")
   write(PromptReset)

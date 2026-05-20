@@ -79,3 +79,6 @@ const
   SysSetUser* = U64(78)
   SysChmod* = U64(79)
   SysRawChmod* = U64(80)
+  SysRawChown* = U64(81)
+  SysChown* = U64(82)
+  SysLastError* = U64(83)

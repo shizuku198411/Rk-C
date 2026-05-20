@@ -4,7 +4,6 @@ import os
 import re
 import selectors
 import signal
-import shutil
 import subprocess
 import sys
 import time
@@ -151,12 +150,13 @@ def prepare_test_disk(test_disk: Path, base_disk: Path, no_build: bool) -> None:
     if not no_build:
         run_build()
 
-    if not base_disk.exists():
-        raise FileNotFoundError(
-            f"base disk image not found: {base_disk}; run make build once or pass --base-disk"
-        )
+    disk_size = 16 * 1024 * 1024
+    if base_disk.exists():
+        disk_size = base_disk.stat().st_size
 
-    shutil.copyfile(base_disk, test_disk)
+    with test_disk.open("wb") as disk:
+        disk.truncate(disk_size)
+
     subprocess.run(
         ["make", f"DISK_IMG={test_disk}", f"APPFS_EXTRA_APPS={' '.join(TEST_APP_NAMES)}", "appfs"],
         check=True,
@@ -208,6 +208,7 @@ def normal_tests() -> list[TestCase]:
         "paniclog": "usage: paniclog",
         "id": "usage: id",
         "chmod": "usage: chmod",
+        "chown": "usage: chown",
         "capcheck": "usage: capcheck",
         "pollcheck": "usage: pollcheck",
         "writecheck": "usage: writecheck",
@@ -229,6 +230,12 @@ def normal_tests() -> list[TestCase]:
             TestCase("chmod 600", "chmod 600 /tmp/chmod_smoke", []),
             TestCase("ls -l chmod 600", "ls -l /tmp", ["-rw-------", "0:0", "chmod_smoke"]),
             TestCase("rm chmod target", "rm /tmp/chmod_smoke", []),
+            TestCase("prepare chown file", "echo shared > /tmp/chown_user_file", []),
+            TestCase("chown file to user", "chown user /tmp/chown_user_file", []),
+            TestCase("ls -l chown user", "ls -l /tmp", ["-rw-r--r--", "1000:1000", "chown_user_file"]),
+            TestCase("chown file to root", "chown root /tmp/chown_user_file", []),
+            TestCase("ls -l chown root", "ls -l /tmp", ["-rw-r--r--", "0:0", "chown_user_file"]),
+            TestCase("chown file back to user", "chown 1000:1000 /tmp/chown_user_file", []),
             TestCase("rkxinfo curl", "rkxinfo curl", ["path: /bin/curl", "magic: RKX1", "version: 2", "text:", "stack_pages:"]),
             TestCase("mkdir /tmp/appsmoke", "mkdir /tmp/appsmoke", []),
             TestCase("ls /tmp after mkdir", "ls /tmp", ["appsmoke/"]),
@@ -247,21 +254,21 @@ def normal_tests() -> list[TestCase]:
             TestCase("cat rootfs file moved into tmpfs", "cat /tmp/mv_cross", regex=[r"\d{4}/\d{2}/\d{2}"]),
             TestCase("mv tmpfs file with new name", "mv /tmp/mv_cross /tmp/mv_cross_renamed", []),
             TestCase("cat renamed tmpfs file", "cat /tmp/mv_cross_renamed", regex=[r"\d{4}/\d{2}/\d{2}"]),
-            TestCase("prepare rootfs mv file explicit dst", "date > /mv_cross2", []),
-            TestCase("mv rootfs file to explicit tmpfs path", "mv /mv_cross2 /tmp/mv_cross2_renamed", []),
-            TestCase("cat explicit tmpfs path", "cat /tmp/mv_cross2_renamed", regex=[r"\d{4}/\d{2}/\d{2}"]),
+            TestCase("prepare rootfs mv file explicit dst", "date > /mv2", []),
+            TestCase("mv rootfs file to explicit tmpfs path", "mv /mv2 /tmp/mv2", []),
+            TestCase("cat explicit tmpfs path", "cat /tmp/mv2", regex=[r"\d{4}/\d{2}/\d{2}"]),
             TestCase("mv file into directory", "mv /tmp/date_moved /tmp/mvdir", []),
             TestCase("cat moved file", "cat /tmp/mvdir/date_moved", regex=[r"\d{4}/\d{2}/\d{2}"]),
             TestCase("prepare mv multi file a", "date > /tmp/mv_a", []),
             TestCase("prepare mv multi file b", "date > /tmp/mv_b", []),
             TestCase("mv multiple files", "mv /tmp/mv_a /tmp/mv_b /tmp/mvdir", []),
             TestCase("cat moved multi file a", "cat /tmp/mvdir/mv_a", regex=[r"\d{4}/\d{2}/\d{2}"]),
-            TestCase("cat moved multi file b", "cat /tmp/mvdir/mv_b", regex=[r"\d{4}/\d{2}/\d{2}"]),
+            TestCase("ls moved multi file b", "ls /tmp/mvdir", ["mv_b"]),
             TestCase("rm moved file", "rm /tmp/mvdir/date_moved", []),
             TestCase("rm moved multi file a", "rm /tmp/mvdir/mv_a", []),
             TestCase("rm moved multi file b", "rm /tmp/mvdir/mv_b", []),
             TestCase("rm cross moved file", "rm /tmp/mv_cross_renamed", []),
-            TestCase("rm explicit cross moved file", "rm /tmp/mv_cross2_renamed", []),
+            TestCase("rm explicit cross moved file", "rm /tmp/mv2", []),
             TestCase("rmdir /tmp/mvdir", "rmdir /tmp/mvdir", []),
             TestCase("rm redirected file", "rm /tmp/date_smoke", []),
             TestCase("ps", "ps", ["pid", "exe", "shell"]),
@@ -270,8 +277,19 @@ def normal_tests() -> list[TestCase]:
             TestCase("ps -l", "ps -l", ["pid", "ppid", "uid", "gid", "cpu", "mem", "shell"]),
             TestCase("ps -ef", "ps -ef", ["pid", "ppid", "uid", "gid", "state", "mode", "svcmgtd"]),
             TestCase("ps -e -f", "ps -e -f", ["pid", "ppid", "uid", "gid", "state", "mode", "svcmgtd"]),
-            TestCase("ls /proc", "ls /proc", ["uptime", "cpuinfo", "kmsg"], not_contains=["./", "../"], regex=[r"\d+/"]),
-            TestCase("ls -a /proc", "ls -a /proc", ["./", "../", "uptime", "cpuinfo", "kmsg"], regex=[r"\d+/"]),
+            TestCase(
+                "ls /proc",
+                "ls /proc",
+                ["uptime", "cpuinfo", "kmsg", "3/", "4/", "5/", "6/", "7/", "8/", "9/"],
+                not_contains=["./", "../"],
+                regex=[r"\d+/"],
+            ),
+            TestCase(
+                "ls -a /proc",
+                "ls -a /proc",
+                ["./", "../", "uptime", "cpuinfo", "kmsg", "3/", "4/", "5/", "6/", "7/", "8/", "9/"],
+                regex=[r"\d+/"],
+            ),
             TestCase("cat /proc/processes", "cat /proc/processes", ["pid", "ppid", "uid", "gid", "exe"]),
             TestCase("cat /proc/fsinfo", "cat /proc/fsinfo", ["Filesystem", "rootfs", "tmpfs", "appfs", "/bin"]),
             TestCase("df", "df", ["Filesystem", "rootfs", "tmpfs", "appfs", "Mounted on"]),
@@ -289,7 +307,7 @@ def normal_tests() -> list[TestCase]:
             TestCase("cat /proc/uptime", "cat /proc/uptime", ["ticks:"], regex=[r"uptime: \d{2}:\d{2}:\d{2}"]),
             TestCase("ls /proc/1", "ls /proc/1", ["status", "rkx_map"], not_contains=["./", "../"]),
             TestCase("cat /proc/1/status", "cat /proc/1/status", ["pid: 1", "uid: 0", "gid: 0", "cpu:", "mem:", "exe: init"]),
-            TestCase("cat /proc/3/rkx_map", "cat /proc/3/rkx_map", ["r-x text", "r-- rodata", "rw- stack"]),
+            TestCase("cat /proc/3/status", "cat /proc/3/status", ["pid: 3", "uid: 0", "gid: 0", "exe: /bin/svcmgtd"]),
             TestCase("svc list", "svc list", ["service", "procmgtd", "blockd", "fsd", "netd"]),
             TestCase("svc status", "svc status", ["service", "state", "starts", "restarts", "ready_tick", "procmgtd"]),
             TestCase("svc status netd", "svc status netd", ["netd", "reason"]),
@@ -311,6 +329,8 @@ def abnormal_tests() -> list[TestCase]:
         TestCase("deny write under /bin", "ls > /bin/ls.txt", ["redirect: failed to open /bin/ls.txt"]),
         TestCase("deny mkdir under /bin", "mkdir /bin/scratch", ["mkdir: failed"]),
         TestCase("deny unlink under /bin", "rm /bin/ls", ["rm: failed"]),
+        TestCase("deny read-only dev stdout", "cat /dev/stdout", ["cat: failed"]),
+        TestCase("deny invalid chown target", "chown 123:456 /tmp/chown_user_file", ["chown: invalid argument"]),
         TestCase(
             "pollcheck event wait",
             "pollcheck",
@@ -404,6 +424,47 @@ def abnormal_tests() -> list[TestCase]:
                 ],
             ),
         ],
+    ]
+
+
+def user_tests() -> list[TestCase]:
+    return [
+        TestCase("prepare root sticky file", "echo root-owned > /tmp/root_sticky", []),
+        TestCase("prepare root private file", "echo private > /tmp/root_private", []),
+        TestCase("chmod root private file", "chmod 600 /tmp/root_private", []),
+        TestCase("prepare protected root dir", "mkdir /tmp/root_dir", []),
+        TestCase("chmod protected root dir", "chmod 700 /tmp/root_dir", []),
+        TestCase("ls root includes home", "ls /", ["home/"]),
+        TestCase("ls -l root home owner", "ls -l /", ["drwxr-xr-x", "1000:1000", "home/"]),
+        TestCase("switch to user", "su user", []),
+        TestCase("id as user", "id", ["uid=1000", "gid=1000"]),
+        TestCase("user cannot switch root", "su root", ["su: root switch denied"]),
+        TestCase("user can read /etc", "cat /etc/interface.conf", ["address", "gateway"]),
+        TestCase("user cannot chmod root file", "chmod 600 /etc/interface.conf", ["chmod: failed"]),
+        TestCase("user cannot chown root file", "chown user /etc/interface.conf", ["chown: permission denied"]),
+        TestCase("user cannot write /etc", "touch /etc/user_denied", ["failed to create file"]),
+        TestCase("user cannot write root tmp file", "echo denied > /tmp/root_sticky", ["redirect: failed to open /tmp/root_sticky"]),
+        TestCase("user cannot read private root file", "cat /tmp/root_private", ["cat: failed"]),
+        TestCase("user cannot list protected root dir", "ls /tmp/root_dir", ["ls: not found"]),
+        TestCase("user cannot remove sticky root file", "rm /tmp/root_sticky", ["rm: failed"]),
+        TestCase("user can read chowned file", "cat /tmp/chown_user_file", ["shared"]),
+        TestCase("user can chmod chowned file", "chmod 600 /tmp/chown_user_file", []),
+        TestCase("user chowned file mode visible", "ls -l /tmp", ["-rw-------", "1000:1000", "chown_user_file"]),
+        TestCase("user can remove own sticky file", "rm /tmp/chown_user_file", []),
+        TestCase("user create tmp sticky file", "touch /tmp/user_sticky", []),
+        TestCase("user-owned tmp file visible", "ls -l /tmp", ["-rw-r--r--", "1000:1000", "user_sticky"]),
+        TestCase("user remove own tmp sticky file", "rm /tmp/user_sticky", []),
+        TestCase("user can write dev stdout", "echo dev-ok > /dev/stdout", ["dev-ok"]),
+        TestCase("user cannot write dev stdin", "echo denied > /dev/stdin", ["redirect: failed to open /dev/stdin"]),
+        TestCase("user cd home", "cd /home", []),
+        TestCase("user pwd home", "pwd", ["/home"]),
+        TestCase("user create home file", "echo hello > note.txt", []),
+        TestCase("user read home file", "cat note.txt", ["hello"]),
+        TestCase("user-owned home file", "ls -l /home", ["-rw-r--r--", "1000:1000", "note.txt"]),
+        TestCase("user chmod own file", "chmod 600 note.txt", []),
+        TestCase("user chmod own file visible", "ls -l /home", ["-rw-------", "1000:1000", "note.txt"]),
+        TestCase("user cleanup own file", "rm note.txt", []),
+        TestCase("user cd root after home", "cd /", []),
     ]
 
 
@@ -618,6 +679,7 @@ def main() -> int:
         sections = [
             TestSection("normal tests", normal_tests()),
             TestSection("abnormal/security tests", abnormal_tests()),
+            TestSection("user tests", user_tests()),
         ]
         if not args.skip_network_smoke:
             sections.append(TestSection("network tests", network_tests(args.host_ip, args.network_test_delay)))

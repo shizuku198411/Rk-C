@@ -23,7 +23,7 @@ proc parseOctalMode(s: cstring, mode: var U32): bool =
     if s[pos] < '0' or s[pos] > '7':
       return false
     value = value * U32(8) + U32(ord(s[pos]) - ord('0'))
-    if value > U32(0o777):
+    if value > U32(0o1777):
       return false
     inc pos
 

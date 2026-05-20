@@ -75,6 +75,10 @@ type
   FileState* {.bycopy.} = object
     entries*: array[SysFdMax, FdEntry]
 
+  ProcessIdentity* {.bycopy.} = object
+    uid*: U32
+    gid*: U32
+
   PipeState* {.bycopy.} = object
     used*: bool
     readers*: U32
@@ -105,8 +109,7 @@ type
   Process* {.bycopy.} = object
     pid*: int32
     parentPid*: int32
-    uid*: U32
-    gid*: U32
+    identity*: ProcessIdentity
     exePath*: cstring
     exePathBuf*: array[SysProcessNameMax, char]
     cwd*: array[SysProcessCwdMax, char]
@@ -120,6 +123,7 @@ type
     detached*: bool
     exitStatus*: U64
     pendingSignals*: U32
+    lastError*: I32
     cpuTicks*: U64
     cpuWindowTicks*: U64
     cpuPercent*: U32
@@ -176,6 +180,20 @@ proc setKernelPageTable*(root: PageTable) =
 proc setRootCwd(p: ptr Process) =
   p.cwd[0] = '/'
   p.cwd[1] = '\0'
+
+
+proc setIdentity(p: ptr Process, uid, gid: U32) =
+  p.identity.uid = uid
+  p.identity.gid = gid
+
+
+proc setLastError*(err: I32) =
+  if currentProc != nil:
+    currentProc.lastError = err
+
+
+proc clearLastError*() =
+  setLastError(SysErrOk)
 
 
 proc setExePath(p: ptr Process, path: cstring) =
@@ -475,8 +493,7 @@ proc createKernelProcessInternal(entry: KernelTask, isIdle: bool, name: cstring)
   p.pid = assignPid()
   inc nextPid
   p.parentPid = 0
-  p.uid = RootUid
-  p.gid = RootGid
+  setIdentity(p, RootUid, RootGid)
   setExePath(p, name)
   p.state = procRunnable
   p.entry = entry
@@ -488,6 +505,7 @@ proc createKernelProcessInternal(entry: KernelTask, isIdle: bool, name: cstring)
   p.detached = false
   p.exitStatus = 0
   p.pendingSignals = U32(0)
+  p.lastError = SysErrOk
   clearIpcQueue(p)
   initStandardFiles(p)
   p.context = Context()
@@ -505,8 +523,7 @@ proc processInit*() =
   while i < MaxProcs:
     procs[i].pid = 0
     procs[i].parentPid = 0
-    procs[i].uid = RootUid
-    procs[i].gid = RootGid
+    setIdentity(addr procs[i], RootUid, RootGid)
     setExePath(addr procs[i], "init")
     setRootCwd(addr procs[i])
     procs[i].state = procUnused
@@ -519,6 +536,7 @@ proc processInit*() =
     procs[i].detached = false
     procs[i].exitStatus = 0
     procs[i].pendingSignals = U32(0)
+    procs[i].lastError = SysErrOk
     clearIpcQueue(addr procs[i])
     clearFileState(addr procs[i])
     inc i
@@ -567,15 +585,13 @@ proc inheritProcessMetadata*(child, parent: ptr Process) =
 
   if parent == nil:
     child.parentPid = 0
-    child.uid = RootUid
-    child.gid = RootGid
+    setIdentity(child, RootUid, RootGid)
     setRootCwd(child)
     initStandardFiles(child)
     return
 
   child.parentPid = parent.pid
-  child.uid = parent.uid
-  child.gid = parent.gid
+  child.identity = parent.identity
   copyCwd(child.cwd, parent.cwd)
   copyFileState(child, parent)
   # Future per-process attributes such as rootfs should be copied here.
@@ -663,8 +679,7 @@ proc discardProcess*(p: ptr Process) =
 
   p.pid = 0
   p.parentPid = 0
-  p.uid = RootUid
-  p.gid = RootGid
+  setIdentity(p, RootUid, RootGid)
   setExePath(p, "init_proc")
   setRootCwd(p)
   p.state = procUnused
@@ -677,6 +692,7 @@ proc discardProcess*(p: ptr Process) =
   p.detached = false
   p.exitStatus = 0
   p.pendingSignals = U32(0)
+  p.lastError = SysErrOk
   p.cpuTicks = 0
   p.cpuWindowTicks = 0
   p.cpuPercent = 0

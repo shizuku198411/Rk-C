@@ -272,6 +272,11 @@ proc sysRawChmod*(path: cstring, mode: U32): I32 =
   I32(rawSyscall3(SysRawChmod, cast[U64](path), U64(mode), 0))
 
 
+proc sysRawChown*(path: cstring, uid, gid: U32): I32 =
+  let uidGid = U64(uid) or (U64(gid) shl U64(32))
+  I32(rawSyscall3(SysRawChown, cast[U64](path), uidGid, 0))
+
+
 proc sysRawFileSize*(path: cstring): I32 =
   I32(rawSyscall3(SysRawFileSize, cast[U64](path), 0, 0))
 
@@ -350,6 +355,15 @@ proc sysSetUser*(uid, gid: U32): I32 =
 
 proc sysChmod*(path: cstring, mode: U32): I32 =
   I32(rawSyscall3(SysChmod, cast[U64](path), U64(mode), 0))
+
+
+proc sysChown*(path: cstring, uid, gid: U32): I32 =
+  let uidGid = U64(uid) or (U64(gid) shl U64(32))
+  I32(rawSyscall3(SysChown, cast[U64](path), uidGid, 0))
+
+
+proc sysLastError*(): I32 =
+  I32(rawSyscall3(SysLastError, 0, 0, 0))
 
 
 proc sysRawNetInfo*(info: ptr SysNetDeviceInfo): I32 =

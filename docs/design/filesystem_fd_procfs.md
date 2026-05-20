@@ -11,6 +11,23 @@ Rk-C has a small filesystem stack with a userland filesystem service.
 
 `blockd` owns raw block access. `fsd` owns raw filesystem operations.
 
+## Permissions
+
+Normal filesystem syscalls are checked with the caller process identity:
+
+- `uid`
+- primary `gid`
+- file mode bits
+
+RKX capabilities are intentionally separate from file permissions. Root can
+bypass normal file mode checks, but root does not automatically gain raw block,
+raw filesystem, raw network, trace, or service-management capabilities.
+
+Ownership changes are exposed through `chown`, which is root-only. Mode changes
+are exposed through `chmod`, which is allowed for root or the file owner.
+`/tmp` uses sticky-directory behavior so users cannot remove each other's files
+from the public tmpfs mount.
+
 ## FS Service
 
 `fsd` serves:
@@ -42,6 +59,14 @@ The fd layer supports:
 
 Shell redirection and simple pipelines are built on fd operations.
 
+FD read/write currently re-evaluates filesystem permissions on each operation.
+This means a later `chmod` affects already-open file descriptors immediately.
+That is simpler than Unix-style open-time permission snapshots and keeps the
+authorization behavior explicit while the FS service boundary is still evolving.
+
+If Rk-C later wants closer Unix compatibility, `FdEntry` can grow cached
+`readAllowed` / `writeAllowed` bits set at `open` time.
+
 ## Procfs
 
 `procfsd` serves `/proc` through the filesystem service boundary.
@@ -59,4 +84,3 @@ Useful paths:
 /proc/<pid>/status
 /proc/<pid>/rkx_map
 ```
-

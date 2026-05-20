@@ -58,6 +58,8 @@ proc syscallName*(num: U64): cstring =
   of SysRawFileSize: cstring("raw_file_size")
   of SysRawReadRange: cstring("raw_read_range")
   of SysRawRename: cstring("raw_rename")
+  of SysRawChmod: cstring("raw_chmod")
+  of SysRawChown: cstring("raw_chown")
   of SysBlockServiceRegister: cstring("block_service_register")
   of SysBlockServiceReceive: cstring("block_service_receive")
   of SysBlockServiceReply: cstring("block_service_reply")
@@ -72,6 +74,10 @@ proc syscallName*(num: U64): cstring =
   of SysGetPid: cstring("get_pid")
   of SysGetUid: cstring("get_uid")
   of SysGetGid: cstring("get_gid")
+  of SysSetUser: cstring("set_user")
+  of SysChmod: cstring("chmod")
+  of SysChown: cstring("chown")
+  of SysLastError: cstring("last_error")
   of SysServiceList: cstring("service_list")
   of SysIpcTryReceive: cstring("ipc_try_receive")
   of SysIpcSendPacket: cstring("ipc_send_packet")
@@ -341,6 +347,22 @@ proc printSyscallArgs(frame: ptr TrapFrame) =
     printNamedCString("old", frame.a0)
     print(", ")
     printNamedCString("new", frame.a1)
+  of SysRawChmod:
+    printNamedCString("path", frame.a0)
+    print(", ")
+    printNamedU64("mode", frame.a1)
+  of SysChmod:
+    printNamedCString("path", frame.a0)
+    print(", ")
+    printNamedU64("mode", frame.a1)
+  of SysRawChown:
+    printNamedCString("path", frame.a0)
+    print(", ")
+    printNamedU64("uid_gid", frame.a1)
+  of SysChown:
+    printNamedCString("path", frame.a0)
+    print(", ")
+    printNamedU64("uid_gid", frame.a1)
   of SysRawMkdir, SysRawUnlink, SysRawRmdir, SysRawReadFile, SysRawWriteFile,
       SysRawFileSize:
     printNamedCString("path", frame.a0)
@@ -368,6 +390,10 @@ proc printSyscallArgs(frame: ptr TrapFrame) =
     printNamedI64("pid", frame.a1)
   of SysServiceUnregister:
     printNamedU64("kind", frame.a0)
+  of SysSetUser:
+    printNamedU64("uid", frame.a0)
+    print(", ")
+    printNamedU64("gid", frame.a1)
   of SysServiceList:
     printNamedPtr("entries", frame.a0)
     print(", ")

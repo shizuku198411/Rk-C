@@ -108,7 +108,7 @@ proc defaultNodeMode(parent: int, name: cstring, typ: U32): U32 =
   if typ == FsTypeFile:
     return FsModeFileDefault
   if typ == FsTypeMount and parent == 0 and cstringEq(name, "tmp"):
-    return FsModePublicDir
+    return FsModeStickyPublicDir
   if typ == FsTypeDir and parent == 0 and cstringEq(name, "bin"):
     return FsModeReadonlyDir
 
@@ -627,6 +627,25 @@ proc ensureRootDir(name: cstring, typ: U32): bool =
   superBlock.count != before
 
 
+proc ensureRootDirOwned(name: cstring, typ, uid, gid, mode: U32): bool =
+  var changed = ensureRootDir(name, typ)
+  let idx = findChild(0, name)
+  if idx < 0:
+    return changed
+
+  if superBlock.nodes[idx].uid != uid:
+    superBlock.nodes[idx].uid = uid
+    changed = true
+  if superBlock.nodes[idx].gid != gid:
+    superBlock.nodes[idx].gid = gid
+    changed = true
+  if superBlock.nodes[idx].mode != mode:
+    superBlock.nodes[idx].mode = mode
+    changed = true
+
+  changed
+
+
 proc ensureDir(parentIdx: int, name: cstring, typ: U32): bool =
   if parentIdx < 0 or superBlock.nodes[parentIdx].typ != FsTypeDir:
     return false
@@ -663,6 +682,13 @@ proc fsInit*() =
   fsChanged = ensureRootDir("etc", FsTypeDir) or fsChanged
   fsChanged = ensureRootDir("dev", FsTypeDir) or fsChanged
   fsChanged = ensureRootDir("var", FsTypeDir) or fsChanged
+  fsChanged = ensureRootDirOwned(
+    "home",
+    FsTypeDir,
+    UserUid,
+    UserGid,
+    FsModeDirDefault,
+  ) or fsChanged
 
   let varIdx = resolvePath("/var")
   fsChanged = ensureDir(varIdx, "log", FsTypeDir) or fsChanged
@@ -966,6 +992,39 @@ proc fsCanModifyParentPath*(uid, gid: U32, path: cstring): bool =
   var leaf: array[FsNameMax, char]
   let parent = resolveParentWithSearch(uid, gid, path, leaf)
   canSearchNode(uid, gid, parent) and canWriteNode(uid, gid, parent)
+
+
+proc stickyAllowsRemove(uid: U32, parent, target: int): bool =
+  if parent < 0 or target < 0:
+    return false
+  if (superBlock.nodes[parent].mode and FsModeSticky) == U32(0):
+    return true
+
+  uid == RootUid or uid == superBlock.nodes[parent].uid or uid == superBlock.nodes[target].uid
+
+
+proc fsCanRemovePath*(uid, gid: U32, path: cstring): bool =
+  if not fsReady or path == nil:
+    return false
+
+  let mountIdx = findMount(path)
+  if mountIdx >= 0 and mounts[mountIdx].backend == vfsTmpfs:
+    return mountPointAllowsSearch(uid, gid, mountIdx) and
+      tmpfsCanRemove(uid, gid, mountLocalPath(path, mounts[mountIdx].pathLen))
+
+  if isBinPath(path) or resolveAppfsPath(path) >= 0 or resolveDevPath(path) >= 0:
+    return false
+
+  if isProcPath(path):
+    return false
+
+  var leaf: array[FsNameMax, char]
+  let parent = resolveParentWithSearch(uid, gid, path, leaf)
+  if not (canSearchNode(uid, gid, parent) and canWriteNode(uid, gid, parent)):
+    return false
+
+  let target = findChild(parent, cast[cstring](addr leaf[0]))
+  target > 0 and stickyAllowsRemove(uid, parent, target)
 
 
 proc fsCanChmodPath*(uid, gid: U32, path: cstring): bool =

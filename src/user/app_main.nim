@@ -74,6 +74,8 @@ elif defined(userApp_id):
   import apps/id/id
 elif defined(userApp_chmod):
   import apps/chmod/chmod
+elif defined(userApp_chown):
+  import apps/chown/chown
 # == test use only apps ==
 elif defined(userApp_faultcheck):
   import apps/faultcheck/faultcheck

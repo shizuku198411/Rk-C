@@ -19,6 +19,7 @@ proc printHelp*() =
   write("  df\n")
   write("  id\n")
   write("  chmod\n")
+  write("  chown\n")
   write("  edit\n")
   write("  ps\n")
   write("  date\n")

@@ -221,6 +221,7 @@ proc tmpfsInit*() =
   nodes[0].typ = TmpfsTypeDir
   nodes[0].parent = 0
   initNodeMetadata(addr nodes[0], TmpfsTypeDir)
+  nodes[0].mode = FsModeStickyPublicDir
   discard copyCString(nodes[0].name, "/")
   ready = true
 
@@ -338,6 +339,25 @@ proc tmpfsCanModifyParent*(uid, gid: U32, path: cstring): bool =
   var leaf: array[TmpfsNameMax, char]
   let parent = resolveParentWithSearch(uid, gid, path, leaf)
   canSearchNode(uid, gid, parent) and canWriteNode(uid, gid, parent)
+
+
+proc stickyAllowsRemove(uid: U32, parent, target: int): bool =
+  if parent < 0 or target < 0:
+    return false
+  if (nodes[parent].mode and FsModeSticky) == U32(0):
+    return true
+
+  uid == RootUid or uid == nodes[parent].uid or uid == nodes[target].uid
+
+
+proc tmpfsCanRemove*(uid, gid: U32, path: cstring): bool =
+  var leaf: array[TmpfsNameMax, char]
+  let parent = resolveParentWithSearch(uid, gid, path, leaf)
+  if not (canSearchNode(uid, gid, parent) and canWriteNode(uid, gid, parent)):
+    return false
+
+  let target = findChild(parent, cast[cstring](addr leaf[0]))
+  target > 0 and stickyAllowsRemove(uid, parent, target)
 
 
 proc tmpfsCanChmod*(uid, gid: U32, path: cstring): bool =

@@ -82,6 +82,7 @@ proc requestProcFs(op: U32, path: cstring, capacity: U64, offset: U64 = 0): I32 
       if op == SysIpcOpProcFsLsRequest and procResp.op == SysIpcOpProcFsLsResponse:
         return I32(procResp.arg0)
 
+
 proc writeDirEntry(entry: ptr DirEntry, name: cstring, typ: U32) =
   entry.typ = typ
   entry.size = 0
@@ -98,18 +99,53 @@ proc writeDirEntry(entry: ptr DirEntry, name: cstring, typ: U32) =
 
 
 proc handleProcLs() =
-  let count = requestProcFs(SysIpcOpProcFsLsRequest, reqPath(), req.capacity, req.size)
-  if count < 0:
-    resp.result = -1
+  let entrySize = U64(sizeof(DirEntry))
+  let requestedEntries = req.capacity div entrySize
+  let procChunkEntries = U64(SysIpcMessageMax) div entrySize
+  if requestedEntries == U64(0) or procChunkEntries == U64(0):
+    resp.result = 0
+    resp.size = 0
     return
 
-  resp.result = count
-  resp.size = procResp.len
+  var total = U64(0)
+  var done = false
+  while total < requestedEntries and not done:
+    var chunkEntries = requestedEntries - total
+    if chunkEntries > procChunkEntries:
+      chunkEntries = procChunkEntries
 
-  var i = U32(0)
-  while i < procResp.len and i < SysFsDataMax:
-    resp.data[i] = U8(procResp.data[i])
-    inc i
+    let count = requestProcFs(
+      SysIpcOpProcFsLsRequest,
+      reqPath(),
+      chunkEntries * entrySize,
+      req.size + total,
+    )
+    if count < 0:
+      resp.result = -1
+      resp.size = 0
+      return
+
+    if count == 0:
+      done = true
+    else:
+      var copySize = U64(count) * entrySize
+      if copySize > U64(procResp.len):
+        copySize = U64(procResp.len)
+      if total * entrySize + copySize > SysFsDataMax:
+        copySize = SysFsDataMax - total * entrySize
+
+      var i = U64(0)
+      let dstBase = total * entrySize
+      while i < copySize:
+        resp.data[dstBase + i] = U8(procResp.data[i])
+        inc i
+
+      total += U64(count)
+      if U64(count) < chunkEntries:
+        done = true
+
+  resp.result = I32(total)
+  resp.size = total * entrySize
 
 
 proc handleLs() =
@@ -157,6 +193,9 @@ proc handleLs() =
 
 proc handleMkdir() =
   resp.result = sysRawMkdir(reqPath())
+  if resp.result == 0 and sysRawChown(reqPath(), req.uid, req.gid) < 0:
+    discard sysRawRmdir(reqPath())
+    resp.result = -1
 
 
 proc handleUnlink() =
@@ -250,7 +289,11 @@ proc handleReadRange() =
 
 
 proc handleWriteFile() =
+  let created = sysRawFileSize(reqPath()) < 0
   resp.result = sysRawWriteFileMode(reqPath(), addr req.data[0], req.size, U32(req.capacity))
+  if resp.result == 0 and created and sysRawChown(reqPath(), req.uid, req.gid) < 0:
+    discard sysRawUnlink(reqPath())
+    resp.result = -1
 
 
 proc handleRename() =
@@ -267,6 +310,14 @@ proc handleChmod() =
     return
 
   resp.result = sysRawChmod(reqPath(), U32(req.size))
+
+
+proc handleChown() =
+  if isProcPath(reqPath()):
+    resp.result = -1
+    return
+
+  resp.result = sysRawChown(reqPath(), U32(req.size), U32(req.capacity))
 
 
 proc handleRequest() =
@@ -288,6 +339,8 @@ proc handleRequest() =
     handleRename()
   elif req.op == SysFsOpChmod:
     handleChmod()
+  elif req.op == SysFsOpChown:
+    handleChown()
   elif req.op == SysFsOpFileSize:
     handleFileSize()
   elif req.op == SysFsOpReadRange:
