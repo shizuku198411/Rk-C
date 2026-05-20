@@ -229,6 +229,14 @@ proc reportExecFailure(path: cstring, rc: I32) =
   if rc == SysExecNoProcess:
     write("exec: process table full\n")
     return
+  if rc == SysExecPermission:
+    write("permission denied: ")
+    write(path)
+    write("\n")
+    return
+  if rc == SysExecNoEntry:
+    reportExecFailure(path)
+    return
 
   reportExecFailure(path)
 

@@ -90,9 +90,16 @@ proc traceCommand(arg: cstring, verbose: bool) =
 
   let pid = sysExec(path, childArg, false)
   if pid < 0:
-    write("command not found: ")
-    write(path)
-    write("\n")
+    if pid == SysExecPermission:
+      write("permission denied: ")
+      write(path)
+      write("\n")
+    elif pid == SysExecNoProcess:
+      write("exec: process table full\n")
+    else:
+      write("command not found: ")
+      write(path)
+      write("\n")
     sysExit(1)
 
   if verbose:

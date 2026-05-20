@@ -105,6 +105,22 @@ proc grantedCapsForImage(path: cstring, hdr: ptr RkxHeader): U32 =
   hdr.capabilityMask and trustedCapsForPath(path)
 
 
+proc allowedForCurrentUid(hdr: ptr RkxHeader): bool =
+  if hdr == nil or hdr.allowedUidCount == U32(0):
+    return true
+  if currentProc == nil:
+    return true
+
+  let uid = currentProc.identity.uid
+  var i = U32(0)
+  while i < hdr.allowedUidCount and i < U32(RkxAllowedUidMax):
+    if hdr.allowedUids[i] == uid:
+      return true
+    inc i
+
+  false
+
+
 proc replaceUserStack(root: PageTable, stackTop: VAddr, stackPages: U64, arg: cstring, userSp, argVa: var VAddr): int =
   if stackPages < U64(RkxMinStackPages) or stackPages > U64(RkxMaxStackPages):
     return -1
@@ -135,6 +151,10 @@ proc installExecImage(p: ptr Process, root: PageTable, path: cstring, base, stac
   
   if loadRkxImage(root, path, base, imagePages, entryVa, addr rkxHeader) != 0:
     return -1
+
+  if not allowedForCurrentUid(addr rkxHeader):
+    discard unmapRangeFree(root, base, imagePages)
+    return int(SysExecPermission)
 
   let stackPages = stackPagesFromHeader(addr rkxHeader)
   var userSp = VAddr(0)
@@ -265,9 +285,10 @@ proc execUserApp*(path: cstring, arg: cstring, detached: bool = false): int32 =
   let childStackTop = execStackTopForPath(path)
   child.rootPageTable = root
 
-  if installExecImage(child, root, path, childBase, childStackTop, arg) != 0:
+  let installRc = installExecImage(child, root, path, childBase, childStackTop, arg)
+  if installRc != 0:
     discardProcess(child)
-    return -1
+    return int32(installRc)
 
   inheritProcessMetadata(child, parent)
   child.pid

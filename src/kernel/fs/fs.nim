@@ -933,6 +933,55 @@ proc fsCanExecutePath*(uid, gid: U32, path: cstring): bool =
   canExecuteNode(uid, gid, idx)
 
 
+proc fsExecuteStatus*(uid, gid: U32, path: cstring): I32 =
+  if not fsReady or path == nil:
+    return SysErrInval
+
+  let mountIdx = findMount(path)
+  if mountIdx >= 0 and mounts[mountIdx].backend == vfsTmpfs:
+    if not mountPointAllowsSearch(uid, gid, mountIdx):
+      return SysErrAccess
+
+    let localPath = mountLocalPath(path, mounts[mountIdx].pathLen)
+    if tmpfsFileSize(localPath) < 0 and not tmpfsIsDir(localPath):
+      return SysErrNoEnt
+    if not tmpfsCanExecute(uid, gid, localPath):
+      return SysErrAccess
+
+    return SysErrOk
+
+  if isBinRoot(path):
+    if appfsRootAllowsSearch(uid, gid):
+      return SysErrOk
+
+    return SysErrAccess
+
+  if isBinPath(path):
+    if not appfsRootAllowsSearch(uid, gid):
+      return SysErrAccess
+    if resolveAppfsPath(path) < 0:
+      return SysErrNoEnt
+    if not appfsFileAllowsExecute(uid, gid):
+      return SysErrAccess
+
+    return SysErrOk
+
+  if isProcPath(path) or resolveDevPath(path) >= 0:
+    return SysErrAccess
+
+  let rawIdx = resolvePath(path)
+  if rawIdx < 0:
+    return SysErrNoEnt
+
+  let searchedIdx = resolvePathWithSearch(uid, gid, path)
+  if searchedIdx < 0 or searchedIdx != rawIdx:
+    return SysErrAccess
+  if not canExecuteNode(uid, gid, searchedIdx):
+    return SysErrAccess
+
+  SysErrOk
+
+
 proc fsCanSearchDirPath*(uid, gid: U32, path: cstring): bool =
   if not fsReady or path == nil:
     return false

@@ -139,6 +139,17 @@ proc printHeader(path: cstring) =
   writeUnsigned(header.bssMemSize)
   write("\n")
   writeField("stack_pages", U64(header.stackPages))
+  write("allowed_uids: ")
+  if header.allowedUidCount == U32(0):
+    write("all")
+  else:
+    var i = U32(0)
+    while i < header.allowedUidCount and i < U32(RkxAllowedUidMax):
+      if i > U32(0):
+        write(",")
+      writeUnsigned(U64(header.allowedUids[i]))
+      inc i
+  write("\n")
   writeHexField("flags", U64(header.flags))
 
 

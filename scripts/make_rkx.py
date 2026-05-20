@@ -13,13 +13,15 @@ RKX_VERSION = 2
 DEFAULT_STACK_PAGES = 4
 MIN_STACK_PAGES = 1
 MAX_STACK_PAGES = 16
+MAX_ALLOWED_UIDS = 8
 METADATA_VERSION = 1
-HEADER_SIZE = 4 * 4 + 1 * 8 + 3 * 4 * 8 + 2 * 8 + 2 * 4
+HEADER_SIZE = 4 * 4 + 1 * 8 + 3 * 4 * 8 + 2 * 8 + 4 * 4 + MAX_ALLOWED_UIDS * 4
 # magic, version, headerSize, capabilityMask
 # entryVa
 # text/rodata/data: va, off, fileSize, memSize
 # bss: va, memSize
 # stackPages, flags
+# allowedUidCount, reserved, allowedUids
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CAPS_NIM = REPO_ROOT / "src" / "lib" / "syscall_caps.nim"
@@ -139,6 +141,7 @@ def load_metadata(app_name, explicit_path=None):
     metadata = {
         "stack_pages": DEFAULT_STACK_PAGES,
         "capability_mask": 0,
+        "allowed_uids": [],
         "path": None,
     }
 
@@ -166,6 +169,19 @@ def load_metadata(app_name, explicit_path=None):
         raise RuntimeError(f"{path}: capabilities must be a list")
 
     metadata["capability_mask"] = capability_mask_from_names(capabilities, path)
+
+    allowed_uids = data.get("allowed_uids", [])
+    if not isinstance(allowed_uids, list):
+        raise RuntimeError(f"{path}: allowed_uids must be a list")
+    if len(allowed_uids) > MAX_ALLOWED_UIDS:
+        raise RuntimeError(
+            f"{path}: too many allowed_uids: {len(allowed_uids)} "
+            f"(max {MAX_ALLOWED_UIDS})"
+        )
+    for uid in allowed_uids:
+        if not isinstance(uid, int) or uid < 0 or uid > 0xFFFFFFFF:
+            raise RuntimeError(f"{path}: invalid allowed uid {uid!r}")
+    metadata["allowed_uids"] = allowed_uids
     metadata["path"] = path
     return metadata
 
@@ -205,6 +221,10 @@ def main():
         if args.capability_mask is not None
         else metadata["capability_mask"]
     )
+    allowed_uids = list(metadata["allowed_uids"])
+    allowed_uid_count = len(allowed_uids)
+    while len(allowed_uids) < MAX_ALLOWED_UIDS:
+        allowed_uids.append(0)
 
     syms = read_symbols(args.elf)
 
@@ -252,7 +272,9 @@ def main():
         "QQQQ"
         "QQQQ"
         "QQ"
-        "II",
+        "II"
+        "II"
+        "IIIIIIII",
         RKX_MAGIC,
         RKX_VERSION,
         HEADER_SIZE,
@@ -279,6 +301,10 @@ def main():
 
         stack_pages,
         0,
+
+        allowed_uid_count,
+        0,
+        *allowed_uids,
     )
 
     assert len(header) == HEADER_SIZE
@@ -295,7 +321,7 @@ def main():
     print(
         f"[rkx] {args.out}: text={len(text_blob)} rodata={len(ro_blob)} "
         f"data={len(data_blob)} bss={bss_end - bss_va} stack_pages={stack_pages} "
-        f"caps=0x{capability_mask:08x}"
+        f"caps=0x{capability_mask:08x} allowed_uids={metadata['allowed_uids']}"
     )
 
 if __name__ == "__main__":

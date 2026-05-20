@@ -27,6 +27,7 @@ class TestCase:
     timeout: float = 8.0
     recover_timeout: float | None = None
     delay_before: float = 0.0
+    number: int = 0
 
 
 @dataclass
@@ -313,6 +314,8 @@ def normal_tests() -> list[TestCase]:
             TestCase("svc status netd", "svc status netd", ["netd", "reason"]),
             TestCase("svc degraded", "svc degraded", ["service", "state"]),
             TestCase("svc logs", "svc logs", ["started", "ready"]),
+            TestCase("rkxinfo svc root only", "rkxinfo svc", ["path: /bin/svc", "allowed_uids: 0"]),
+            TestCase("rkxinfo ls all users", "rkxinfo ls", ["path: /bin/ls", "allowed_uids: all"]),
             TestCase("stracectl app", "stracectl ls /bin", ["shell", "tcpcheck", "curl"], timeout=12.0),
             TestCase("stracectl on", "stracectl on", ["strace on"]),
             TestCase("stracectl off", "stracectl off", ["strace off"]),
@@ -323,6 +326,7 @@ def normal_tests() -> list[TestCase]:
 
 def abnormal_tests() -> list[TestCase]:
     return [
+        TestCase("missing command", "definitely_missing_command", ["command not found: /bin/definitely_missing_command"]),
         TestCase("kill invalid pid", "kill 999", ["kill: failed"]),
         TestCase("svc stop required service", "svc stop fsd", ["cannot stop required service"]),
         TestCase("ipc invalid send", "ipc send 999 hello", ["ipc: send failed"]),
@@ -439,6 +443,9 @@ def user_tests() -> list[TestCase]:
         TestCase("switch to user", "su user", []),
         TestCase("id as user", "id", ["uid=1000", "gid=1000"]),
         TestCase("user cannot switch root", "su root", ["su: root switch denied"]),
+        TestCase("user can run normal app", "ls /", ["tmp/", "bin/", "home/"]),
+        TestCase("user cannot run svc", "svc list", ["permission denied: /bin/svc"]),
+        TestCase("user cannot run server binary", "userd", ["permission denied: /bin/userd"]),
         TestCase("user can read /etc", "cat /etc/interface.conf", ["address", "gateway"]),
         TestCase("user cannot chmod root file", "chmod 600 /etc/interface.conf", ["chmod: failed"]),
         TestCase("user cannot chown root file", "chown user /etc/interface.conf", ["chown: permission denied"]),
@@ -549,10 +556,14 @@ def actual_summary(output: str, limit: int = 420) -> str:
 
 
 def print_result(status: str, case: TestCase, output: str) -> None:
+    label = case.name
+    if case.number > 0:
+        label = f"#{case.number:03d} {case.name}"
+
     if status == "PASS":
-        print("[" + "\033[32m" + "PASS" + "\033[0m" + "] " + case.name)
+        print("[" + "\033[32m" + "PASS" + "\033[0m" + "] " + label)
     else:
-        print("[" + "\033[31m" + "FAIL" + "\033[0m" + "] " + case.name)
+        print("[" + "\033[31m" + "FAIL" + "\033[0m" + "] " + label)
     print(f"       expected: {expected_summary(case)}")
     print(f"       actual  : {actual_summary(output)}")
 
@@ -648,6 +659,8 @@ def main() -> int:
     command = ["make", *env_prefix, "qemu-run-built"]
     qemu = QemuConsole(command, Path(args.log))
     failures = 0
+    failed_cases: list[TestCase] = []
+    case_number = 1
     try:
         qemu.start()
         boot = qemu.wait_for(PROMPT_MARKER, args.boot_timeout)
@@ -693,6 +706,8 @@ def main() -> int:
                 break
             print_section(section.name)
             for case in section.tests:
+                case.number = case_number
+                case_number += 1
                 result = run_and_validate(
                     qemu,
                     case,
@@ -702,6 +717,7 @@ def main() -> int:
                 if result.errors:
                     print_failure(case, result.output, result.errors)
                     failures += 1
+                    failed_cases.append(case)
                     if result.fatal:
                         print("fatal console desync; stopping remaining tests")
                         stop = True
@@ -715,6 +731,9 @@ def main() -> int:
 
     if failures:
         print(f"{failures} test(s) failed")
+        print("failed test cases:")
+        for case in failed_cases:
+            print(f"  #{case.number:03d} {case.command}")
         return 1
 
     print("all app smoke tests passed")

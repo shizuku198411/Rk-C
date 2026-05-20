@@ -3,6 +3,7 @@ import ../../lib/core/strutils
 import ../../lib/core/syscall
 import ../../../lib/service_catalog
 import ../../../lib/syscall_caps
+import ../../../lib/user_ids
 
 const
   ProcessCap = int(SysProcessMaxSlots)
@@ -510,23 +511,23 @@ proc handleReadyPacket(packet: ptr SysIpcPacket) =
 
 proc handleControlPacket(packet: ptr SysIpcPacket) =
   if packet.op == SysIpcOpSvcRestart:
-    if (packet.capabilityMask and SysCapServiceManager) == 0:
+    if packet.uid != RootUid or (packet.capabilityMask and SysCapServiceManager) == 0:
       return
     handleRestartRequest(packet)
   elif packet.op == SysIpcOpSvcStart:
-    if (packet.capabilityMask and SysCapServiceManager) == 0:
+    if packet.uid != RootUid or (packet.capabilityMask and SysCapServiceManager) == 0:
       return
     handleStartCommand(packet)
   elif packet.op == SysIpcOpSvcStop:
-    if (packet.capabilityMask and SysCapServiceManager) == 0:
+    if packet.uid != RootUid or (packet.capabilityMask and SysCapServiceManager) == 0:
       return
     handleStopCommand(packet)
   elif packet.op == SysIpcOpSvcStatusRequest:
-    if (packet.capabilityMask and SysCapServiceManager) == 0:
+    if packet.uid != RootUid or (packet.capabilityMask and SysCapServiceManager) == 0:
       return
     handleStatusRequest(packet)
   elif packet.op == SysIpcOpSvcLogsRequest:
-    if (packet.capabilityMask and SysCapServiceManager) == 0:
+    if packet.uid != RootUid or (packet.capabilityMask and SysCapServiceManager) == 0:
       return
     handleLogsRequest(packet)
   elif packet.op == SysIpcOpSvcReady:

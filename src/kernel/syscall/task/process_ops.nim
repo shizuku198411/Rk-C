@@ -129,20 +129,45 @@ proc syscallWait*(pidVal: U64): U64 =
 
 proc syscallExec*(path, arg, detachedVal: U64): U64 =
   if copyUserCString(addr pathBuf[0], path, UserCStringMax) < 0:
+    setLastError(SysErrInval)
     return U64(-1'i64)
-  if currentProc == nil or
-      not fsCanExecutePath(currentProc.identity.uid, currentProc.identity.gid, cast[cstring](addr pathBuf[0])):
+  if currentProc == nil:
+    setLastError(SysErrInval)
     return U64(-1'i64)
+
+  let execStatus = fsExecuteStatus(
+    currentProc.identity.uid,
+    currentProc.identity.gid,
+    cast[cstring](addr pathBuf[0]),
+  )
+  if execStatus == SysErrNoEnt:
+    setLastError(SysErrNoEnt)
+    return cast[U64](I64(SysExecNoEntry))
+  if execStatus != SysErrOk:
+    setLastError(execStatus)
+    return cast[U64](I64(SysExecPermission))
 
   let copiedArg =
     if arg == 0:
       nil
     else:
       if copyUserCString(addr argBuf[0], arg, UserCStringMax) < 0:
+        setLastError(SysErrInval)
         return U64(-1'i64)
       cast[cstring](addr argBuf[0])
 
-  U64(execUserApp(cast[cstring](addr pathBuf[0]), copiedArg, detachedVal != 0))
+  let pid = execUserApp(cast[cstring](addr pathBuf[0]), copiedArg, detachedVal != 0)
+  if pid == SysExecPermission:
+    setLastError(SysErrAccess)
+  elif pid == SysExecNoEntry:
+    setLastError(SysErrNoEnt)
+  elif pid < 0:
+    setLastError(SysErrInval)
+
+  if pid < 0:
+    return cast[U64](I64(pid))
+
+  U64(pid)
 
 
 proc syscallGetCwd*(outBuf, capacity: U64): U64 =

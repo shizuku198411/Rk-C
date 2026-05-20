@@ -124,6 +124,8 @@ const
   SysProcessZombie* = U32(4)
   SysProcListAllSlots* = U64(1)
   SysExecNoProcess* = I32(-2)
+  SysExecNoEntry* = I32(-3)
+  SysExecPermission* = I32(-4)
 
   SysServiceKindBlock* = U32(0)
   SysServiceKindFs* = U32(1)
@@ -234,6 +236,8 @@ type
     arg1*: U64
     len*: U32
     capabilityMask*: U32
+    uid*: U32
+    gid*: U32
     data*: array[SysIpcMessageMax, char]
 
   SysFsRequest* {.packed.} = object

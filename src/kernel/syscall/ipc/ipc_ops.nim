@@ -57,6 +57,8 @@ proc sendPacket(target: ptr Process, packet: ptr SysIpcPacket): U64 =
       currentProc.user.capabilityMask
     else:
       U32(0)
+  packet.uid = currentProc.identity.uid
+  packet.gid = currentProc.identity.gid
   if packet.len < U32(SysIpcMessageMax):
     packet.data[int(packet.len)] = '\0'
 

@@ -6,6 +6,7 @@ const
   RkxDefaultStackPages* = U32(4)
   RkxMinStackPages* = U32(1)
   RkxMaxStackPages* = U32(16)
+  RkxAllowedUidMax* = 8
 
 
 type
@@ -37,3 +38,7 @@ type
 
     stackPages*: U32
     flags*: U32
+
+    allowedUidCount*: U32
+    reserved*: U32
+    allowedUids*: array[RkxAllowedUidMax, U32]
