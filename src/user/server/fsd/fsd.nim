@@ -85,6 +85,9 @@ proc requestProcFs(op: U32, path: cstring, capacity: U64, offset: U64 = 0): I32 
 proc writeDirEntry(entry: ptr DirEntry, name: cstring, typ: U32) =
   entry.typ = typ
   entry.size = 0
+  entry.uid = 0
+  entry.gid = 0
+  entry.mode = 0o555
 
   var i = 0
   while i + 1 < DirEntryNameMax and name[i] != '\0':
@@ -258,6 +261,14 @@ proc handleRename() =
   resp.result = sysRawRename(reqPath(), reqDataPath())
 
 
+proc handleChmod() =
+  if isProcPath(reqPath()):
+    resp.result = -1
+    return
+
+  resp.result = sysRawChmod(reqPath(), U32(req.size))
+
+
 proc handleRequest() =
   clearResponse()
 
@@ -275,6 +286,8 @@ proc handleRequest() =
     handleWriteFile()
   elif req.op == SysFsOpRename:
     handleRename()
+  elif req.op == SysFsOpChmod:
+    handleChmod()
   elif req.op == SysFsOpFileSize:
     handleFileSize()
   elif req.op == SysFsOpReadRange:

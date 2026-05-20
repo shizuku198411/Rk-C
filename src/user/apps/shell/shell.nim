@@ -39,6 +39,9 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
 
     elif cstringEq(cstr(cmdBuf), "cd"):
       changeDirectory(cstr(argBuf))
+
+    elif cstringEq(cstr(cmdBuf), "su"):
+      switchUser(cstr(argBuf))
     
     elif cstringEq(cstr(cmdBuf), "pwd"):
       var buf: array[SysProcessCwdMax, char]

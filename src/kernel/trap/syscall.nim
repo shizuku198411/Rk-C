@@ -90,6 +90,9 @@ proc handleSyscall*(frame: ptr TrapFrame) =
   of SysRename:
     frame.a0 = syscallRename(frame.a0, frame.a1)
 
+  of SysChmod:
+    frame.a0 = syscallChmod(frame.a0, frame.a1)
+
   of SysOpen:
     frame.a0 = syscallOpen(frame.a0, frame.a1)
 
@@ -195,6 +198,9 @@ proc handleSyscall*(frame: ptr TrapFrame) =
   of SysRawRename:
     frame.a0 = syscallRawRename(frame.a0, frame.a1)
 
+  of SysRawChmod:
+    frame.a0 = syscallRawChmod(frame.a0, frame.a1)
+
   of SysBlockServiceRegister:
     frame.a0 = syscallBlockServiceRegister()
 
@@ -236,6 +242,15 @@ proc handleSyscall*(frame: ptr TrapFrame) =
   
   of SysGetPpid:
     frame.a0 = syscallGetPpid()
+
+  of SysGetUid:
+    frame.a0 = syscallGetUid()
+
+  of SysGetGid:
+    frame.a0 = syscallGetGid()
+
+  of SysSetUser:
+    frame.a0 = syscallSetUser(frame.a0, frame.a1)
 
   of SysGetCap:
     frame.a0 = syscallGetCap(frame.a0, frame.a1)

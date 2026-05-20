@@ -10,4 +10,7 @@ type
   FsDirEntry* {.packed.} = object
     typ*: U32
     size*: U32
+    uid*: U32
+    gid*: U32
+    mode*: U32
     name*: array[FsDirEntryNameMax, char]

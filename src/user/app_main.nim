@@ -70,6 +70,10 @@ elif defined(userApp_wc):
   import apps/wc/wc
 elif defined(userApp_paniclog):
   import apps/paniclog/paniclog
+elif defined(userApp_id):
+  import apps/id/id
+elif defined(userApp_chmod):
+  import apps/chmod/chmod
 # == test use only apps ==
 elif defined(userApp_faultcheck):
   import apps/faultcheck/faultcheck

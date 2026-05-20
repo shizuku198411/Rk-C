@@ -1,6 +1,8 @@
 import ../../lib/fixed_string
+import ../../lib/fs_permissions
 import ../../lib/syscall_types
 import ../../lib/types
+import ../../lib/user_ids
 import ../fs/dirent
 import ../lib/path
 
@@ -19,6 +21,9 @@ type
     typ: U32
     parent: U32
     size: U32
+    uid: U32
+    gid: U32
+    mode: U32
     name: array[TmpfsNameMax, char]
     data: array[TmpfsFileMax, char]
 
@@ -30,6 +35,42 @@ var
 proc tmpfsWriteText*(path: cstring, data: cstring): int
 proc tmpfsWriteBytes*(path: cstring, data: pointer, size: U64): int
 proc tmpfsWriteBytesWithFlags*(path: cstring, data: pointer, size: U64, flags: U32): int
+
+
+proc defaultNodeMode(typ: U32): U32 =
+  if typ == TmpfsTypeFile:
+    return FsModeFileDefault
+
+  FsModePublicDir
+
+
+proc initNodeMetadata(node: ptr TmpfsNode, typ: U32) =
+  if node == nil:
+    return
+
+  node.uid = RootUid
+  node.gid = RootGid
+  node.mode = defaultNodeMode(typ)
+
+
+proc canReadNode(uid, gid: U32, idx: int): bool =
+  idx >= 0 and idx < TmpfsMaxNodes and nodes[idx].used != U32(0) and
+    fsModeAllowsRead(nodes[idx].uid, nodes[idx].gid, nodes[idx].mode, uid, gid)
+
+
+proc canWriteNode(uid, gid: U32, idx: int): bool =
+  idx >= 0 and idx < TmpfsMaxNodes and nodes[idx].used != U32(0) and
+    fsModeAllowsWrite(nodes[idx].uid, nodes[idx].gid, nodes[idx].mode, uid, gid)
+
+
+proc canExecuteNode(uid, gid: U32, idx: int): bool =
+  idx >= 0 and idx < TmpfsMaxNodes and nodes[idx].used != U32(0) and
+    fsModeAllowsExecute(nodes[idx].uid, nodes[idx].gid, nodes[idx].mode, uid, gid)
+
+
+proc canSearchNode(uid, gid: U32, idx: int): bool =
+  idx >= 0 and idx < TmpfsMaxNodes and nodes[idx].used != U32(0) and
+    nodes[idx].typ == TmpfsTypeDir and canExecuteNode(uid, gid, idx)
 
 
 proc tmpfsMaxNodes*(): U64 =
@@ -91,6 +132,7 @@ proc allocNode(parent: int, name: cstring, typ: U32): int =
       nodes[i].typ = typ
       nodes[i].parent = U32(parent)
       nodes[i].size = 0
+      initNodeMetadata(addr nodes[i], typ)
       discard copyCString(nodes[i].name, name)
       return i
     inc i
@@ -107,6 +149,26 @@ proc resolvePath(path: cstring): int =
   var current = 0
   var name: array[TmpfsNameMax, char]
   while readPathComponent(path, pos, name):
+    let next = findChild(current, cast[cstring](addr name[0]))
+    if next < 0:
+      return -1
+    current = next
+  current
+
+
+proc resolvePathWithSearch(uid, gid: U32, path: cstring): int =
+  if path == nil or path[0] == '\0':
+    return -1
+  if path[0] == '/' and path[1] == '\0':
+    return 0
+
+  var pos = 0
+  var current = 0
+  var name: array[TmpfsNameMax, char]
+  while readPathComponent(path, pos, name):
+    if not canSearchNode(uid, gid, current):
+      return -1
+
     let next = findChild(current, cast[cstring](addr name[0]))
     if next < 0:
       return -1
@@ -132,11 +194,33 @@ proc resolveParent(path: cstring, leaf: var array[TmpfsNameMax, char]): int =
   -1
 
 
+proc resolveParentWithSearch(uid, gid: U32, path: cstring, leaf: var array[TmpfsNameMax, char]): int =
+  if path == nil or path[0] == '\0':
+    return -1
+
+  var pos = 0
+  var current = 0
+  var name: array[TmpfsNameMax, char]
+  while readPathComponent(path, pos, name):
+    if not canSearchNode(uid, gid, current):
+      return -1
+
+    if path[pos] == '\0':
+      leaf = name
+      return current
+    let next = findChild(current, cast[cstring](addr name[0]))
+    if next < 0 or nodes[next].typ != TmpfsTypeDir:
+      return -1
+    current = next
+  -1
+
+
 proc tmpfsInit*() =
   nodes = default(array[TmpfsMaxNodes, TmpfsNode])
   nodes[0].used = 1
   nodes[0].typ = TmpfsTypeDir
   nodes[0].parent = 0
+  initNodeMetadata(addr nodes[0], TmpfsTypeDir)
   discard copyCString(nodes[0].name, "/")
   ready = true
 
@@ -144,6 +228,9 @@ proc tmpfsInit*() =
 proc fillDirEntry(idx: int, outEntry: ptr FsDirEntry) =
   outEntry.typ = nodes[idx].typ
   outEntry.size = nodes[idx].size
+  outEntry.uid = nodes[idx].uid
+  outEntry.gid = nodes[idx].gid
+  outEntry.mode = nodes[idx].mode
 
   var i = 0
   while i < FsDirEntryNameMax:
@@ -154,6 +241,9 @@ proc fillDirEntry(idx: int, outEntry: ptr FsDirEntry) =
 proc fillVirtualDirEntry(name: cstring, outEntry: ptr FsDirEntry) =
   outEntry.typ = FsDirEntryTypeDir
   outEntry.size = 0
+  outEntry.uid = RootUid
+  outEntry.gid = RootGid
+  outEntry.mode = FsModePublicDir
 
   var i = 0
   while i < FsDirEntryNameMax:
@@ -217,6 +307,61 @@ proc tmpfsFileSize*(path: cstring): int =
     return -1
 
   int(nodes[idx].size)
+
+
+proc tmpfsCanRead*(uid, gid: U32, path: cstring): bool =
+  let idx = resolvePathWithSearch(uid, gid, path)
+  canReadNode(uid, gid, idx)
+
+
+proc tmpfsCanWrite*(uid, gid: U32, path: cstring): bool =
+  let idx = resolvePathWithSearch(uid, gid, path)
+  canWriteNode(uid, gid, idx)
+
+
+proc tmpfsCanExecute*(uid, gid: U32, path: cstring): bool =
+  let idx = resolvePathWithSearch(uid, gid, path)
+  canExecuteNode(uid, gid, idx)
+
+
+proc tmpfsCanSearchDir*(uid, gid: U32, path: cstring): bool =
+  let idx = resolvePathWithSearch(uid, gid, path)
+  canSearchNode(uid, gid, idx)
+
+
+proc tmpfsCanModifyDir*(uid, gid: U32, path: cstring): bool =
+  let idx = resolvePathWithSearch(uid, gid, path)
+  canSearchNode(uid, gid, idx) and canWriteNode(uid, gid, idx)
+
+
+proc tmpfsCanModifyParent*(uid, gid: U32, path: cstring): bool =
+  var leaf: array[TmpfsNameMax, char]
+  let parent = resolveParentWithSearch(uid, gid, path, leaf)
+  canSearchNode(uid, gid, parent) and canWriteNode(uid, gid, parent)
+
+
+proc tmpfsCanChmod*(uid, gid: U32, path: cstring): bool =
+  let idx = resolvePathWithSearch(uid, gid, path)
+  idx >= 0 and (uid == RootUid or uid == nodes[idx].uid)
+
+
+proc tmpfsChmod*(path: cstring, mode: U32): int =
+  let idx = resolvePath(path)
+  if idx < 0:
+    return -1
+
+  nodes[idx].mode = mode
+  0
+
+
+proc tmpfsChown*(path: cstring, uid, gid: U32): int =
+  let idx = resolvePath(path)
+  if idx < 0:
+    return -1
+
+  nodes[idx].uid = uid
+  nodes[idx].gid = gid
+  0
 
 
 proc tmpfsReadRange*(path: cstring, dst: pointer, offset, capacity: U64): int =

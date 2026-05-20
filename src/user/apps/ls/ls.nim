@@ -41,15 +41,39 @@ proc isHiddenEntry(entry: ptr DirEntry): bool =
 
 
 proc printLongEntry(entry: ptr DirEntry) =
+  if entry.typ == DirEntryTypeDir or entry.typ == DirEntryTypeMount:
+    write("d")
+  else:
+    write("-")
+
+  let bits = [
+    U32(256), U32(128), U32(64),
+    U32(32), U32(16), U32(8),
+    U32(4), U32(2), U32(1),
+  ]
+  let chars = ['r', 'w', 'x', 'r', 'w', 'x', 'r', 'w', 'x']
+  var bitIndex = 0
+  while bitIndex < 9:
+    if (entry.mode and bits[bitIndex]) != U32(0):
+      writeChar(chars[bitIndex])
+    else:
+      writeChar('-')
+    inc bitIndex
+
+  write("\t")
+  writeUnsigned(U64(entry.uid))
+  write(":")
+  writeUnsigned(U64(entry.gid))
+  write("\t")
+  writeUnsigned(U64(entry.size))
+  write(" bytes")
+  write("\t")
   write(cast[cstring](addr entry.name[0]))
 
   if entry.typ == DirEntryTypeDir or entry.typ == DirEntryTypeMount:
     write("/\n")
-    return
-
-  write("\t")
-  writeUnsigned(U64(entry.size))
-  write(" bytes\n")
+  else:
+    write("\n")
 
 
 proc printName(entry: ptr DirEntry) =

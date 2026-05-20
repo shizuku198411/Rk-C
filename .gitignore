@@ -6,4 +6,5 @@ map/
 opensbi/
 virt.*
 docs/review
+docs/roadmap
 __pycache__/

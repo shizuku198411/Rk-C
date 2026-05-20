@@ -28,6 +28,7 @@ const
   SysFsOpFileSize* = U32(7)
   SysFsOpReadRange* = U32(8)
   SysFsOpRename* = U32(9)
+  SysFsOpChmod* = U32(10)
   SysBlockOpRead* = U32(1)
   SysBlockOpWrite* = U32(2)
 
@@ -97,6 +98,8 @@ const
   SysSignalServiceStopped* = U32(4)
   SysSignalMax* = U32(31)
 
+  SysSetUserRootOnly* = I32(-2)
+
   SysProcessMaxSlots* = U32(32)
   SysProcessUnused* = U32(0)
   SysProcessRunnable* = U32(1)
@@ -118,6 +121,8 @@ type
   SysProcessInfo* {.packed.} = object
     pid*: I32
     ppid*: I32
+    uid*: U32
+    gid*: U32
     state*: U32
     isUser*: U32
     cpuTicks*: U64

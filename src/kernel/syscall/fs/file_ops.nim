@@ -2,6 +2,7 @@ import ../../../lib/types
 import ../../../lib/syscall_types
 import ../../../lib/calc
 import ../../dev/timer
+import ../../fs/fs
 import ../../lib/fd_helpers
 import ../../syscall/fs/fs_service_ops
 import ../../syscall/io/console_io
@@ -35,6 +36,63 @@ proc readPath(pathVal: U64, defaultRoot: bool = false): cstring =
   cast[cstring](addr pathBuf[0])
 
 
+proc copyKernelPath(dst: var array[SysPathMax, char], src: cstring): cstring =
+  if src == nil:
+    return nil
+
+  var i = U64(0)
+  while i + U64(1) < SysPathMax and src[i] != '\0':
+    dst[i] = src[i]
+    inc i
+  dst[i] = '\0'
+  cast[cstring](addr dst[0])
+
+
+proc canReadPath(path: cstring): bool =
+  currentProc != nil and fsCanReadPath(currentProc.uid, currentProc.gid, path)
+
+
+proc canWritePath(path: cstring): bool =
+  currentProc != nil and fsCanWritePath(currentProc.uid, currentProc.gid, path)
+
+
+proc canSearchDirPath(path: cstring): bool =
+  currentProc != nil and fsCanSearchDirPath(currentProc.uid, currentProc.gid, path)
+
+
+proc canModifyParentPath(path: cstring): bool =
+  currentProc != nil and fsCanModifyParentPath(currentProc.uid, currentProc.gid, path)
+
+
+proc canListPath(path: cstring): bool =
+  canReadPath(path) and canSearchDirPath(path)
+
+
+proc canCreateOrWritePath(path: cstring, flags: U32): bool =
+  let existingSize = serviceFileSizeToKernel(path)
+  if existingSize >= 0:
+    return canWritePath(path)
+
+  (flags and SysFsWriteCreate) != U32(0) and canModifyParentPath(path)
+
+
+proc canOpenFilePath(path: cstring, flags: U32): bool =
+  let existingSize = serviceFileSizeToKernel(path)
+  let willCreate = existingSize < 0 and (flags and SysOpenCreate) != U32(0)
+
+  if (flags and SysOpenRead) != 0 and not willCreate and not canReadPath(path):
+    return false
+
+  if (flags and SysOpenWrite) != 0:
+    if existingSize >= 0:
+      if not canWritePath(path):
+        return false
+    elif not canModifyParentPath(path):
+      return false
+
+  true
+
+
 proc syscallLs*(pathVal, entriesVal, maxEntries: U64): U64 =
   if entriesVal == 0 or maxEntries == 0:
     return U64(-1'i64)
@@ -46,6 +104,8 @@ proc syscallLs*(pathVal, entriesVal, maxEntries: U64): U64 =
 
   let path = readPath(pathVal, true)
   if path == nil:
+    return U64(-1'i64)
+  if not canListPath(path):
     return U64(-1'i64)
 
   let countMax =
@@ -60,13 +120,22 @@ proc syscallMkdir*(path: U64): U64 =
   let copiedPath = readPath(path)
   if copiedPath == nil:
     return U64(-1'i64)
+  if not canModifyParentPath(copiedPath):
+    return U64(-1'i64)
 
-  serviceMkdir(copiedPath)
+  var ownerPathBuf: array[SysPathMax, char]
+  let ownerPath = copyKernelPath(ownerPathBuf, copiedPath)
+  let rc = serviceMkdir(copiedPath)
+  if rc == U64(0) and currentProc != nil:
+    discard fsChown(ownerPath, currentProc.uid, currentProc.gid)
+  rc
 
 
 proc syscallUnlink*(path: U64): U64 =
   let copiedPath = readPath(path)
   if copiedPath == nil:
+    return U64(-1'i64)
+  if not canModifyParentPath(copiedPath):
     return U64(-1'i64)
 
   serviceUnlink(copiedPath)
@@ -75,6 +144,8 @@ proc syscallUnlink*(path: U64): U64 =
 proc syscallRmdir*(path: U64): U64 =
   let copiedPath = readPath(path)
   if copiedPath == nil:
+    return U64(-1'i64)
+  if not canModifyParentPath(copiedPath):
     return U64(-1'i64)
 
   serviceRmdir(copiedPath)
@@ -86,6 +157,8 @@ proc syscallReadFile*(path, buf, capacity: U64): U64 =
 
   let copiedPath = readPath(path)
   if copiedPath == nil:
+    return U64(-1'i64)
+  if not canReadPath(copiedPath):
     return U64(-1'i64)
 
   serviceReadFile(copiedPath, buf, capacity)
@@ -109,10 +182,18 @@ proc syscallWriteFile*(path, buf, sizeFlags: U64): U64 =
   let copiedPath = readPath(path)
   if copiedPath == nil:
     return U64(-1'i64)
+  if not canCreateOrWritePath(copiedPath, flags):
+    return U64(-1'i64)
   if copyFromUser(addr fileBuf[0], buf, size) != 0:
     return U64(-1'i64)
 
-  serviceWriteFile(copiedPath, addr fileBuf[0], size, flags)
+  let created = serviceFileSizeToKernel(copiedPath) < 0
+  var ownerPathBuf: array[SysPathMax, char]
+  let ownerPath = copyKernelPath(ownerPathBuf, copiedPath)
+  let rc = serviceWriteFile(copiedPath, addr fileBuf[0], size, flags)
+  if rc == U64(0) and created and currentProc != nil:
+    discard fsChown(ownerPath, currentProc.uid, currentProc.gid)
+  rc
 
 
 proc syscallRename*(oldPathVal, newPathVal: U64): U64 =
@@ -121,8 +202,23 @@ proc syscallRename*(oldPathVal, newPathVal: U64): U64 =
     return U64(-1'i64)
   if copyUserCString(addr renamePathBuf[0], newPathVal, SysPathMax) < 0:
     return U64(-1'i64)
+  if not canModifyParentPath(oldPath) or
+      not canModifyParentPath(cast[cstring](addr renamePathBuf[0])):
+    return U64(-1'i64)
 
   serviceRename(oldPath, cast[cstring](addr renamePathBuf[0]))
+
+
+proc syscallChmod*(pathVal, modeVal: U64): U64 =
+  let path = readPath(pathVal)
+  if path == nil:
+    return U64(-1'i64)
+
+  let mode = U32(modeVal and U64(0x1ff))
+  if currentProc == nil or not fsCanChmodPath(currentProc.uid, currentProc.gid, path):
+    return U64(-1'i64)
+
+  serviceChmod(path, mode)
 
 
 proc refreshFdSize(entry: var FdEntry): bool =
@@ -163,9 +259,17 @@ proc syscallOpen*(pathVal, flagsVal: U64): U64 =
     currentProc.files.entries[U32(fd)] = entry
     return U64(fd)
 
+  if not canOpenFilePath(path, flags):
+    return U64(-1'i64)
+
+  let created = serviceFileSizeToKernel(path) < 0
+  var ownerPathBuf: array[SysPathMax, char]
+  let ownerPath = copyKernelPath(ownerPathBuf, path)
   if (flags and (SysOpenCreate or SysOpenTrunc)) != 0:
     if serviceWriteFile(fdPath(entry), addr fdFileBuf[0], 0) != 0:
       return U64(-1'i64)
+    if created:
+      discard fsChown(ownerPath, currentProc.uid, currentProc.gid)
 
   if not refreshFdSize(entry):
     return U64(-1'i64)
@@ -198,6 +302,8 @@ proc syscallReadFd*(fdVal, bufVal, len: U64): U64 =
 
     return U64(readLen)
   if entry.kind != SysFdKindFile:
+    return U64(-1'i64)
+  if not canReadPath(fdPath(entry[])):
     return U64(-1'i64)
 
   if not refreshFdSize(entry[]):
@@ -247,6 +353,8 @@ proc syscallWriteFd*(fdVal, bufVal, len: U64): U64 =
 
     return U64(written)
   if entry.kind != SysFdKindFile:
+    return U64(-1'i64)
+  if not canWritePath(fdPath(entry[])):
     return U64(-1'i64)
 
   var currentSize = U64(0)

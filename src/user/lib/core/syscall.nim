@@ -27,6 +27,9 @@ type
   DirEntry* {.packed.} = object
     typ*: U32
     size*: U32
+    uid*: U32
+    gid*: U32
+    mode*: U32
     name*: array[DirEntryNameMax, char]
 
 
@@ -265,6 +268,10 @@ proc sysRawRename*(oldPath, newPath: cstring): I32 =
   I32(rawSyscall3(SysRawRename, cast[U64](oldPath), cast[U64](newPath), 0))
 
 
+proc sysRawChmod*(path: cstring, mode: U32): I32 =
+  I32(rawSyscall3(SysRawChmod, cast[U64](path), U64(mode), 0))
+
+
 proc sysRawFileSize*(path: cstring): I32 =
   I32(rawSyscall3(SysRawFileSize, cast[U64](path), 0, 0))
 
@@ -327,6 +334,22 @@ proc sysGetPid*(): I32 =
 
 proc sysGetPpid*(): I32 =
   I32(rawSyscall3(SysGetPpid, 0, 0, 0))
+
+
+proc sysGetUid*(): U32 =
+  U32(rawSyscall3(SysGetUid, 0, 0, 0))
+
+
+proc sysGetGid*(): U32 =
+  U32(rawSyscall3(SysGetGid, 0, 0, 0))
+
+
+proc sysSetUser*(uid, gid: U32): I32 =
+  I32(rawSyscall3(SysSetUser, U64(uid), U64(gid), 0))
+
+
+proc sysChmod*(path: cstring, mode: U32): I32 =
+  I32(rawSyscall3(SysChmod, cast[U64](path), U64(mode), 0))
 
 
 proc sysRawNetInfo*(info: ptr SysNetDeviceInfo): I32 =

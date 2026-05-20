@@ -3,6 +3,7 @@ import ../../lib/calc
 import ../../lib/fixed_string
 import ../../lib/syscall_types
 import ../../lib/types
+import ../../lib/user_ids
 import ../dev/console
 import ../mm/memory
 import ../mm/paging
@@ -104,6 +105,8 @@ type
   Process* {.bycopy.} = object
     pid*: int32
     parentPid*: int32
+    uid*: U32
+    gid*: U32
     exePath*: cstring
     exePathBuf*: array[SysProcessNameMax, char]
     cwd*: array[SysProcessCwdMax, char]
@@ -472,6 +475,8 @@ proc createKernelProcessInternal(entry: KernelTask, isIdle: bool, name: cstring)
   p.pid = assignPid()
   inc nextPid
   p.parentPid = 0
+  p.uid = RootUid
+  p.gid = RootGid
   setExePath(p, name)
   p.state = procRunnable
   p.entry = entry
@@ -500,6 +505,8 @@ proc processInit*() =
   while i < MaxProcs:
     procs[i].pid = 0
     procs[i].parentPid = 0
+    procs[i].uid = RootUid
+    procs[i].gid = RootGid
     setExePath(addr procs[i], "init")
     setRootCwd(addr procs[i])
     procs[i].state = procUnused
@@ -560,11 +567,15 @@ proc inheritProcessMetadata*(child, parent: ptr Process) =
 
   if parent == nil:
     child.parentPid = 0
+    child.uid = RootUid
+    child.gid = RootGid
     setRootCwd(child)
     initStandardFiles(child)
     return
 
   child.parentPid = parent.pid
+  child.uid = parent.uid
+  child.gid = parent.gid
   copyCwd(child.cwd, parent.cwd)
   copyFileState(child, parent)
   # Future per-process attributes such as rootfs should be copied here.
@@ -652,6 +663,8 @@ proc discardProcess*(p: ptr Process) =
 
   p.pid = 0
   p.parentPid = 0
+  p.uid = RootUid
+  p.gid = RootGid
   setExePath(p, "init_proc")
   setRootCwd(p)
   p.state = procUnused

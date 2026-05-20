@@ -1,8 +1,10 @@
 import ../../../lib/fixed_string
 import ../../../lib/syscall_types
 import ../../../lib/types
+import ../../../lib/user_ids
 import ../../dev/console
 import ../../fs/dirent
+import ../../fs/fs
 import ../../lib/syscall_out
 import ../../mm/usercopy
 import ../../task/exec
@@ -30,6 +32,8 @@ proc fillProcessInfo(entry: var SysProcessInfo, p: ptr Process) =
   entry = SysProcessInfo()
   entry.pid = p.pid
   entry.ppid = p.parentPid
+  entry.uid = p.uid
+  entry.gid = p.gid
   entry.state = processStateValue(p.state)
   entry.cpuTicks = p.cpuTicks
   entry.memoryPages =
@@ -126,6 +130,9 @@ proc syscallWait*(pidVal: U64): U64 =
 proc syscallExec*(path, arg, detachedVal: U64): U64 =
   if copyUserCString(addr pathBuf[0], path, UserCStringMax) < 0:
     return U64(-1'i64)
+  if currentProc == nil or
+      not fsCanExecutePath(currentProc.uid, currentProc.gid, cast[cstring](addr pathBuf[0])):
+    return U64(-1'i64)
 
   let copiedArg =
     if arg == 0:
@@ -189,6 +196,8 @@ proc syscallSetCwd*(pathVal: U64): U64 =
   let path = cast[cstring](addr pathBuf[0])
   if path[0] != '/':
     return U64(-1'i64)
+  if not fsCanSearchDirPath(currentProc.uid, currentProc.gid, path):
+    return U64(-1'i64)
   if not servicePathIsDir(path):
     return U64(-1'i64)
   if setCurrentCwd(path) != 0:
@@ -209,6 +218,40 @@ proc syscallGetPpid*(): U64 =
     return U64(-1'i64)
 
   U64(currentProc.parentPid)
+
+
+proc syscallGetUid*(): U64 =
+  if currentProc == nil:
+    return U64(-1'i64)
+
+  U64(currentProc.uid)
+
+
+proc syscallGetGid*(): U64 =
+  if currentProc == nil:
+    return U64(-1'i64)
+
+  U64(currentProc.gid)
+
+
+proc validUser(uid, gid: U32): bool =
+  (uid == RootUid and gid == RootGid) or (uid == UserUid and gid == UserGid)
+
+
+proc syscallSetUser*(uidVal, gidVal: U64): U64 =
+  if currentProc == nil:
+    return U64(-1'i64)
+
+  let uid = U32(uidVal)
+  let gid = U32(gidVal)
+  if not validUser(uid, gid):
+    return U64(-1'i64)
+  if currentProc.uid != RootUid and uid == RootUid:
+    return U64(-2'i64)
+
+  currentProc.uid = uid
+  currentProc.gid = gid
+  0
 
 
 proc syscallGetCap*(outBuf, bufSize: U64): U64 =

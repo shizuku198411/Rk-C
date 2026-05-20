@@ -74,3 +74,8 @@ const
   SysRename* = U64(73)
   SysRawRename* = U64(74)
   SysFsInfo* = U64(75)
+  SysGetUid* = U64(76)
+  SysGetGid* = U64(77)
+  SysSetUser* = U64(78)
+  SysChmod* = U64(79)
+  SysRawChmod* = U64(80)

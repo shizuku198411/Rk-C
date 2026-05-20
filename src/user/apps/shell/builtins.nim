@@ -2,6 +2,7 @@ import ../../lib/core/io
 import ../../lib/core/pathutils
 import ../../lib/core/strutils
 import ../../lib/core/syscall
+import ../../../lib/user_ids
 
 
 proc changeDirectory*(path: cstring) =
@@ -16,6 +17,30 @@ proc changeDirectory*(path: cstring) =
 
   if sysSetCwd(resolved) != 0:
     write("cd: failed\n")
+
+
+proc switchUser*(name: cstring) =
+  if isEmpty(name):
+    write("usage: su <root|user>\n")
+    return
+
+  var uid: U32
+  var gid: U32
+  if cstringEq(name, "root"):
+    uid = RootUid
+    gid = RootGid
+  elif cstringEq(name, "user"):
+    uid = UserUid
+    gid = UserGid
+  else:
+    write("su: unknown user\n")
+    return
+
+  let rc = sysSetUser(uid, gid)
+  if rc == SysSetUserRootOnly:
+    write("su: root switch denied\n")
+  elif rc != 0:
+    write("su: failed\n")
 
 
 proc printTrapCount*() =

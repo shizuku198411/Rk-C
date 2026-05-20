@@ -206,6 +206,8 @@ def normal_tests() -> list[TestCase]:
         "mv": "usage: mv",
         "df": "usage: df",
         "paniclog": "usage: paniclog",
+        "id": "usage: id",
+        "chmod": "usage: chmod",
         "capcheck": "usage: capcheck",
         "pollcheck": "usage: pollcheck",
         "writecheck": "usage: writecheck",
@@ -222,6 +224,11 @@ def normal_tests() -> list[TestCase]:
             TestCase("ls -al dot entries", "ls -al /bin", ["./", "../", "shell", "bytes"]),
             TestCase("ls parent path", "ls /bin/..", ["bin/", "tmp/"]),
             TestCase("ls -l /bin", "ls -l /bin", ["shell", "bytes"]),
+            TestCase("touch chmod target", "touch /tmp/chmod_smoke", []),
+            TestCase("ls -l default mode", "ls -l /tmp", ["-rw-r--r--", "0:0", "chmod_smoke"]),
+            TestCase("chmod 600", "chmod 600 /tmp/chmod_smoke", []),
+            TestCase("ls -l chmod 600", "ls -l /tmp", ["-rw-------", "0:0", "chmod_smoke"]),
+            TestCase("rm chmod target", "rm /tmp/chmod_smoke", []),
             TestCase("rkxinfo curl", "rkxinfo curl", ["path: /bin/curl", "magic: RKX1", "version: 2", "text:", "stack_pages:"]),
             TestCase("mkdir /tmp/appsmoke", "mkdir /tmp/appsmoke", []),
             TestCase("ls /tmp after mkdir", "ls /tmp", ["appsmoke/"]),
@@ -258,12 +265,14 @@ def normal_tests() -> list[TestCase]:
             TestCase("rmdir /tmp/mvdir", "rmdir /tmp/mvdir", []),
             TestCase("rm redirected file", "rm /tmp/date_smoke", []),
             TestCase("ps", "ps", ["pid", "exe", "shell"]),
-            TestCase("ps -f", "ps -f", ["pid", "ppid", "state", "mode", "shell"]),
-            TestCase("ps -l", "ps -l", ["pid", "ppid", "cpu", "mem", "shell"]),
-            TestCase("ps -ef", "ps -ef", ["pid", "ppid", "state", "mode", "svcmgtd"]),
-            TestCase("ps -e -f", "ps -e -f", ["pid", "ppid", "state", "mode", "svcmgtd"]),
+            TestCase("id", "id", ["uid=0", "gid=0"]),
+            TestCase("ps -f", "ps -f", ["pid", "ppid", "uid", "gid", "state", "mode", "shell"]),
+            TestCase("ps -l", "ps -l", ["pid", "ppid", "uid", "gid", "cpu", "mem", "shell"]),
+            TestCase("ps -ef", "ps -ef", ["pid", "ppid", "uid", "gid", "state", "mode", "svcmgtd"]),
+            TestCase("ps -e -f", "ps -e -f", ["pid", "ppid", "uid", "gid", "state", "mode", "svcmgtd"]),
             TestCase("ls /proc", "ls /proc", ["uptime", "cpuinfo", "kmsg"], not_contains=["./", "../"], regex=[r"\d+/"]),
             TestCase("ls -a /proc", "ls -a /proc", ["./", "../", "uptime", "cpuinfo", "kmsg"], regex=[r"\d+/"]),
+            TestCase("cat /proc/processes", "cat /proc/processes", ["pid", "ppid", "uid", "gid", "exe"]),
             TestCase("cat /proc/fsinfo", "cat /proc/fsinfo", ["Filesystem", "rootfs", "tmpfs", "appfs", "/bin"]),
             TestCase("df", "df", ["Filesystem", "rootfs", "tmpfs", "appfs", "Mounted on"]),
             TestCase("shell cd /proc", "cd /proc", []),
@@ -279,7 +288,7 @@ def normal_tests() -> list[TestCase]:
             TestCase("cat /proc/kmsg", "cat /proc/kmsg", ["[boot]"]),
             TestCase("cat /proc/uptime", "cat /proc/uptime", ["ticks:"], regex=[r"uptime: \d{2}:\d{2}:\d{2}"]),
             TestCase("ls /proc/1", "ls /proc/1", ["status", "rkx_map"], not_contains=["./", "../"]),
-            TestCase("cat /proc/1/status", "cat /proc/1/status", ["pid: 1", "cpu:", "mem:", "exe: init"]),
+            TestCase("cat /proc/1/status", "cat /proc/1/status", ["pid: 1", "uid: 0", "gid: 0", "cpu:", "mem:", "exe: init"]),
             TestCase("cat /proc/3/rkx_map", "cat /proc/3/rkx_map", ["r-x text", "r-- rodata", "rw- stack"]),
             TestCase("svc list", "svc list", ["service", "procmgtd", "blockd", "fsd", "netd"]),
             TestCase("svc status", "svc status", ["service", "state", "starts", "restarts", "ready_tick", "procmgtd"]),
@@ -502,7 +511,11 @@ def print_failure(case: TestCase, output: str, errors: list[str]) -> None:
     print("---------------------------")
 
 
-def run_and_validate(qemu: QemuConsole, case: TestCase, default_recover_timeout: float) -> CommandResult:
+def run_and_validate(
+    qemu: QemuConsole,
+    case: TestCase,
+    default_recover_timeout: float,
+) -> CommandResult:
     if case.delay_before > 0:
         time.sleep(case.delay_before)
 
@@ -615,7 +628,11 @@ def main() -> int:
                 break
             print_section(section.name)
             for case in section.tests:
-                result = run_and_validate(qemu, case, args.command_recover_timeout)
+                result = run_and_validate(
+                    qemu,
+                    case,
+                    args.command_recover_timeout,
+                )
 
                 if result.errors:
                     print_failure(case, result.output, result.errors)

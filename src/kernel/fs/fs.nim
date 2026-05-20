@@ -1,7 +1,9 @@
 import ../../lib/fixed_string
+import ../../lib/fs_permissions
 import ../../lib/mem
 import ../../lib/syscall_types
 import ../../lib/types
+import ../../lib/user_ids
 import ../dev/console
 import ../fs/dirent
 import ../fs/tmpfs
@@ -13,6 +15,7 @@ const
   FsMaxNodes* = 32
   FsNameMax* = 16
   FsMetaBlocks = U64(4)
+  FsMetaBytes = 2048
   FsFileBlocks = U64(8)
   FsDataStartBlock = U64(8)
   AppfsMagic = U32(0x41504653) # APFS
@@ -35,6 +38,19 @@ type
     magic: U32
     count: U32
 
+  FsOldNode {.packed.} = object
+    used: U32
+    typ: U32
+    parent: U32
+    size: U32
+    startBlock: U32
+    name: array[FsNameMax, char]
+
+  FsOldSuper {.packed.} = object
+    magic: U32
+    count: U32
+    nodes: array[FsMaxNodes, FsOldNode]
+
   VfsBackend = enum
     vfsRootfs,
     vfsTmpfs
@@ -52,6 +68,9 @@ type
     size: U32
     startBlock: U32
     name: array[FsNameMax, char]
+    uid: U32
+    gid: U32
+    mode: U32
 
   FsSuper {.packed.} = object
     magic: U32
@@ -60,6 +79,7 @@ type
 
 var
   superBlock: FsSuper
+  superRawBuf: array[FsMetaBytes, U8]
   blockBuf: array[512, U8]
   fsWriteBuf: array[SysFsDataMax, U8]
   fsReady: bool
@@ -80,6 +100,78 @@ let devEntryNames = [
 proc fsWriteFile*(path: cstring, data: pointer, size: U64): int
 proc fsWriteFileWithFlags*(path: cstring, data: pointer, size: U64, flags: U32): int
 proc fsRename*(oldPath, newPath: cstring): int
+proc fsChmod*(path: cstring, mode: U32): int
+proc fsChown*(path: cstring, uid, gid: U32): int
+
+
+proc defaultNodeMode(parent: int, name: cstring, typ: U32): U32 =
+  if typ == FsTypeFile:
+    return FsModeFileDefault
+  if typ == FsTypeMount and parent == 0 and cstringEq(name, "tmp"):
+    return FsModePublicDir
+  if typ == FsTypeDir and parent == 0 and cstringEq(name, "bin"):
+    return FsModeReadonlyDir
+
+  FsModeDirDefault
+
+
+proc initNodeMetadata(node: ptr FsNode, parent: int, name: cstring, typ: U32) =
+  if node == nil:
+    return
+
+  node.uid = RootUid
+  node.gid = RootGid
+  node.mode = defaultNodeMode(parent, name, typ)
+
+
+proc ensureNodeMetadata(idx: int): bool =
+  if idx < 0 or idx >= FsMaxNodes:
+    return false
+  if superBlock.nodes[idx].used == 0:
+    return false
+  if superBlock.nodes[idx].mode != FsModeNone:
+    return false
+
+  initNodeMetadata(
+    addr superBlock.nodes[idx],
+    int(superBlock.nodes[idx].parent),
+    cast[cstring](addr superBlock.nodes[idx].name[0]),
+    superBlock.nodes[idx].typ,
+  )
+  true
+
+
+proc ensureAllNodeMetadata(): bool =
+  var changed = false
+  var i = 0
+  while i < FsMaxNodes:
+    changed = ensureNodeMetadata(i) or changed
+    inc i
+  changed
+
+
+proc canReadNode(uid, gid: U32, idx: int): bool =
+  idx >= 0 and idx < FsMaxNodes and superBlock.nodes[idx].used != U32(0) and
+    fsModeAllowsRead(superBlock.nodes[idx].uid, superBlock.nodes[idx].gid,
+      superBlock.nodes[idx].mode, uid, gid)
+
+
+proc canWriteNode(uid, gid: U32, idx: int): bool =
+  idx >= 0 and idx < FsMaxNodes and superBlock.nodes[idx].used != U32(0) and
+    fsModeAllowsWrite(superBlock.nodes[idx].uid, superBlock.nodes[idx].gid,
+      superBlock.nodes[idx].mode, uid, gid)
+
+
+proc canExecuteNode(uid, gid: U32, idx: int): bool =
+  idx >= 0 and idx < FsMaxNodes and superBlock.nodes[idx].used != U32(0) and
+    fsModeAllowsExecute(superBlock.nodes[idx].uid, superBlock.nodes[idx].gid,
+      superBlock.nodes[idx].mode, uid, gid)
+
+
+proc canSearchNode(uid, gid: U32, idx: int): bool =
+  idx >= 0 and idx < FsMaxNodes and superBlock.nodes[idx].used != U32(0) and
+    (superBlock.nodes[idx].typ == FsTypeDir or superBlock.nodes[idx].typ == FsTypeMount) and
+    canExecuteNode(uid, gid, idx)
 
 
 proc copyInfoString(dst: var array[SysFsInfoNameMax, char], src: cstring) =
@@ -159,6 +251,19 @@ proc isBinPath(path: cstring): bool =
 
 proc isDevRoot(path: cstring): bool =
   cstringEq(path, "/dev") or cstringEq(path, "/dev/")
+
+
+proc isProcRoot(path: cstring): bool =
+  cstringEq(path, "/proc") or cstringEq(path, "/proc/")
+
+
+proc isProcPath(path: cstring): bool =
+  if path == nil:
+    return false
+
+  isProcRoot(path) or
+    (path[0] == '/' and path[1] == 'p' and path[2] == 'r' and
+      path[3] == 'o' and path[4] == 'c' and path[5] == '/')
 
 
 proc resolveDevPath(path: cstring): int =
@@ -303,18 +408,52 @@ proc writeSuper(): int =
 
 
 proc readSuper(): int =
-  let dst = cast[ptr UncheckedArray[U8]](addr superBlock)
   var copied = U64(0)
   var blk = U64(0)
   while blk < FsMetaBlocks:
     if serviceBlockRead(blk, addr blockBuf[0]) < 0:
       return -1
     var i = U64(0)
-    while i < BlockSize and copied < U64(sizeof(FsSuper)):
-      dst[copied] = blockBuf[i]
+    while i < BlockSize and copied < U64(FsMetaBytes):
+      superRawBuf[copied] = blockBuf[i]
       inc i
       inc copied
     inc blk
+
+  discard copyMem(addr superBlock, addr superRawBuf[0], U64(sizeof(FsSuper)))
+  if superBlock.magic != FsMagic:
+    return 0
+
+  if superBlock.nodes[0].used != U32(0) and
+      superBlock.nodes[0].typ == FsTypeDir and
+      superBlock.nodes[0].mode != FsModeNone:
+    return 0
+
+  var oldSuper: FsOldSuper
+  discard copyMem(addr oldSuper, addr superRawBuf[0], U64(sizeof(FsOldSuper)))
+  superBlock = FsSuper()
+  superBlock.magic = oldSuper.magic
+
+  var usedCount = U32(0)
+  var j = 0
+  while j < FsMaxNodes:
+    if oldSuper.nodes[j].used != U32(0):
+      superBlock.nodes[j].used = oldSuper.nodes[j].used
+      superBlock.nodes[j].typ = oldSuper.nodes[j].typ
+      superBlock.nodes[j].parent = oldSuper.nodes[j].parent
+      superBlock.nodes[j].size = oldSuper.nodes[j].size
+      superBlock.nodes[j].startBlock = oldSuper.nodes[j].startBlock
+      discard copyMem(addr superBlock.nodes[j].name[0], addr oldSuper.nodes[j].name[0], U64(FsNameMax))
+      initNodeMetadata(
+        addr superBlock.nodes[j],
+        int(superBlock.nodes[j].parent),
+        cast[cstring](addr superBlock.nodes[j].name[0]),
+        superBlock.nodes[j].typ,
+      )
+      inc usedCount
+    inc j
+
+  superBlock.count = usedCount
   0
 
 
@@ -332,6 +471,7 @@ proc allocNode(parent: int, name: cstring, typ: U32): int =
       superBlock.nodes[i].size = 0
       superBlock.nodes[i].startBlock = U32(FsDataStartBlock + U64(i) * FsFileBlocks)
       discard copyCString(superBlock.nodes[i].name, name)
+      initNodeMetadata(addr superBlock.nodes[i], parent, name, typ)
       inc superBlock.count
       return i
     inc i
@@ -355,6 +495,26 @@ proc resolvePath(path: cstring): int =
   current
 
 
+proc resolvePathWithSearch(uid, gid: U32, path: cstring): int =
+  if path == nil or path[0] == '\0':
+    return -1
+  if path[0] == '/' and path[1] == '\0':
+    return 0
+
+  var pos = 0
+  var current = 0
+  var name: array[FsNameMax, char]
+  while readPathComponent(path, pos, name):
+    if not canSearchNode(uid, gid, current):
+      return -1
+
+    let next = findChild(current, cast[cstring](addr name[0]))
+    if next < 0:
+      return -1
+    current = next
+  current
+
+
 proc resolveParent(path: cstring, leaf: var array[FsNameMax, char]): int =
   if path == nil or path[0] == '\0':
     return -1
@@ -363,6 +523,27 @@ proc resolveParent(path: cstring, leaf: var array[FsNameMax, char]): int =
   var current = 0
   var name: array[FsNameMax, char]
   while readPathComponent(path, pos, name):
+    if path[pos] == '\0':
+      leaf = name
+      return current
+    let next = findChild(current, cast[cstring](addr name[0]))
+    if next < 0 or superBlock.nodes[next].typ == FsTypeFile:
+      return -1
+    current = next
+  -1
+
+
+proc resolveParentWithSearch(uid, gid: U32, path: cstring, leaf: var array[FsNameMax, char]): int =
+  if path == nil or path[0] == '\0':
+    return -1
+
+  var pos = 0
+  var current = 0
+  var name: array[FsNameMax, char]
+  while readPathComponent(path, pos, name):
+    if not canSearchNode(uid, gid, current):
+      return -1
+
     if path[pos] == '\0':
       leaf = name
       return current
@@ -431,6 +612,7 @@ proc formatFs() =
   superBlock.nodes[0].typ = FsTypeDir
   superBlock.nodes[0].parent = 0
   discard copyCString(superBlock.nodes[0].name, "/")
+  initNodeMetadata(addr superBlock.nodes[0], 0, "/", FsTypeDir)
 
   discard allocNode(0, "tmp", FsTypeMount)
   discard allocNode(0, "bin", FsTypeDir)
@@ -475,6 +657,7 @@ proc fsInit*() =
     printBootMsg("  disk fs mounted\n")
 
   var fsChanged = false
+  fsChanged = ensureAllNodeMetadata() or fsChanged
   fsChanged = ensureRootDir("tmp", FsTypeMount) or fsChanged
   fsChanged = ensureRootDir("bin", FsTypeDir) or fsChanged
   fsChanged = ensureRootDir("etc", FsTypeDir) or fsChanged
@@ -609,9 +792,205 @@ proc fsInfo*(outEntries: ptr SysFsInfoEntry, maxEntries: U64): I32 =
   I32(count)
 
 
+proc mountPointAllowsSearch(uid, gid: U32, mountIdx: int): bool =
+  if mountIdx < 0 or mountIdx >= mountCount:
+    return false
+
+  let mountPath = cast[cstring](addr mounts[mountIdx].path[0])
+  let idx = resolvePathWithSearch(uid, gid, mountPath)
+  canSearchNode(uid, gid, idx)
+
+
+proc appfsRootIdxWithSearch(uid, gid: U32): int =
+  resolvePathWithSearch(uid, gid, cstring"/bin")
+
+
+proc appfsRootAllowsRead(uid, gid: U32): bool =
+  let idx = appfsRootIdxWithSearch(uid, gid)
+  canReadNode(uid, gid, idx)
+
+
+proc appfsRootAllowsSearch(uid, gid: U32): bool =
+  let idx = appfsRootIdxWithSearch(uid, gid)
+  canSearchNode(uid, gid, idx)
+
+
+proc appfsFileAllowsRead(uid, gid: U32): bool =
+  fsModeAllowsRead(RootUid, RootGid, FsModeReadonlyFile, uid, gid)
+
+
+proc appfsFileAllowsExecute(uid, gid: U32): bool =
+  fsModeAllowsExecute(RootUid, RootGid, FsModeReadonlyFile, uid, gid)
+
+
+proc devFileAllowsRead(uid, gid: U32): bool =
+  fsModeAllowsRead(RootUid, RootGid, FsModeDeviceFile, uid, gid)
+
+
+proc devFileAllowsWrite(uid, gid: U32): bool =
+  fsModeAllowsWrite(RootUid, RootGid, FsModeDeviceFile, uid, gid)
+
+
+proc fsCanReadPath*(uid, gid: U32, path: cstring): bool =
+  if not fsReady or path == nil:
+    return false
+
+  let mountIdx = findMount(path)
+  if mountIdx >= 0 and mounts[mountIdx].backend == vfsTmpfs:
+    return mountPointAllowsSearch(uid, gid, mountIdx) and
+      tmpfsCanRead(uid, gid, mountLocalPath(path, mounts[mountIdx].pathLen))
+
+  if isBinRoot(path):
+    return appfsRootAllowsRead(uid, gid)
+
+  if resolveAppfsPath(path) >= 0:
+    return appfsRootAllowsSearch(uid, gid) and appfsFileAllowsRead(uid, gid)
+
+  if isProcPath(path):
+    return true
+
+  if isDevRoot(path):
+    let idx = resolvePathWithSearch(uid, gid, path)
+    return canReadNode(uid, gid, idx)
+
+  if resolveDevPath(path) >= 0:
+    return devFileAllowsRead(uid, gid)
+
+  let idx = resolvePathWithSearch(uid, gid, path)
+  canReadNode(uid, gid, idx)
+
+
+proc fsCanWritePath*(uid, gid: U32, path: cstring): bool =
+  if not fsReady or path == nil:
+    return false
+
+  let mountIdx = findMount(path)
+  if mountIdx >= 0 and mounts[mountIdx].backend == vfsTmpfs:
+    return mountPointAllowsSearch(uid, gid, mountIdx) and
+      tmpfsCanWrite(uid, gid, mountLocalPath(path, mounts[mountIdx].pathLen))
+
+  if isBinPath(path) or resolveAppfsPath(path) >= 0:
+    return false
+
+  if isProcPath(path):
+    return false
+
+  if resolveDevPath(path) >= 0:
+    return devFileAllowsWrite(uid, gid)
+
+  let idx = resolvePathWithSearch(uid, gid, path)
+  canWriteNode(uid, gid, idx)
+
+
+proc fsCanExecutePath*(uid, gid: U32, path: cstring): bool =
+  if not fsReady or path == nil:
+    return false
+
+  let mountIdx = findMount(path)
+  if mountIdx >= 0 and mounts[mountIdx].backend == vfsTmpfs:
+    return mountPointAllowsSearch(uid, gid, mountIdx) and
+      tmpfsCanExecute(uid, gid, mountLocalPath(path, mounts[mountIdx].pathLen))
+
+  if isBinRoot(path):
+    return appfsRootAllowsSearch(uid, gid)
+
+  if resolveAppfsPath(path) >= 0:
+    return appfsRootAllowsSearch(uid, gid) and appfsFileAllowsExecute(uid, gid)
+
+  if isProcPath(path):
+    return false
+
+  if resolveDevPath(path) >= 0:
+    return false
+
+  let idx = resolvePathWithSearch(uid, gid, path)
+  canExecuteNode(uid, gid, idx)
+
+
+proc fsCanSearchDirPath*(uid, gid: U32, path: cstring): bool =
+  if not fsReady or path == nil:
+    return false
+
+  let mountIdx = findMount(path)
+  if mountIdx >= 0 and mounts[mountIdx].backend == vfsTmpfs:
+    return mountPointAllowsSearch(uid, gid, mountIdx) and
+      tmpfsCanSearchDir(uid, gid, mountLocalPath(path, mounts[mountIdx].pathLen))
+
+  if isBinRoot(path):
+    return appfsRootAllowsSearch(uid, gid)
+
+  if isProcPath(path):
+    return true
+
+  if resolveAppfsPath(path) >= 0 or resolveDevPath(path) >= 0:
+    return false
+
+  let idx = resolvePathWithSearch(uid, gid, path)
+  canSearchNode(uid, gid, idx)
+
+
+proc fsCanModifyDirPath*(uid, gid: U32, path: cstring): bool =
+  if not fsReady or path == nil:
+    return false
+
+  let mountIdx = findMount(path)
+  if mountIdx >= 0 and mounts[mountIdx].backend == vfsTmpfs:
+    return mountPointAllowsSearch(uid, gid, mountIdx) and
+      tmpfsCanModifyDir(uid, gid, mountLocalPath(path, mounts[mountIdx].pathLen))
+
+  if isBinPath(path) or resolveAppfsPath(path) >= 0 or resolveDevPath(path) >= 0:
+    return false
+
+  if isProcPath(path):
+    return false
+
+  let idx = resolvePathWithSearch(uid, gid, path)
+  canSearchNode(uid, gid, idx) and canWriteNode(uid, gid, idx)
+
+
+proc fsCanModifyParentPath*(uid, gid: U32, path: cstring): bool =
+  if not fsReady or path == nil:
+    return false
+
+  let mountIdx = findMount(path)
+  if mountIdx >= 0 and mounts[mountIdx].backend == vfsTmpfs:
+    return mountPointAllowsSearch(uid, gid, mountIdx) and
+      tmpfsCanModifyParent(uid, gid, mountLocalPath(path, mounts[mountIdx].pathLen))
+
+  if isBinPath(path) or resolveAppfsPath(path) >= 0 or resolveDevPath(path) >= 0:
+    return false
+
+  if isProcPath(path):
+    return false
+
+  var leaf: array[FsNameMax, char]
+  let parent = resolveParentWithSearch(uid, gid, path, leaf)
+  canSearchNode(uid, gid, parent) and canWriteNode(uid, gid, parent)
+
+
+proc fsCanChmodPath*(uid, gid: U32, path: cstring): bool =
+  if not fsReady or path == nil:
+    return false
+
+  let mountIdx = findMount(path)
+  if mountIdx >= 0 and mounts[mountIdx].backend == vfsTmpfs:
+    return mountPointAllowsSearch(uid, gid, mountIdx) and
+      tmpfsCanChmod(uid, gid, mountLocalPath(path, mounts[mountIdx].pathLen))
+
+  if isBinPath(path) or resolveAppfsPath(path) >= 0 or
+      resolveDevPath(path) >= 0 or isProcPath(path):
+    return false
+
+  let idx = resolvePathWithSearch(uid, gid, path)
+  idx >= 0 and (uid == RootUid or uid == superBlock.nodes[idx].uid)
+
+
 proc fillNodeEntry(idx: int, outEntry: ptr FsDirEntry) =
   outEntry.typ = superBlock.nodes[idx].typ
   outEntry.size = superBlock.nodes[idx].size
+  outEntry.uid = superBlock.nodes[idx].uid
+  outEntry.gid = superBlock.nodes[idx].gid
+  outEntry.mode = superBlock.nodes[idx].mode
 
   var i = 0
   while i < FsDirEntryNameMax:
@@ -622,6 +1001,9 @@ proc fillNodeEntry(idx: int, outEntry: ptr FsDirEntry) =
 proc fillAppfsEntry(idx: int, outEntry: ptr FsDirEntry) =
   outEntry.typ = FsDirEntryTypeFile
   outEntry.size = appfsEntries[idx].size
+  outEntry.uid = RootUid
+  outEntry.gid = RootGid
+  outEntry.mode = FsModeReadonlyFile
 
   var i = 0
   while i < FsDirEntryNameMax:
@@ -632,6 +1014,9 @@ proc fillAppfsEntry(idx: int, outEntry: ptr FsDirEntry) =
 proc fillDevEntry(idx: int, outEntry: ptr FsDirEntry) =
   outEntry.typ = FsDirEntryTypeFile
   outEntry.size = 0
+  outEntry.uid = RootUid
+  outEntry.gid = RootGid
+  outEntry.mode = FsModeDeviceFile
 
   var i = 0
   let name = devEntryNames[idx]
@@ -649,6 +1034,9 @@ proc fillDevEntry(idx: int, outEntry: ptr FsDirEntry) =
 proc fillVirtualDirEntry(name: cstring, outEntry: ptr FsDirEntry) =
   outEntry.typ = FsDirEntryTypeDir
   outEntry.size = 0
+  outEntry.uid = RootUid
+  outEntry.gid = RootGid
+  outEntry.mode = FsModeDirDefault
 
   var i = 0
   while i < FsDirEntryNameMax:
@@ -993,6 +1381,45 @@ proc fsRename*(oldPath, newPath: cstring): int =
 
   superBlock.nodes[src].parent = U32(newParent)
   discard copyCString(superBlock.nodes[src].name, cast[cstring](addr leaf[0]))
+  writeSuper()
+
+
+proc fsChmod*(path: cstring, mode: U32): int =
+  if not fsReady or path == nil:
+    return -1
+  if isBinPath(path) or resolveAppfsPath(path) >= 0 or
+      resolveDevPath(path) >= 0 or isProcPath(path):
+    return -1
+
+  let mountIdx = findMount(path)
+  if mountIdx >= 0 and mounts[mountIdx].backend == vfsTmpfs:
+    return tmpfsChmod(mountLocalPath(path, mounts[mountIdx].pathLen), mode)
+
+  let idx = resolvePath(path)
+  if idx < 0:
+    return -1
+
+  superBlock.nodes[idx].mode = mode
+  writeSuper()
+
+
+proc fsChown*(path: cstring, uid, gid: U32): int =
+  if not fsReady or path == nil:
+    return -1
+  if isBinPath(path) or resolveAppfsPath(path) >= 0 or
+      resolveDevPath(path) >= 0 or isProcPath(path):
+    return -1
+
+  let mountIdx = findMount(path)
+  if mountIdx >= 0 and mounts[mountIdx].backend == vfsTmpfs:
+    return tmpfsChown(mountLocalPath(path, mounts[mountIdx].pathLen), uid, gid)
+
+  let idx = resolvePath(path)
+  if idx < 0:
+    return -1
+
+  superBlock.nodes[idx].uid = uid
+  superBlock.nodes[idx].gid = gid
   writeSuper()
 
 

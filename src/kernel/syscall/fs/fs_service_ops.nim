@@ -107,6 +107,10 @@ proc rawRenameKernel(oldPath, newPath: cstring): int =
   fsRename(oldPath, newPath)
 
 
+proc rawChmodKernel(path: cstring, mode: U32): int =
+  fsChmod(path, mode)
+
+
 proc unpackWriteSizeFlags(value: U64, size: var U64, flags: var U32) =
   size = value and U64(0xffffffff'u64)
   flags = U32(value shr U64(32))
@@ -454,6 +458,25 @@ proc serviceRename*(oldPath, newPath: cstring): U64 =
   outValue
 
 
+proc serviceChmod*(path: cstring, mode: U32): U64 =
+  let req = queueFsRequest(SysFsOpChmod, path, nil, U64(mode), 0)
+  if req == nil:
+    if not canFallbackToRawFs():
+      return U64(-1'i64)
+
+    return U64(rawChmodKernel(path, mode))
+
+  let resp = waitFsResponse(req)
+  let outValue =
+    if resp == nil:
+      U64(-1'i64)
+    else:
+      U64(resp.result)
+
+  finishPending(req)
+  outValue
+
+
 proc syscallRawLs*(pathVal, entriesVal, maxEntriesVal: U64): U64 =
   var maxEntries: U64
   var offset: U64
@@ -600,3 +623,14 @@ proc syscallRawRename*(oldPathVal, newPathVal: U64): U64 =
     return U64(-1'i64)
 
   U64(rawRenameKernel(cast[cstring](addr oldPathBuf[0]), cast[cstring](addr newPathBuf[0])))
+
+
+proc syscallRawChmod*(pathVal, modeVal: U64): U64 =
+  if not canSyscallRawFs() or pathVal == 0:
+    return U64(-1'i64)
+
+  var pathBuf: array[SysFsPathMax, char]
+  if copyUserCString(addr pathBuf[0], pathVal, U64(SysFsPathMax)) < 0:
+    return U64(-1'i64)
+
+  U64(rawChmodKernel(cast[cstring](addr pathBuf[0]), U32(modeVal)))

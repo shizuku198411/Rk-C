@@ -70,6 +70,8 @@ proc syscallName*(num: U64): cstring =
   of SysYield: cstring("yield")
   of SysSleep: cstring("sleep")
   of SysGetPid: cstring("get_pid")
+  of SysGetUid: cstring("get_uid")
+  of SysGetGid: cstring("get_gid")
   of SysServiceList: cstring("service_list")
   of SysIpcTryReceive: cstring("ipc_try_receive")
   of SysIpcSendPacket: cstring("ipc_send_packet")

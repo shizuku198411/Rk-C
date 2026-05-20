@@ -72,6 +72,10 @@ proc printProcess(entry: ptr SysProcessInfo, full, longFormat: bool) =
   write("\t")
   printPid(entry.ppid)
   write("\t")
+  writeUnsigned(U64(entry.uid))
+  write("\t")
+  writeUnsigned(U64(entry.gid))
+  write("\t")
   write(stateName(entry.state))
   write("\t")
   write(modeName(entry.isUser))
@@ -149,7 +153,7 @@ proc shouldPrintProcess(entry: ptr SysProcessInfo, count: I32, fullList: bool): 
 
 proc printHeader(full, longFormat: bool) =
   if full or longFormat:
-    write("pid\tppid\tstate\t\tmode")
+    write("pid\tppid\tuid\tgid\tstate\t\tmode")
     if longFormat:
       write("\tcpu\tmem")
     write("\texe\n")
@@ -208,7 +212,7 @@ proc requestProcessList(maxEntries: I32, flags: U64): I32 =
 
 proc printUsage() =
   write("usage: ps [-f] [-e] [-l]\n")
-  write("  -f    show pid, ppid, state, mode, and exe\n")
+  write("  -f    show pid, ppid, uid, gid, state, mode, and exe\n")
   write("  -e    show all process slots\n")
   write("  -l    show cpu and memory usage\n")
 

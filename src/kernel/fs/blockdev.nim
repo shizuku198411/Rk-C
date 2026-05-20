@@ -13,7 +13,7 @@ const
   VqNum = U64(8)
   VqBytes = U64(8192)
   VqAlign = U64(4096)
-  IoSpinLimit = U64(30000000)
+  IoSpinLimit = U64(300000000)
   IoRetryMax = 1
 
 type
@@ -160,13 +160,14 @@ proc doIoOnce(typ: U32, blockIndex: U64, buf: pointer): int =
   vq.lastUsedIdx = volatileLoad(addr vq.used.idx)
   arch.fenceRwRw()
 
-  if volatileLoad(addr reqStatus) != 0:
+  let status = volatileLoad(addr reqStatus)
+  if status != 0:
     print("[blk] io error type=")
     printUnsigned(U64(typ))
     print(" block=")
     printUnsigned(blockIndex)
     print(" status=")
-    printHex(U64(volatileLoad(addr reqStatus)))
+    printHex(U64(status))
     putChar('\n')
     return -1
   0

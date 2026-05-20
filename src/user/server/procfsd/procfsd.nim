@@ -373,7 +373,7 @@ proc renderProcesses(): U32 =
     appendStr(pos, cstring("error\n"))
     return pos
 
-  appendStr(pos, cstring("pid\tppid\tstate\tuser\tcpu\tmem\texe\n"))
+  appendStr(pos, cstring("pid\tppid\tuid\tgid\tstate\tuser\tcpu\tmem\texe\n"))
 
   var i = I32(0)
   while i < count:
@@ -381,6 +381,10 @@ proc renderProcesses(): U32 =
       appendI32(pos, procInfos[i].pid)
       appendChar(pos, '\t')
       appendI32(pos, procInfos[i].ppid)
+      appendChar(pos, '\t')
+      appendU64(pos, U64(procInfos[i].uid))
+      appendChar(pos, '\t')
+      appendU64(pos, U64(procInfos[i].gid))
       appendChar(pos, '\t')
       appendStr(pos, stateName(procInfos[i].state))
       appendChar(pos, '\t')
@@ -489,6 +493,14 @@ proc renderStatus(pid: I32): U32 =
 
       appendStr(pos, cstring("ppid: "))
       appendI32(pos, procInfos[i].ppid)
+      appendChar(pos, '\n')
+
+      appendStr(pos, cstring("uid: "))
+      appendU64(pos, U64(procInfos[i].uid))
+      appendChar(pos, '\n')
+
+      appendStr(pos, cstring("gid: "))
+      appendU64(pos, U64(procInfos[i].gid))
       appendChar(pos, '\n')
 
       appendStr(pos, cstring("state: "))
