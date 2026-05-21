@@ -32,6 +32,17 @@ jobs:
           tar -xf /tmp/nim.tar.xz -C "$HOME"
           "$HOME/nim-2.2.10/bin/nim" --version
 
+      - name: Locate OpenSBI firmware
+        id: opensbi
+        run: |
+          fw="$(find /usr -path '*opensbi*generic*fw_jump.bin' -type f | head -n 1)"
+          if [ -z "$fw" ]; then
+            echo "OpenSBI fw_jump.bin not found" >&2
+            exit 1
+          fi
+          echo "fw=$fw" >> "$GITHUB_OUTPUT"
+          echo "Using OpenSBI firmware: $fw"
+
       - name: Run app smoke tests
         run: |
           make test-apps \
