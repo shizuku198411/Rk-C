@@ -16,6 +16,8 @@ programs, supports a shell-driven userland, and includes enough filesystem,
 process, service, account, and networking features to exercise the
 microkernel design end-to-end.
 
+![ss](./assets/ss.png)
+
 ## Highlights
 
 Kernel and architecture:
