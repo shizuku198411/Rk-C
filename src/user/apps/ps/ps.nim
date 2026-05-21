@@ -175,8 +175,7 @@ proc printHeader(full, longFormat: bool) =
 
 
 proc printProcesses(count: I32, full, every, longFormat: bool) =
-  if not every:
-    sortProcessByPid(entries, count)
+  sortProcessByPid(entries, count)
 
   printHeader(full, longFormat)
   var i = I32(0)
