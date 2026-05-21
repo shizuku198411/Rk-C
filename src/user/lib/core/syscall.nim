@@ -100,6 +100,11 @@ proc sysExec*(path: cstring, arg: cstring, detached: bool = false): I32 =
   I32(rawSyscall3(SysExec, cast[U64](path), cast[U64](arg), detachedVal))
 
 
+proc sysExecAs*(path: cstring, arg: cstring, uid, gid: U32): I32 =
+  let uidGid = U64(uid) or (U64(gid) shl U64(32))
+  I32(rawSyscall3(SysExecAs, cast[U64](path), cast[U64](arg), uidGid))
+
+
 proc sysWait*(pid: I32): U64 =
   rawSyscall3(SysWait, U64(pid), 0, 0)
 

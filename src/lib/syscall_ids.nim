@@ -82,3 +82,4 @@ const
   SysRawChown* = U64(81)
   SysChown* = U64(82)
   SysLastError* = U64(83)
+  SysExecAs* = U64(84)

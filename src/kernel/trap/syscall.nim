@@ -60,6 +60,9 @@ proc handleSyscall*(frame: ptr TrapFrame) =
   of SysExec:
     frame.a0 = syscallExec(frame.a0, frame.a1, frame.a2)
 
+  of SysExecAs:
+    frame.a0 = syscallExecAs(frame.a0, frame.a1, frame.a2)
+
   of SysWait:
     frame.a0 = syscallWait(frame.a0)
 

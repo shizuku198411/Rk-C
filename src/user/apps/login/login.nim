@@ -52,20 +52,15 @@ proc readLoginLine(buf: var array[LoginLineMax, char], echo: bool): cstring =
         writeChar(ch)
 
 
-proc runShell(entry: PasswdEntry) {.noreturn.} =
-  if sysSetUser(entry.uid, entry.gid) != 0:
-    write("login: failed to set user\n")
-    sysExit(1)
-
+proc runShell(entry: PasswdEntry) =
   discard sysSetCwd(cast[cstring](addr entry.home[0]))
 
-  let shellPid = sysExec(cstring"/bin/shell", nil, false)
+  let shellPid = sysExecAs(cstring"/bin/shell", nil, entry.uid, entry.gid)
   if shellPid < 0:
     write("login: failed to start shell\n")
-    sysExit(1)
+    return
 
   discard sysWait(shellPid)
-  sysExit(0)
 
 
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
@@ -82,6 +77,8 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
     var entry: PasswdEntry
     if authenticateUser(username, password, entry):
       runShell(entry)
+      write("\n")
+      continue
 
     if not isEmpty(username):
-      write("login: incorrect username or password\n")
+      write("incorrect username or password\n\n")

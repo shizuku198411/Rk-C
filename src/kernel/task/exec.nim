@@ -3,6 +3,7 @@ import ../../lib/rkx
 import ../../lib/syscall_caps
 import ../../lib/syscall_types
 import ../../lib/types
+import ../../lib/user_ids
 import ../dev/console
 import ../mm/memory
 import ../mm/paging
@@ -105,13 +106,10 @@ proc grantedCapsForImage(path: cstring, hdr: ptr RkxHeader): U32 =
   hdr.capabilityMask and trustedCapsForPath(path)
 
 
-proc allowedForCurrentUid(hdr: ptr RkxHeader): bool =
+proc allowedForUid(hdr: ptr RkxHeader, uid: U32): bool =
   if hdr == nil or hdr.allowedUidCount == U32(0):
     return true
-  if currentProc == nil:
-    return true
 
-  let uid = currentProc.identity.uid
   var i = U32(0)
   while i < hdr.allowedUidCount and i < U32(RkxAllowedUidMax):
     if hdr.allowedUids[i] == uid:
@@ -121,7 +119,8 @@ proc allowedForCurrentUid(hdr: ptr RkxHeader): bool =
   false
 
 
-proc replaceUserStack(root: PageTable, stackTop: VAddr, stackPages: U64, arg: cstring, userSp, argVa: var VAddr): int =
+proc replaceUserStack(root: PageTable, stackTop: VAddr, stackPages: U64, arg: cstring,
+                      userSp, argVa: var VAddr): int =
   if stackPages < U64(RkxMinStackPages) or stackPages > U64(RkxMaxStackPages):
     return -1
 
@@ -140,7 +139,8 @@ proc replaceUserStack(root: PageTable, stackTop: VAddr, stackPages: U64, arg: cs
   0
 
 
-proc installExecImage(p: ptr Process, root: PageTable, path: cstring, base, stackTop: VAddr, arg: cstring): int =
+proc installExecImage(p: ptr Process, root: PageTable, path: cstring, base, stackTop: VAddr,
+                      arg: cstring, allowedUid: U32, checkAllowedUid: bool): int =
   if root == nil:
     panic("missing process page table")
 
@@ -152,7 +152,7 @@ proc installExecImage(p: ptr Process, root: PageTable, path: cstring, base, stac
   if loadRkxImage(root, path, base, imagePages, entryVa, addr rkxHeader) != 0:
     return -1
 
-  if not allowedForCurrentUid(addr rkxHeader):
+  if checkAllowedUid and not allowedForUid(addr rkxHeader, allowedUid):
     discard unmapRangeFree(root, base, imagePages)
     return int(SysExecPermission)
 
@@ -242,7 +242,7 @@ proc loadUserProcess(path: cstring, base, stackTop: VAddr, arg: cstring): int32 
     return -1
 
   p.rootPageTable = root
-  if installExecImage(p, root, path, base, stackTop, arg) != 0:
+  if installExecImage(p, root, path, base, stackTop, arg, RootUid, false) != 0:
     discardProcess(p)
     return -1
 
@@ -269,7 +269,8 @@ proc createBlockServerUserProcess*(): int32 =
   loadUserProcess("/bin/blockd", AppBase, AppStackTop, nil)
 
 
-proc execUserApp*(path: cstring, arg: cstring, detached: bool = false): int32 =
+proc execUserAppWithIdentity(path: cstring, arg: cstring, detached: bool,
+                             uid, gid: U32): int32 =
   let parent = currentProc
   if not hasFreeProcessSlot():
     return SysExecNoProcess
@@ -289,10 +290,32 @@ proc execUserApp*(path: cstring, arg: cstring, detached: bool = false): int32 =
   let childStackTop = execStackTopForPath(path)
   child.rootPageTable = root
 
-  let installRc = installExecImage(child, root, path, childBase, childStackTop, arg)
+  let installRc = installExecImage(child, root, path, childBase, childStackTop, arg, uid, true)
   if installRc != 0:
     discardProcess(child)
     return int32(installRc)
 
   inheritProcessMetadata(child, parent)
+  child.identity.uid = uid
+  child.identity.gid = gid
   child.pid
+
+
+proc execUserApp*(path: cstring, arg: cstring, detached: bool = false): int32 =
+  let parent = currentProc
+  let uid =
+    if parent == nil:
+      RootUid
+    else:
+      parent.identity.uid
+  let gid =
+    if parent == nil:
+      RootGid
+    else:
+      parent.identity.gid
+
+  execUserAppWithIdentity(path, arg, detached, uid, gid)
+
+
+proc execUserAppAs*(path: cstring, arg: cstring, uid, gid: U32): int32 =
+  execUserAppWithIdentity(path, arg, false, uid, gid)

@@ -31,6 +31,7 @@ proc syscallName*(num: U64): cstring =
   of SysTraps: cstring("traps")
   of SysMkdir: cstring("mkdir")
   of SysExec: cstring("exec")
+  of SysExecAs: cstring("exec_as")
   of SysWait: cstring("wait")
   of SysUnlink: cstring("unlink")
   of SysRmdir: cstring("rmdir")
@@ -301,6 +302,12 @@ proc printSyscallArgs(frame: ptr TrapFrame) =
     printNamedCString("arg", frame.a1)
     print(", ")
     printNamedBool("detached", frame.a2)
+  of SysExecAs:
+    printNamedCString("path", frame.a0)
+    print(", ")
+    printNamedCString("arg", frame.a1)
+    print(", ")
+    printNamedU64("uid_gid", frame.a2)
   of SysWait, SysKill:
     printNamedI64("pid", frame.a0)
   of SysGetCwd:
