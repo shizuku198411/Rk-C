@@ -48,6 +48,16 @@ proc switchUser*(name: cstring) =
     loadHistory()
 
 
+## Prints working directory.
+proc printPwd*() =
+  var buf: array[SysProcessCwdMax, char]
+  if sysGetCwd(addr buf[0], U64(SysProcessCwdMax)) < 0:
+    write("failed to get cwd\n")
+    return
+  write(cast[cstring](addr buf[0]))
+  write("\n")
+
+
 ## Prints kernel trap counters for quick runtime diagnostics.
 proc printTrapCount*() =
   var trapCount: SysTrapCount
@@ -117,3 +127,10 @@ proc printBitmapInfo*() =
   write("  free : ")
   writeUnsigned(info.free)
   write(" pages\n")
+
+
+## shutdown kernel
+proc kernelShutdown*() =
+  saveHistory()
+  if sysShutdown() != 0:
+    write("failed to shutdown\n")

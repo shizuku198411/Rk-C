@@ -46,12 +46,7 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
       switchUser(cstr(argBuf))
     
     elif cstringEq(cstr(cmdBuf), "pwd"):
-      var buf: array[SysProcessCwdMax, char]
-      if sysGetCwd(addr buf[0], U64(SysProcessCwdMax)) < 0:
-        write("failed to get cwd\n")
-        continue
-      write(cast[cstring](addr buf[0]))
-      write("\n")
+      printPwd()
 
     elif cstringEq(cstr(cmdBuf), "ticks"):
       writeUnsigned(sysTicks())
@@ -71,9 +66,7 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
       sysExit(0)      
 
     elif cstringEq(cstr(cmdBuf), "shutdown"):
-      saveHistory()
-      if sysShutdown() != 0:
-        write("failed to shutdown\n")
+      kernelShutdown()
 
     else:
       runApp(buildBinPath(cstr(cmdBuf)), cstr(argBuf), background)
