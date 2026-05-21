@@ -27,6 +27,10 @@ const
   FsTypeMount = U32(3)
   VfsMaxMounts = 4
   DevEntryCount = 4
+  OsReleaseContent = cstring"""NAME="Rk-C"
+VERSION="0.1.1"
+GITHUB_URL="https://github.com/shizuku198411/Rk-C"
+"""
 
 type
   AppfsEntry {.packed.} = object
@@ -663,6 +667,47 @@ proc ensureDir(parentIdx: int, name: cstring, typ: U32): bool =
   superBlock.count != before
 
 
+proc cstringDataSize(data: cstring): U64 =
+  var size = U64(0)
+  while data[size] != '\0':
+    inc size
+
+  size
+
+
+proc ensureFileContent(parentIdx: int, name, data: cstring, uid, gid, mode: U32): bool =
+  if parentIdx < 0 or superBlock.nodes[parentIdx].typ != FsTypeDir:
+    return false
+
+  let before = superBlock.count
+  let idx = allocNode(parentIdx, name, FsTypeFile)
+  if idx < 0:
+    return false
+  if superBlock.nodes[idx].typ != FsTypeFile:
+    return false
+
+  var changed = superBlock.count != before
+  let size = cstringDataSize(data)
+
+  if superBlock.nodes[idx].uid != uid:
+    superBlock.nodes[idx].uid = uid
+    changed = true
+  if superBlock.nodes[idx].gid != gid:
+    superBlock.nodes[idx].gid = gid
+    changed = true
+  if superBlock.nodes[idx].mode != mode:
+    superBlock.nodes[idx].mode = mode
+    changed = true
+  if superBlock.nodes[idx].size != U32(size):
+    superBlock.nodes[idx].size = U32(size)
+    changed = true
+
+  if writeFileBytes(superBlock.nodes[idx], cast[pointer](data), size) < 0:
+    panic("failed to write ensured file")
+
+  true
+
+
 proc fsInit*() =
   blockServiceInit()
   
@@ -692,6 +737,15 @@ proc fsInit*() =
 
   let varIdx = resolvePath("/var")
   fsChanged = ensureDir(varIdx, "log", FsTypeDir) or fsChanged
+  let etcIdx = resolvePath("/etc")
+  fsChanged = ensureFileContent(
+    etcIdx,
+    "os-release",
+    OsReleaseContent,
+    RootUid,
+    RootGid,
+    FsModeFileDefault,
+  ) or fsChanged
 
   if fsChanged and writeSuper() < 0:
     panic("fs ensure dirs failed")
