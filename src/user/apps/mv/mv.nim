@@ -1,3 +1,4 @@
+## Moves or renames files, with simple copy/unlink fallback.
 import ../../lib/core/io
 import ../../lib/core/args
 import ../../lib/core/syscall
@@ -17,10 +18,12 @@ var
   targetPathBuf: array[PathMax, char]
 
 
+## Prints mv usage information.
 proc printUsage() =
   write("usage: mv <src>... <dst>\n")
 
 
+## Clears a path buffer.
 proc clearPath(dst: var array[PathMax, char]) =
   var i = 0
   while i < PathMax:
@@ -28,6 +31,7 @@ proc clearPath(dst: var array[PathMax, char]) =
     inc i
 
 
+## Appends one character to a path buffer with bounds checking.
 proc copyChar(dst: var array[PathMax, char], pos: var int, ch: char): bool =
   if pos + 1 >= PathMax:
     return false
@@ -38,11 +42,13 @@ proc copyChar(dst: var array[PathMax, char], pos: var int, ch: char): bool =
   true
 
 
+## Returns true when a path can be listed as a directory.
 proc isDir(path: cstring): bool =
   let count = sysLs(path, addr entries[0], U64(MvMaxEntries))
   count >= 0
 
 
+## Returns a C string view of the final path component.
 proc basename(path: cstring): cstring =
   var endPos = 0
   while path[endPos] != '\0':
@@ -58,6 +64,7 @@ proc basename(path: cstring): cstring =
   cast[cstring](addr path[start])
 
 
+## Joins a directory and basename into a destination path buffer.
 proc joinPath(dir, name: cstring, dst: var array[PathMax, char]): cstring =
   clearPath(dst)
   var pos = 0
@@ -87,6 +94,7 @@ proc joinPath(dir, name: cstring, dst: var array[PathMax, char]): cstring =
   cast[cstring](addr dst[0])
 
 
+## Moves one source path to one target path.
 proc moveOne(srcPath, dstPath: cstring): bool =
   if sysRename(srcPath, dstPath) == 0:
     return true
@@ -108,6 +116,7 @@ proc moveOne(srcPath, dstPath: cstring): bool =
   sysUnlink(srcPath) == 0
 
 
+## Parses mv arguments and moves each source to the destination.
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   if not parseUserArgs(arg, parsedArgs):
     printUsage()

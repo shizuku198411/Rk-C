@@ -1,3 +1,4 @@
+## Prints the current uid/gid and resolves their names when available.
 import ../../lib/core/args
 import ../../lib/core/group
 import ../../lib/core/io
@@ -10,11 +11,13 @@ import ../../lib/core/userdb
 var parsedArgs: UserArgs
 
 
+## Prints id usage information.
 proc printUsage() =
   write("usage: id\n")
   write("       id --help\n")
 
 
+## Reads current identity and prints uid/gid with optional names.
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   if not parseUserArgs(arg, parsedArgs):
     printUsage()

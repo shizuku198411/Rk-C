@@ -1,3 +1,4 @@
+## Prints metadata from an RKX executable image.
 import ../../../lib/rkx
 import ../../../lib/syscall_caps
 import ../../lib/core/args
@@ -15,10 +16,12 @@ var
   header: RkxHeader
 
 
+## Prints rkxinfo usage information.
 proc printUsage() =
   write("usage: rkxinfo <app|/bin/app>\n")
 
 
+## Clears the path construction buffer.
 proc clearPathBuf() =
   var i = 0
   while i < PathBufSize:
@@ -26,6 +29,7 @@ proc clearPathBuf() =
     inc i
 
 
+## Appends a string to the path buffer with bounds checking.
 proc appendPath(s: cstring, pos: var U32): bool =
   var i = U32(0)
   while s[i] != '\0':
@@ -38,6 +42,7 @@ proc appendPath(s: cstring, pos: var U32): bool =
   true
 
 
+## Builds a /bin/<name> path for app-name inputs.
 proc buildBinPath(name: cstring): cstring =
   clearPathBuf()
   var pos = U32(0)
@@ -49,6 +54,7 @@ proc buildBinPath(name: cstring): cstring =
   cast[cstring](addr pathBuf[0])
 
 
+## Resolves an absolute path or converts an app name to /bin/<name>.
 proc inputPath(arg: cstring): cstring =
   if arg == nil or arg[0] == '\0':
     return nil
@@ -58,6 +64,7 @@ proc inputPath(arg: cstring): cstring =
   buildBinPath(arg)
 
 
+## Prints one decimal RKX header field.
 proc writeField(name: cstring, value: U64) =
   write(name)
   write(": ")
@@ -65,6 +72,7 @@ proc writeField(name: cstring, value: U64) =
   write("\n")
 
 
+## Prints one hexadecimal RKX header field.
 proc writeHexField(name: cstring, value: U64) =
   write(name)
   write(": ")
@@ -72,6 +80,7 @@ proc writeHexField(name: cstring, value: U64) =
   write("\n")
 
 
+## Writes a named capability when the bit is present.
 proc writeCapName(mask: U32, bit: U32, name: cstring, first: var bool) =
   if (mask and bit) == 0:
     return
@@ -81,6 +90,7 @@ proc writeCapName(mask: U32, bit: U32, name: cstring, first: var bool) =
   first = false
 
 
+## Prints the decoded capability mask.
 proc writeCaps(mask: U32) =
   writeHex32Value(mask)
   write(" (")
@@ -105,6 +115,7 @@ proc writeCaps(mask: U32) =
   write(")")
 
 
+## Prints one RKX memory segment descriptor.
 proc writeSegment(name: cstring, va, off, fileSize, memSize: U64) =
   write(name)
   write(": va=")
@@ -118,6 +129,7 @@ proc writeSegment(name: cstring, va, off, fileSize, memSize: U64) =
   write("\n")
 
 
+## Prints all decoded RKX header fields.
 proc printHeader(path: cstring) =
   write("path: ")
   write(path)
@@ -153,6 +165,7 @@ proc printHeader(path: cstring) =
   writeHexField("flags", U64(header.flags))
 
 
+## Prints an rkxinfo error and exits.
 proc fail(msg: cstring) {.noreturn.} =
   write("rkxinfo: ")
   write(msg)
@@ -160,6 +173,7 @@ proc fail(msg: cstring) {.noreturn.} =
   sysExit(1)
 
 
+## Reads and validates the RKX header from disk.
 proc readHeader(path: cstring) =
   let fd = sysOpen(path, SysOpenRead)
   if fd < 0:
@@ -178,6 +192,7 @@ proc readHeader(path: cstring) =
     fail(cstring("bad header size"))
 
 
+## Parses one target and prints its RKX metadata.
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   if not parseUserArgs(arg, parsedArgs):
     printUsage()

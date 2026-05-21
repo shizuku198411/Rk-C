@@ -1,3 +1,4 @@
+## Builds and verifies PBKDF2-SHA256 password hashes for shadow entries.
 import ../net/crypto/crypto_types
 import ../net/crypto/hkdf
 import ./shadow
@@ -5,6 +6,7 @@ import ./strutils
 import ./syscall
 
 
+## Returns the byte length of a password C string.
 proc passwordLen(password: cstring): U32 =
   if password == nil:
     return U32(0)
@@ -12,6 +14,7 @@ proc passwordLen(password: cstring): U32 =
   U32(cstrlen(password))
 
 
+## Derives a fixed-size PBKDF2-SHA256 password hash.
 proc pbkdf2Sha256(password: cstring, salt: pointer, saltLen, iterations: U32, outHash: pointer): bool =
   if password == nil or salt == nil or outHash == nil or iterations == U32(0):
     return false
@@ -56,6 +59,7 @@ proc pbkdf2Sha256(password: cstring, salt: pointer, saltLen, iterations: U32, ou
   true
 
 
+## Creates a new salted shadow hash entry for a username and password.
 proc makePasswordHash*(name, password: cstring, entry: var ShadowEntry): bool =
   clearShadowEntry(entry)
   if name == nil or password == nil:
@@ -71,6 +75,7 @@ proc makePasswordHash*(name, password: cstring, entry: var ShadowEntry): bool =
   pbkdf2Sha256(password, addr entry.salt[0], ShadowSaltLen, entry.iterations, addr entry.hash[0])
 
 
+## Verifies a password against a stored shadow entry in constant time.
 proc verifyPassword*(entry: ShadowEntry, password: cstring): bool =
   var computed: array[ShadowHashLen, U8]
   if not pbkdf2Sha256(password, unsafeAddr entry.salt[0], ShadowSaltLen, entry.iterations, addr computed[0]):

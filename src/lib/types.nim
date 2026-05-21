@@ -1,3 +1,4 @@
+## Defines shared integer, address, size, and alignment helpers.
 type
   U8* = uint8
   U16* = uint16
@@ -14,11 +15,14 @@ const
   NilPAddr* = PAddr(0)
   PageSize* = U64(4096)
 
+## Rounds a value up to the requested alignment.
 func alignUp*(value, align: U64): U64 {.inline.} =
   (value + align - 1'u64) and not (align - 1'u64)
 
+## Rounds a value down to the requested alignment.
 func alignDown*(value, align: U64): U64 {.inline.} =
   value and not (align - 1'u64)
 
+## Returns whether a value is aligned to the requested boundary.
 func isAligned*(value, align: U64): bool {.inline.} =
   (value and (align - 1'u64)) == 0

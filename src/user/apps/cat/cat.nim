@@ -1,3 +1,4 @@
+## Concatenates a file or stdin to stdout.
 import ../../lib/core/io
 import ../../lib/core/args
 import ../../lib/core/pathutils
@@ -11,10 +12,12 @@ var buffer: array[CatBufferSize, char]
 var parsedArgs: UserArgs
 
 
+## Prints cat usage information.
 proc printUsage() =
   write("usage: cat [path]\n")
 
 
+## Streams stdin to stdout until EOF.
 proc catStdin() =
   while true:
     let readLen = sysReadFd(0, addr buffer[0], U64(CatBufferSize))
@@ -27,6 +30,7 @@ proc catStdin() =
     discard sysWriteFd(1, addr buffer[0], U64(readLen))
 
 
+## Parses arguments and prints stdin or one resolved file path.
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   discard parseUserArgs(arg, parsedArgs)
 

@@ -1,3 +1,4 @@
+## Implements filesystem service registration and request/reply syscall handlers.
 import ../../../lib/fixed_string
 import ../../../lib/mem
 import ../../../lib/syscall_types
@@ -28,14 +29,17 @@ var
   renamePathBuf: array[SysFsPathMax, char]
 
 
+## Allocates pending.
 proc allocPending(): ptr PendingFsRequest =
   allocIpcPending(pending)
 
 
+## Finds pending.
 proc findPending(id: U64): ptr PendingFsRequest =
   findIpcPending(pending, id)
 
 
+## Queues fs request.
 proc queueFsRequest(op: U32, path: cstring, data: pointer, size, capacity: U64): ptr PendingFsRequest =
   if not fsServiceAvailable() or currentIsFsService():
     return nil
@@ -64,6 +68,7 @@ proc queueFsRequest(op: U32, path: cstring, data: pointer, size, capacity: U64):
   p
 
 
+## Waits for fs response.
 proc waitFsResponse(p: ptr PendingFsRequest): ptr SysFsResponse =
   if not waitIpcReply(addr p.ipc, serviceFs, waitFsReq):
     return nil
@@ -71,10 +76,12 @@ proc waitFsResponse(p: ptr PendingFsRequest): ptr SysFsResponse =
   addr p.response
 
 
+## Finishes pending.
 proc finishPending(p: ptr PendingFsRequest) =
   finishIpcPending(p)
 
 
+## Implements the raw ls kernel kernel helper.
 proc rawLsKernel(path: cstring, outEntries: ptr FsDirEntry, maxEntries: U64, offset: U64 = 0): int =
   if outEntries == nil or maxEntries == 0:
     return -1
@@ -94,30 +101,37 @@ proc rawLsKernel(path: cstring, outEntries: ptr FsDirEntry, maxEntries: U64, off
   int(count)
 
 
+## Implements the raw read file kernel kernel helper.
 proc rawReadFileKernel(path: cstring, buf: pointer, capacity: U64): int =
   fsReadFile(path, buf, capacity)
 
 
+## Implements the raw file size kernel kernel helper.
 proc rawFileSizeKernel(path: cstring): int =
   fsFileSize(path)
 
 
+## Implements the raw read file range kernel kernel helper.
 proc rawReadFileRangeKernel(path: cstring, buf: pointer, offset, capacity: U64): int =
   fsReadFileRange(path, buf, offset, capacity)
 
 
+## Implements the raw rename kernel kernel helper.
 proc rawRenameKernel(oldPath, newPath: cstring): int =
   fsRename(oldPath, newPath)
 
 
+## Implements the raw chmod kernel kernel helper.
 proc rawChmodKernel(path: cstring, mode: U32): int =
   fsChmod(path, mode)
 
 
+## Implements the raw chown kernel kernel helper.
 proc rawChownKernel(path: cstring, uid, gid: U32): int =
   fsChown(path, uid, gid)
 
 
+## Implements the unpack write size flags kernel helper.
 proc unpackWriteSizeFlags(value: U64, size: var U64, flags: var U32) =
   size = value and U64(0xffffffff'u64)
   flags = U32(value shr U64(32))
@@ -125,11 +139,13 @@ proc unpackWriteSizeFlags(value: U64, size: var U64, flags: var U32) =
     flags = SysFsWriteDefault
 
 
+## Implements the unpack ls limit offset kernel helper.
 proc unpackLsLimitOffset(value: U64, maxEntries: var U64, offset: var U64) =
   maxEntries = value and U64(0xffffffff'u64)
   offset = value shr U64(32)
 
 
+## Handles the fs info syscall operation.
 proc syscallFsInfo*(outEntriesVal, maxEntriesVal: U64): U64 =
   if outEntriesVal == 0 or maxEntriesVal == 0:
     return U64(-1'i64)
@@ -152,6 +168,7 @@ proc syscallFsInfo*(outEntriesVal, maxEntriesVal: U64): U64 =
   U64(count)
 
 
+## Handles the fs service register syscall operation.
 proc syscallFsServiceRegister*(): U64 =
   if currentIsFsService():
     return 0
@@ -162,6 +179,7 @@ proc syscallFsServiceRegister*(): U64 =
   0
 
 
+## Handles the fs service receive syscall operation.
 proc syscallFsServiceReceive*(outReq: U64): U64 =
   if outReq == 0 or not canSyscallFsServiceReceive():
     return U64(-1'i64)
@@ -179,6 +197,7 @@ proc syscallFsServiceReceive*(outReq: U64): U64 =
     sleepCurrentForIpc()
 
 
+## Handles the fs service reply syscall operation.
 proc syscallFsServiceReply*(respVal: U64): U64 =
   if respVal == 0 or not canSyscallFsServiceReply():
     return U64(-1'i64)
@@ -197,6 +216,7 @@ proc syscallFsServiceReply*(respVal: U64): U64 =
   0
 
 
+## Implements the service ls kernel helper.
 proc serviceLs*(path: cstring, entriesVal, maxEntries: U64, offset: U64 = 0): U64 =
   if maxEntries == 0:
     return 0
@@ -235,6 +255,7 @@ proc serviceLs*(path: cstring, entriesVal, maxEntries: U64, offset: U64 = 0): U6
   outValue
 
 
+## Implements the service ls to kernel kernel helper.
 proc serviceLsToKernel*(path: cstring, dst: ptr FsDirEntry, maxEntries: U64, offset: U64 = 0): I32 =
   if dst == nil or maxEntries == 0:
     return -1
@@ -271,6 +292,7 @@ proc serviceLsToKernel*(path: cstring, dst: ptr FsDirEntry, maxEntries: U64, off
   outValue
 
 
+## Implements the service mkdir kernel helper.
 proc serviceMkdir*(path: cstring): U64 =
   let req = queueFsRequest(SysFsOpMkdir, path, nil, 0, 0)
   if req == nil:
@@ -295,6 +317,7 @@ proc serviceMkdir*(path: cstring): U64 =
   outValue
 
 
+## Implements the service unlink kernel helper.
 proc serviceUnlink*(path: cstring): U64 =
   let req = queueFsRequest(SysFsOpUnlink, path, nil, 0, 0)
   if req == nil:
@@ -314,6 +337,7 @@ proc serviceUnlink*(path: cstring): U64 =
   outValue
 
 
+## Implements the service rmdir kernel helper.
 proc serviceRmdir*(path: cstring): U64 =
   let req = queueFsRequest(SysFsOpRmdir, path, nil, 0, 0)
   if req == nil:
@@ -333,6 +357,7 @@ proc serviceRmdir*(path: cstring): U64 =
   outValue
 
 
+## Implements the service read file kernel helper.
 proc serviceReadFile*(path: cstring, bufVal, capacity: U64): U64 =
   let req = queueFsRequest(SysFsOpReadFile, path, nil, 0, capacity)
   if req == nil:
@@ -360,6 +385,7 @@ proc serviceReadFile*(path: cstring, bufVal, capacity: U64): U64 =
   outValue
 
 
+## Implements the service read file to kernel kernel helper.
 proc serviceReadFileToKernel*(path: cstring, dst: pointer, capacity: U64): I32 =
   if dst == nil or capacity > SysFsDataMax:
     return -1
@@ -382,6 +408,7 @@ proc serviceReadFileToKernel*(path: cstring, dst: pointer, capacity: U64): I32 =
   outValue
 
 
+## Implements the service file size to kernel kernel helper.
 proc serviceFileSizeToKernel*(path: cstring): I32 =
   let req = queueFsRequest(SysFsOpFileSize, path, nil, 0, 0)
   if req == nil:
@@ -401,6 +428,7 @@ proc serviceFileSizeToKernel*(path: cstring): I32 =
   outValue
 
 
+## Implements the service read file range to kernel kernel helper.
 proc serviceReadFileRangeToKernel*(path: cstring, dst: pointer, offset, capacity: U64): I32 =
   if dst == nil or capacity > SysFsDataMax:
     return -1
@@ -423,6 +451,7 @@ proc serviceReadFileRangeToKernel*(path: cstring, dst: pointer, offset, capacity
   outValue
 
 
+## Implements the service write file kernel helper.
 proc serviceWriteFile*(path: cstring, data: pointer, size: U64, flags: U32 = SysFsWriteDefault): U64 =
   let req = queueFsRequest(SysFsOpWriteFile, path, data, size, U64(flags))
   if req == nil:
@@ -449,6 +478,7 @@ proc serviceWriteFile*(path: cstring, data: pointer, size: U64, flags: U32 = Sys
   outValue
 
 
+## Implements the service rename kernel helper.
 proc serviceRename*(oldPath, newPath: cstring): U64 =
   if not copyCString(renamePathBuf, newPath):
     return U64(-1'i64)
@@ -477,6 +507,7 @@ proc serviceRename*(oldPath, newPath: cstring): U64 =
   outValue
 
 
+## Implements the service chmod kernel helper.
 proc serviceChmod*(path: cstring, mode: U32): U64 =
   let req = queueFsRequest(SysFsOpChmod, path, nil, U64(mode), 0)
   if req == nil:
@@ -496,6 +527,7 @@ proc serviceChmod*(path: cstring, mode: U32): U64 =
   outValue
 
 
+## Implements the service chown kernel helper.
 proc serviceChown*(path: cstring, uid, gid: U32): U64 =
   let req = queueFsRequest(SysFsOpChown, path, nil, U64(uid), U64(gid))
   if req == nil:
@@ -515,6 +547,7 @@ proc serviceChown*(path: cstring, uid, gid: U32): U64 =
   outValue
 
 
+## Handles the raw ls syscall operation.
 proc syscallRawLs*(pathVal, entriesVal, maxEntriesVal: U64): U64 =
   var maxEntries: U64
   var offset: U64
@@ -543,6 +576,7 @@ proc syscallRawLs*(pathVal, entriesVal, maxEntriesVal: U64): U64 =
   U64(count)
 
 
+## Handles the raw mkdir syscall operation.
 proc syscallRawMkdir*(pathVal: U64): U64 =
   if not canSyscallRawFs() or pathVal == 0:
     return U64(-1'i64)
@@ -554,6 +588,7 @@ proc syscallRawMkdir*(pathVal: U64): U64 =
   U64(fsMkdir(cast[cstring](addr pathBuf[0])))
 
 
+## Handles the raw unlink syscall operation.
 proc syscallRawUnlink*(pathVal: U64): U64 =
   if not canSyscallRawFs() or pathVal == 0:
     return U64(-1'i64)
@@ -565,6 +600,7 @@ proc syscallRawUnlink*(pathVal: U64): U64 =
   U64(fsUnlink(cast[cstring](addr pathBuf[0])))
 
 
+## Handles the raw rmdir syscall operation.
 proc syscallRawRmdir*(pathVal: U64): U64 =
   if not canSyscallRawFs() or pathVal == 0:
     return U64(-1'i64)
@@ -576,6 +612,7 @@ proc syscallRawRmdir*(pathVal: U64): U64 =
   U64(fsRmdir(cast[cstring](addr pathBuf[0])))
 
 
+## Handles the raw read file syscall operation.
 proc syscallRawReadFile*(pathVal, bufVal, capacity: U64): U64 =
   if not canSyscallRawFs() or pathVal == 0 or bufVal == 0 or capacity > SysFsDataMax:
     return U64(-1'i64)
@@ -593,6 +630,7 @@ proc syscallRawReadFile*(pathVal, bufVal, capacity: U64): U64 =
   U64(readLen)
 
 
+## Handles the raw file size syscall operation.
 proc syscallRawFileSize*(pathVal: U64): U64 =
   if not canSyscallRawFs() or pathVal == 0:
     return U64(-1'i64)
@@ -608,6 +646,7 @@ proc syscallRawFileSize*(pathVal: U64): U64 =
   U64(size)
 
 
+## Handles the raw read range syscall operation.
 proc syscallRawReadRange*(reqVal: U64): U64 =
   if not canSyscallRawFs() or reqVal == 0:
     return U64(-1'i64)
@@ -632,6 +671,7 @@ proc syscallRawReadRange*(reqVal: U64): U64 =
   U64(readLen)
 
 
+## Handles the raw write file syscall operation.
 proc syscallRawWriteFile*(pathVal, bufVal, sizeFlags: U64): U64 =
   var size: U64
   var flags: U32
@@ -649,6 +689,7 @@ proc syscallRawWriteFile*(pathVal, bufVal, sizeFlags: U64): U64 =
   U64(fsWriteFileWithFlags(cast[cstring](addr pathBuf[0]), addr rawFileBuf[0], size, flags))
 
 
+## Handles the raw rename syscall operation.
 proc syscallRawRename*(oldPathVal, newPathVal: U64): U64 =
   if not canSyscallRawFs() or oldPathVal == 0 or newPathVal == 0:
     return U64(-1'i64)
@@ -663,6 +704,7 @@ proc syscallRawRename*(oldPathVal, newPathVal: U64): U64 =
   U64(rawRenameKernel(cast[cstring](addr oldPathBuf[0]), cast[cstring](addr newPathBuf[0])))
 
 
+## Handles the raw chmod syscall operation.
 proc syscallRawChmod*(pathVal, modeVal: U64): U64 =
   if not canSyscallRawFs() or pathVal == 0:
     return U64(-1'i64)
@@ -674,6 +716,7 @@ proc syscallRawChmod*(pathVal, modeVal: U64): U64 =
   U64(rawChmodKernel(cast[cstring](addr pathBuf[0]), U32(modeVal)))
 
 
+## Handles the raw chown syscall operation.
 proc syscallRawChown*(pathVal, uidGidVal: U64): U64 =
   if not canSyscallRawFs() or pathVal == 0:
     return U64(-1'i64)

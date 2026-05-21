@@ -1,3 +1,4 @@
+## Implements raw network device syscall handlers.
 import ../../../lib/syscall_types
 import ../../../lib/types
 import ../../lib/syscall_out
@@ -6,6 +7,7 @@ import ../../net/netdev
 import ../syscall_cap
 
 
+## Handles the raw net info syscall operation.
 proc syscallRawNetInfo*(outInfo: U64): U64 =
   if outInfo == 0 or not canSyscallRawNet():
     return U64(-1'i64)
@@ -17,6 +19,7 @@ proc syscallRawNetInfo*(outInfo: U64): U64 =
   0
 
 
+## Handles the raw net init syscall operation.
 proc syscallRawNetInit*(): U64 =
   if not canSyscallRawNet():
     return U64(-1'i64)
@@ -24,6 +27,7 @@ proc syscallRawNetInit*(): U64 =
   U64(netdevInit())
 
 
+## Handles the raw net mac syscall operation.
 proc syscallRawNetMac*(outMac: U64): U64 =
   if outMac == 0 or not canSyscallRawNet():
     return U64(-1'i64)
@@ -37,6 +41,7 @@ proc syscallRawNetMac*(outMac: U64): U64 =
   0
 
 
+## Handles the raw net recv syscall operation.
 proc syscallRawNetRecv*(outBuf, capacity: U64): U64 =
   if outBuf == 0 or capacity == 0 or capacity > SysNetPacketMax or not canSyscallRawNet():
     return U64(-1'i64)
@@ -53,6 +58,7 @@ proc syscallRawNetRecv*(outBuf, capacity: U64): U64 =
   U64(size)
 
 
+## Handles the raw net send syscall operation.
 proc syscallRawNetSend*(inBuf, size: U64): U64 =
   if inBuf == 0 or size == 0 or size > SysNetPacketMax or not canSyscallRawNet():
     return U64(-1'i64)

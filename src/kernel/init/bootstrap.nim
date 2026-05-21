@@ -1,3 +1,4 @@
+## Boots the kernel, initializes subsystems, and starts initial user services.
 import ../../arch/riscv64/arch
 import ../../lib/calc
 import ../../lib/mem
@@ -27,6 +28,7 @@ var
   kernelRootPageTable: PageTable
 
 
+## Clears bss.
 proc clearBss() =
   let start = cast[U64](addr bssStartSym)
   let last = cast[U64](addr bssEndSym)
@@ -37,15 +39,18 @@ proc clearBss() =
     panic("failed to bss zero clear")
 
 
+## Sets trap vector.
 proc setTrapVector() =
   arch.writeStvec(cast[U64](arch.trapEntry))
 
 
+## Implements the enable timer interrupt kernel helper.
 proc enableTimerInterrupt() =
   arch.writeSie(arch.readSie() or SieStie)
   arch.writeSstatus((arch.readSstatus() or SstatusSie) and not SstatusSum)
 
 
+## Implements the enable sv39 kernel helper.
 proc enableSv39(memInfo: MemoryInfo) =
   kernelRootPageTable = createKernelMappedPageTable()
   if kernelRootPageTable == nil:
@@ -60,6 +65,7 @@ proc enableSv39(memInfo: MemoryInfo) =
   discard memInfo
 
 
+## Implements the kernel banner kernel helper.
 proc kernelBanner() =
   putChar('\n')
   printlnConsoleOnly("╔════════════════════════════════════════╗")
@@ -75,6 +81,7 @@ proc kernelBanner() =
   printlnConsoleOnly("╚════════════════════════════════════════╝\n")
 
 
+## Waits for for initial services.
 proc waitForInitialServices() =
   let deadline = saturatingAddU64(timerTickCount, ServiceWaitTimeoutTicks)
 
@@ -90,6 +97,7 @@ proc waitForInitialServices() =
     sleepCurrentUntilTick(saturatingAddU64(timerTickCount, U64(1)))
 
 
+## Implements the boot task kernel helper.
 proc bootTask() {.cdecl.} =
   if createServiceManagerUserProcess() < 0:
     panic("failed to create service manager")
@@ -106,6 +114,7 @@ proc bootTask() {.cdecl.} =
 
 
 
+## Implements the address info kernel helper.
 proc addressInfo(hartid: U64, dtb: pointer, memInfo: MemoryInfo) =
   let bssSize = cast[U64](addr bssEndSym) - cast[U64](addr bssStartSym)
   let freeRamSize = cast[U64](addr freeRamEndSym) - cast[U64](addr freeRamStartSym)
@@ -165,6 +174,7 @@ proc addressInfo(hartid: U64, dtb: pointer, memInfo: MemoryInfo) =
   putChar('\n')
 
 
+## Implements the kernel bootstrap kernel helper.
 proc kernelBootstrap*(hartid: U64, dtb: pointer) =
   putChar('\n')
 

@@ -1,3 +1,4 @@
+## Manages per-user shell history loading, saving, printing, and rotation.
 import ../../lib/core/io
 import ../../lib/core/syscall
 import ../../lib/core/userdb
@@ -16,6 +17,7 @@ const
 var historyPathBuf: array[HistoryPathMax, char]
 
 
+## Clears the temporary buffer used to build the current history file path.
 proc clearHistoryPathBuf() =
   var i = U32(0)
   while i < HistoryPathMax:
@@ -23,6 +25,7 @@ proc clearHistoryPathBuf() =
     inc i
 
 
+## Appends one character to the history path buffer with bounds checking.
 proc appendPathChar(pos: var U32, c: char): bool =
   if pos + 1 >= HistoryPathMax:
     return false
@@ -33,6 +36,7 @@ proc appendPathChar(pos: var U32, c: char): bool =
   true
 
 
+## Appends a C string to the history path buffer with bounds checking.
 proc appendPathCString(pos: var U32, s: cstring): bool =
   var i = U32(0)
   while s[i] != '\0':
@@ -42,6 +46,7 @@ proc appendPathCString(pos: var U32, s: cstring): bool =
   true
 
 
+## Builds the history path for the current uid, falling back to /home.
 proc buildCurrentUserHistoryPath(): cstring =
   clearHistoryPathBuf()
 
@@ -71,6 +76,7 @@ proc buildCurrentUserHistoryPath(): cstring =
   cast[cstring](addr historyPathBuf[0])
 
 
+## Returns the current visible length of a shell input line buffer.
 proc lineLen*(buf: var array[LineMax, char]): int =
   var i = 0
   while i < LineMax:
@@ -80,6 +86,7 @@ proc lineLen*(buf: var array[LineMax, char]): int =
   LineMax - 1
 
 
+## Serializes in-memory history entries into the save buffer.
 proc buildHistorySaveBuf(): U64 =
   var
     outPos: U64 = 0
@@ -106,6 +113,7 @@ proc buildHistorySaveBuf(): U64 =
   outPos
 
 
+## Clears every in-memory shell history entry.
 proc clearHistory*() =
   var h = 0
   while h < HistoryMax:
@@ -117,6 +125,7 @@ proc clearHistory*() =
   historyPos = 0
 
 
+## Parses the saved history file contents back into history entries.
 proc restoreHistoryFromBuf(size: I32) =
   var
     inPos: I32 = 0
@@ -147,6 +156,7 @@ proc restoreHistoryFromBuf(size: I32) =
   historyPos = histPos
 
 
+## Saves the current shell history to the current user's history file.
 proc saveHistory*() =
   let
     size = buildHistorySaveBuf()
@@ -156,6 +166,7 @@ proc saveHistory*() =
     write("failed to write .history\n")
 
 
+## Loads the current user's history file into memory.
 proc loadHistory*() =
   let path = buildCurrentUserHistoryPath()
   let size = sysReadFile(path, addr historySaveBuf[0], U64(HistorySaveBufMax))
@@ -163,6 +174,7 @@ proc loadHistory*() =
     restoreHistoryFromBuf(size)
 
 
+## Prints history entries with a one-based index.
 proc printHistory*() =
   var pos = 0
   while pos < historyPos:
@@ -173,6 +185,7 @@ proc printHistory*() =
     inc pos
 
 
+## Stores the latest command line and rotates older entries when full.
 proc storeHistory*() =
   if historyPos < int32(HistoryMax):
     copyMem(addr history[historyPos][0], addr lineBuf[0], LineMax)

@@ -1,3 +1,4 @@
+## Defines service catalog metadata shared by kernel and userland.
 import syscall_types
 import types
 
@@ -24,6 +25,7 @@ let managedServices*: array[SysManagedServiceCount, SysServiceSpec] = [
 ]
 
 
+## Handles service catalog data for kind known.
 proc serviceKindKnown*(kind: U32): bool =
   kind == SysServiceKindManager or kind == SysServiceKindBlock or
     kind == SysServiceKindFs or kind == SysServiceKindProcess or
@@ -31,6 +33,7 @@ proc serviceKindKnown*(kind: U32): bool =
     kind == SysServiceKindUser
 
 
+## Handles service catalog data for name by kind.
 proc serviceNameByKind*(kind: U32): cstring =
   if kind == SysServiceKindManager:
     return "svcmgtd"
@@ -44,6 +47,7 @@ proc serviceNameByKind*(kind: U32): cstring =
   "unknown"
 
 
+## Handles service catalog data for path by kind.
 proc servicePathByKind*(kind: U32): cstring =
   var i = 0
   while i < managedServices.len:
@@ -54,6 +58,7 @@ proc servicePathByKind*(kind: U32): cstring =
   nil
 
 
+## Handles service catalog data for required by kind.
 proc serviceRequiredByKind*(kind: U32): bool =
   if kind == SysServiceKindManager:
     return true

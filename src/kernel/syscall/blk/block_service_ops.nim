@@ -1,3 +1,4 @@
+## Implements block service registration and raw block syscall handling.
 import ../../../lib/mem
 import ../../../lib/syscall_types
 import ../../../lib/types
@@ -24,18 +25,22 @@ var
   rawBlockBuf: array[SysBlockDataSize, U8]
 
 
+## Implements the block service init kernel helper.
 proc blockServiceInit*() =
   blockdevInit()
 
 
+## Allocates pending.
 proc allocPending(): ptr PendingBlockRequest =
   allocIpcPending(pending)
 
 
+## Finds pending.
 proc findPending(id: U64): ptr PendingBlockRequest =
   findIpcPending(pending, id)
 
 
+## Queues block request.
 proc queueBlockRequest(op: U32, blockIndex: U64, data: pointer): ptr PendingBlockRequest =
   if not blockServiceAvailable() or currentIsBlockService():
     return nil
@@ -55,6 +60,7 @@ proc queueBlockRequest(op: U32, blockIndex: U64, data: pointer): ptr PendingBloc
   p
 
 
+## Waits for block response.
 proc waitBlockResponse(p: ptr PendingBlockRequest): ptr SysBlockResponse =
   if not waitIpcReply(addr p.ipc, serviceBlock, waitBlockReq):
     return nil
@@ -62,10 +68,12 @@ proc waitBlockResponse(p: ptr PendingBlockRequest): ptr SysBlockResponse =
   addr p.response
 
 
+## Finishes pending.
 proc finishPending(p: ptr PendingBlockRequest) =
   finishIpcPending(p)
 
 
+## Implements the service block read kernel helper.
 proc serviceBlockRead*(blockIndex: U64, outBlock: pointer): int =
   if outBlock == nil:
     return -1
@@ -87,6 +95,7 @@ proc serviceBlockRead*(blockIndex: U64, outBlock: pointer): int =
   0
 
 
+## Implements the service block write kernel helper.
 proc serviceBlockWrite*(blockIndex: U64, inBlock: pointer): int =
   if inBlock == nil:
     return -1
@@ -109,6 +118,7 @@ proc serviceBlockWrite*(blockIndex: U64, inBlock: pointer): int =
   outValue
 
 
+## Handles the block service register syscall operation.
 proc syscallBlockServiceRegister*(): U64 =
   if currentIsBlockService():
     return 0
@@ -119,6 +129,7 @@ proc syscallBlockServiceRegister*(): U64 =
   0
 
 
+## Handles the block service receive syscall operation.
 proc syscallBlockServiceReceive*(outReq: U64): U64 =
   if outReq == 0 or not canSyscallBlockServiceReceive():
     return U64(-1'i64)
@@ -136,6 +147,7 @@ proc syscallBlockServiceReceive*(outReq: U64): U64 =
     sleepCurrentForIpc()
 
 
+## Handles the block service reply syscall operation.
 proc syscallBlockServiceReply*(respVal: U64): U64 =
   if respVal == 0 or not canSyscallBlockServiceReply():
     return U64(-1'i64)
@@ -154,6 +166,7 @@ proc syscallBlockServiceReply*(respVal: U64): U64 =
   0
 
 
+## Handles the raw block read syscall operation.
 proc syscallRawBlockRead*(blockIndex, outVal: U64): U64 =
   if not canSyscallRawBlock() or outVal == 0:
     return U64(-1'i64)
@@ -166,6 +179,7 @@ proc syscallRawBlockRead*(blockIndex, outVal: U64): U64 =
   0
 
 
+## Handles the raw block write syscall operation.
 proc syscallRawBlockWrite*(blockIndex, inVal: U64): U64 =
   if not canSyscallRawBlock() or inVal == 0:
     return U64(-1'i64)

@@ -1,3 +1,4 @@
+## Prints the saved user panic log when present.
 import ../../lib/core/io
 import ../../lib/core/args
 import ../../lib/core/strutils
@@ -11,11 +12,13 @@ var
   buffer: array[BufferSize, char]
 
 
+## Prints paniclog usage information.
 proc printUsage() =
   write("usage: paniclog\n")
   write("       paniclog --help\n")
 
 
+## Reads and prints /var/log/user_panic.log.
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   if not parseUserArgs(arg, parsedArgs):
     printUsage()

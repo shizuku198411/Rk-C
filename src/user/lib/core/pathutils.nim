@@ -1,3 +1,4 @@
+## Resolves and normalizes user paths against the current working directory.
 import ./syscall
 import ./strutils
 
@@ -8,6 +9,7 @@ var resolvedPath: array[PathMax, char]
 var joinedPath: array[PathMax, char]
 
 
+## Copies cstring.
 proc copyCString(dst: var openArray[char], src: cstring): bool =
   if dst.len == 0:
     return false
@@ -27,6 +29,7 @@ proc copyCString(dst: var openArray[char], src: cstring): bool =
   true
 
 
+## Copies cstring.
 proc copyCString(dst: var array[PathMax, char], pos: var U64, src: cstring): bool =
   var i = U64(0)
   while src[i] != '\0':
@@ -38,11 +41,13 @@ proc copyCString(dst: var array[PathMax, char], pos: var U64, src: cstring): boo
   true
 
 
+## Implements the terminate helper.
 proc terminate(dst: var array[PathMax, char], pos: U64) =
   if pos < U64(PathMax):
     dst[pos] = '\0'
 
 
+## Clears path.
 proc clearPath(dst: var array[PathMax, char]) =
   var i = 0
   while i < PathMax:
@@ -50,6 +55,7 @@ proc clearPath(dst: var array[PathMax, char]) =
     inc i
 
 
+## Appends char.
 proc appendChar(dst: var array[PathMax, char], pos: var U64, ch: char): bool =
   if pos + 1 >= U64(PathMax):
     return false
@@ -60,6 +66,7 @@ proc appendChar(dst: var array[PathMax, char], pos: var U64, ch: char): bool =
   true
 
 
+## Implements the pop component helper.
 proc popComponent(dst: var array[PathMax, char], pos: var U64) =
   if pos <= U64(1):
     pos = U64(1)
@@ -78,6 +85,7 @@ proc popComponent(dst: var array[PathMax, char], pos: var U64) =
   dst[pos] = '\0'
 
 
+## Appends component.
 proc appendComponent(dst: var array[PathMax, char], pos: var U64, src: cstring,
                      startPos, endPos: int): bool =
   let len = endPos - startPos
@@ -105,6 +113,7 @@ proc appendComponent(dst: var array[PathMax, char], pos: var U64, src: cstring,
   true
 
 
+## Implements the normalize absolute helper.
 proc normalizeAbsolute(path: cstring): cstring =
   clearPath(resolvedPath)
   var pos = U64(0)
@@ -129,6 +138,7 @@ proc normalizeAbsolute(path: cstring): cstring =
   cast[cstring](addr resolvedPath[0])
 
 
+## Resolves path.
 proc resolvePath*(path: cstring): cstring =
   if isEmpty(path):
     let rc = sysGetCwd(addr resolvedPath[0], U64(PathMax))
@@ -163,6 +173,7 @@ proc resolvePath*(path: cstring): cstring =
   normalizeAbsolute(cast[cstring](addr joinedPath[0]))
 
 
+## Resolves path into.
 proc resolvePathInto*(path: cstring, dst: var openArray[char]): cstring =
   let resolved = resolvePath(path)
   if resolved == nil:

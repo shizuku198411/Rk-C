@@ -1,3 +1,4 @@
+## Parses and writes shadow password records with PBKDF2 metadata.
 import ./syscall
 import ./strutils
 
@@ -9,7 +10,7 @@ const
   ShadowSaltHexLen* = U32(ShadowSaltLen * U32(2))
   ShadowHashHexLen* = U32(ShadowHashLen * U32(2))
   ShadowLineMax* = U32(160)
-  ShadowDefaultIterations* = U32(2048)
+  ShadowDefaultIterations* = U32(128)
 
 
 type
@@ -20,6 +21,7 @@ type
     hash*: array[ShadowHashLen, U8]
 
 
+## Resets a shadow entry to empty fields and zeroed secret material.
 proc clearShadowEntry*(entry: var ShadowEntry) =
   var i = U32(0)
   while i < ShadowNameMax:
@@ -39,6 +41,7 @@ proc clearShadowEntry*(entry: var ShadowEntry) =
   entry.iterations = U32(0)
 
 
+## Copies one delimited shadow field into a fixed-size destination buffer.
 proc copyField(dst: var openArray[char], src: cstring, startPos, endPos: U32): bool =
   if dst.len == 0:
     return false
@@ -59,6 +62,7 @@ proc copyField(dst: var openArray[char], src: cstring, startPos, endPos: U32): b
   true
 
 
+## Trims CR/LF bytes from the end of a shadow line field.
 proc trimLineEnd(line: cstring, startPos, pos: U32): U32 =
   var endPos = pos
   while endPos > startPos and
@@ -68,6 +72,7 @@ proc trimLineEnd(line: cstring, startPos, pos: U32): U32 =
   endPos
 
 
+## Converts one hexadecimal character to its numeric nibble value.
 proc hexValue(ch: char, outValue: var U8): bool =
   if ch >= '0' and ch <= '9':
     outValue = U8(ord(ch) - ord('0'))
@@ -84,6 +89,7 @@ proc hexValue(ch: char, outValue: var U8): bool =
   false
 
 
+## Parses a fixed-width hexadecimal byte sequence into raw bytes.
 proc parseHexBytes(line: cstring, startPos, endPos: U32, outBuf: pointer, outLen: U32): bool =
   if endPos - startPos != outLen * U32(2):
     return false
@@ -104,6 +110,7 @@ proc parseHexBytes(line: cstring, startPos, endPos: U32, outBuf: pointer, outLen
   true
 
 
+## Parses a delimited shadow field as an unsigned 32-bit integer.
 proc parseFieldU32(line: cstring, startPos, endPos: U32, value: var U32): bool =
   var buf: array[16, char]
   if not copyField(buf, line, startPos, endPos):
@@ -112,6 +119,7 @@ proc parseFieldU32(line: cstring, startPos, endPos: U32, value: var U32): bool =
   parseU32(cast[cstring](addr buf[0]), value)
 
 
+## Parses one shadow database line into a ShadowEntry.
 proc parseShadowLine*(line: cstring, entry: var ShadowEntry): bool =
   clearShadowEntry(entry)
 
@@ -162,6 +170,7 @@ proc parseShadowLine*(line: cstring, entry: var ShadowEntry): bool =
   parseHexBytes(line, hashStart, hashEnd, addr entry.hash[0], ShadowHashLen)
 
 
+## Writes one ShadowEntry as a shadow database line.
 proc writeShadowLine*(dst: pointer, capacity: U32, entry: ShadowEntry): U32 =
   let outBuf = cast[ptr UncheckedArray[char]](dst)
   var pos = U32(0)

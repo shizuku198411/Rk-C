@@ -1,3 +1,4 @@
+## Validates and maps RKX executable images into user page tables.
 import ../../lib/mem
 import ../../lib/calc
 import ../../lib/rkx
@@ -15,11 +16,13 @@ const
   UserImageVaSizeLimit = U64(0x00100000)
 
 
+## Implements the checked add kernel helper.
 proc checkedAdd(a, b: U64, outValue: var U64): bool =
   outValue = a + b
   outValue >= a
 
 
+## Implements the checked range kernel helper.
 proc checkedRange(start, size: U64, outEnd: var U64): bool =
   if size == U64(0):
     outEnd = start
@@ -28,6 +31,7 @@ proc checkedRange(start, size: U64, outEnd: var U64): bool =
   checkedAdd(start, size, outEnd)
 
 
+## Checks or computes the within range.
 proc rangeWithin(start, size, base, limit: U64): bool =
   var endExclusive = U64(0)
 
@@ -40,6 +44,7 @@ proc rangeWithin(start, size, base, limit: U64): bool =
   endExclusive <= limit
 
 
+## Implements the segment pages kernel helper.
 proc segmentPages(memSize: U64): U64 =
   if memSize == U64(0):
     return U64(0)
@@ -47,6 +52,7 @@ proc segmentPages(memSize: U64): U64 =
   alignUp(memSize, PageSize) div PageSize
 
 
+## Returns whether validate file range is valid.
 proc validateFileRange(fileOff, fileSize, imageSize: U64): bool =
   var fileEnd = U64(0)
 
@@ -56,6 +62,7 @@ proc validateFileRange(fileOff, fileSize, imageSize: U64): bool =
   fileEnd <= imageSize
 
 
+## Returns whether validate segment is valid.
 proc validateSegment(
   va: VAddr,
   fileOff: U64,
@@ -83,6 +90,7 @@ proc validateSegment(
   true
 
 
+## Checks or computes the ranges overlap range.
 proc rangesOverlap(aStart, aSize, bStart, bSize: U64): bool =
   if aSize == 0.U64 or bSize == 0.U64:
     return false
@@ -97,6 +105,7 @@ proc rangesOverlap(aStart, aSize, bStart, bSize: U64): bool =
   aStart < bEnd and bStart < aEnd
 
 
+## Returns whether validate segment layout is valid.
 proc validateSegmentLayout(hdr: ptr RkxHeader): bool =
   if rangesOverlap(hdr.textVa, hdr.textMemSize, hdr.rodataVa, hdr.rodataMemSize):
     return false
@@ -114,6 +123,7 @@ proc validateSegmentLayout(hdr: ptr RkxHeader): bool =
   true
 
 
+## Returns whether validate rkx header is valid.
 proc validateRkxHeader(hdr: ptr RkxHeader, imageSize: U64, expectedBase: VAddr): bool =
   if hdr == nil:
     return false
@@ -195,6 +205,7 @@ proc validateRkxHeader(hdr: ptr RkxHeader, imageSize: U64, expectedBase: VAddr):
   true
 
 
+## Maps one page.
 proc mapOnePage(root: PageTable, va: VAddr, pa: PAddr, flags: U64): int =
   if mapPageReplaceFree(root, va, pa, flags) != 0:
     return -1
@@ -202,6 +213,7 @@ proc mapOnePage(root: PageTable, va: VAddr, pa: PAddr, flags: U64): int =
   0
 
 
+## Maps rkx segment.
 proc mapRkxSegment(
   root: PageTable,
   image: ptr UncheckedArray[U8],
@@ -253,6 +265,7 @@ proc mapRkxSegment(
   0
 
 
+## Maps zero segment.
 proc mapZeroSegment(
   root: PageTable,
   va: VAddr,
@@ -283,6 +296,7 @@ proc mapZeroSegment(
   0
 
 
+## Implements the cleanup rkx mappings kernel helper.
 proc cleanupRkxMappings(root: PageTable, hdr: ptr RkxHeader) =
   if root == nil or hdr == nil:
     return
@@ -293,6 +307,7 @@ proc cleanupRkxMappings(root: PageTable, hdr: ptr RkxHeader) =
   discard unmapRangeFree(root, hdr.bssVa, segmentPages(hdr.bssMemSize))
 
 
+## Calculates image pages.
 proc calcImagePages(hdr: ptr RkxHeader, expectedBase: VAddr, imagePages: var U64): bool =
   var maxEnd = expectedBase
 
@@ -325,6 +340,7 @@ proc calcImagePages(hdr: ptr RkxHeader, expectedBase: VAddr, imagePages: var U64
   true
 
 
+## Loads rkx image.
 proc loadRkxImage*(
   root: PageTable,
   path: cstring,

@@ -1,3 +1,4 @@
+## Implements SBI console I/O and the kernel input buffer.
 import ../../arch/riscv64/arch
 import ../../lib/types
 import ./klog
@@ -10,7 +11,9 @@ const
   InputBufCap = U64(128)
 
 
+## Imports the SBI putchar routine.
 proc sbiPutchar(ch: char) {.importc: "sbi_putchar", cdecl.}
+## Imports the SBI getchar routine.
 proc sbiGetchar(): clong {.importc: "sbi_getchar", cdecl.}
 
 var
@@ -19,18 +22,22 @@ var
   inputTail: U64
 
 
+## Implements the input next kernel helper.
 proc inputNext(index: U64): U64 =
   (index + 1'u64) mod InputBufCap
 
 
+## Implements the input empty kernel helper.
 proc inputEmpty*(): bool =
   inputHead == inputTail
 
 
+## Implements the input full kernel helper.
 proc inputFull(): bool =
   inputNext(inputTail) == inputHead
 
 
+## Implements the push input kernel helper.
 proc pushInput(ch: char): bool =
   if inputFull():
     return false
@@ -40,6 +47,7 @@ proc pushInput(ch: char): bool =
   true
 
 
+## Implements the pop input kernel helper.
 proc popInput*(): int =
   if inputEmpty():
     return -1
@@ -49,6 +57,7 @@ proc popInput*(): int =
   int(ord(ch))
 
 
+## Implements the poll input kernel helper.
 proc pollInput*(): bool =
   let uart = cast[ptr UncheckedArray[U8]](Uart0Base)
   var pushed = false
@@ -62,15 +71,18 @@ proc pollInput*(): bool =
   pushed
 
 
+## Implements the put char kernel helper.
 proc putChar*(ch: char) =
   sbiPutchar(ch)
 
 
+## Prints char.
 proc printChar(ch: char) =
   pushKlogChar(ch)
   putChar(ch)
 
 
+## Implements the try get char kernel helper.
 proc tryGetChar*(): int =
   let buffered = popInput()
   if buffered >= 0:
@@ -84,6 +96,7 @@ proc tryGetChar*(): int =
   int(sbiGetchar())
 
 
+## Gets char blocking.
 proc getCharBlocking*(): char =
   while true:
     let ch = tryGetChar()
@@ -92,6 +105,7 @@ proc getCharBlocking*(): char =
     arch.wfi()
 
 
+## Prints print.
 proc print*(s: cstring) =
   if s == nil:
     print("(null)")
@@ -103,11 +117,13 @@ proc print*(s: cstring) =
     inc i
 
 
+## Prints println.
 proc println*(s: cstring) =
   print(s)
   printChar('\n')
 
 
+## Prints console only.
 proc printConsoleOnly*(s: cstring) =
   if s == nil:
     printConsoleOnly("(null)")
@@ -119,16 +135,19 @@ proc printConsoleOnly*(s: cstring) =
     inc i
 
 
+## Prints println console only.
 proc printlnConsoleOnly*(s: cstring) =
   printConsoleOnly(s)
   putChar('\n')
 
 
+## Prints boot msg.
 proc printBootMsg*(s: cstring) =
   print("[boot] ")
   print(s)
 
 
+## Prints unsigned.
 proc printUnsigned*(value: U64) =
   var digits: array[20, char]
   var i = 0
@@ -148,6 +167,7 @@ proc printUnsigned*(value: U64) =
     printChar(digits[i])
 
 
+## Prints signed.
 proc printSigned*(value: int64) =
   if value < 0:
     printChar('-')
@@ -156,6 +176,7 @@ proc printSigned*(value: int64) =
     printUnsigned(U64(value))
 
 
+## Prints hex.
 proc printHex*(value: U64) =
   const table = "0123456789abcdef"
   var digits: array[16, char]
@@ -176,11 +197,13 @@ proc printHex*(value: U64) =
     printChar(digits[i])
 
 
+## Prints ptr.
 proc printPtr*(value: U64) =
   print("0x")
   printHex(value)
 
 
+## Prints bool.
 proc printBool*(value: bool) =
   if value:
     print("true")
@@ -188,6 +211,7 @@ proc printBool*(value: bool) =
     print("false")
 
 
+## Reads line.
 proc readLine*(buf: ptr UncheckedArray[char], cap: U64): U64 =
   if cap == 0:
     return 0
@@ -216,6 +240,7 @@ proc readLine*(buf: ptr UncheckedArray[char], cap: U64): U64 =
       putChar(ch)
 
 
+## Implements the panic kernel helper.
 proc panic*(msg: cstring) {.noreturn.} =
   print("PANIC: ")
   println(msg)

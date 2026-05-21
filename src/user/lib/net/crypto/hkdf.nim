@@ -1,9 +1,11 @@
+## Implements HMAC-SHA256 and HKDF helpers for TLS.
 import ./crypto_types
 import ./sha256
 import ../../core/strutils
 import ../../core/syscall
 
 
+## Computes HMAC-SHA256 for sha256.
 proc hmacSha256*(key: pointer, keyLen: U32, data: pointer, dataLen: U32, outMac: pointer) =
   var keyBlock: array[Sha256BlockLen, U8]
   var innerPad: array[Sha256BlockLen, U8]
@@ -39,6 +41,7 @@ proc hmacSha256*(key: pointer, keyLen: U32, data: pointer, dataLen: U32, outMac:
   sha256Final(outer, outMac)
 
 
+## Computes HKDF extract sha256.
 proc hkdfExtractSha256*(salt: pointer, saltLen: U32, ikm: pointer, ikmLen: U32, outPrk: pointer) =
   var zeroSalt: array[Sha256DigestLen, U8]
   if salt == nil or saltLen == 0:
@@ -47,6 +50,7 @@ proc hkdfExtractSha256*(salt: pointer, saltLen: U32, ikm: pointer, ikmLen: U32, 
     hmacSha256(salt, saltLen, ikm, ikmLen, outPrk)
 
 
+## Computes HKDF expand sha256.
 proc hkdfExpandSha256*(prk: pointer, prkLen: U32, info: pointer,
                        infoLen: U32, outOkm: pointer, okmLen: U32): I32 =
   if prk == nil or outOkm == nil or okmLen == 0:
@@ -85,6 +89,7 @@ proc hkdfExpandSha256*(prk: pointer, prkLen: U32, info: pointer,
   0
 
 
+## Computes HKDF expand label sha256.
 proc hkdfExpandLabelSha256*(secret: pointer, label: cstring, context: pointer,
                             contextLen: U32, outOkm: pointer, okmLen: U32): I32 =
   if secret == nil or label == nil or outOkm == nil:

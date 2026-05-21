@@ -1,3 +1,4 @@
+## Creates user processes and replaces process images during exec.
 import ../../lib/fixed_string
 import ../../lib/rkx
 import ../../lib/syscall_caps
@@ -34,6 +35,7 @@ var
   freeRamEndSym {.importc: "__free_ram_end".}: char
 
 
+## Copies arg.
 proc copyArg(dst: PAddr, src: cstring, maxLen: U64) =
   let d = cast[ptr UncheckedArray[char]](dst)
   var i = U64(0)
@@ -44,6 +46,7 @@ proc copyArg(dst: PAddr, src: cstring, maxLen: U64) =
   d[i] = '\0'
 
 
+## Implements the exec base for path kernel helper.
 proc execBaseForPath(path: cstring): VAddr =
   if cstringEq(path, "/bin/shell"):
     return ShellBase
@@ -51,6 +54,7 @@ proc execBaseForPath(path: cstring): VAddr =
   AppBase
 
 
+## Implements the exec stack top for path kernel helper.
 proc execStackTopForPath(path: cstring): VAddr =
   if cstringEq(path, "/bin/shell"):
     return ShellStackTop
@@ -58,6 +62,7 @@ proc execStackTopForPath(path: cstring): VAddr =
   AppStackTop
 
 
+## Implements the stack pages from header kernel helper.
 proc stackPagesFromHeader(hdr: ptr RkxHeader): U64 =
   if hdr == nil or hdr.stackPages == U32(0):
     return U64(RkxDefaultStackPages)
@@ -65,6 +70,7 @@ proc stackPagesFromHeader(hdr: ptr RkxHeader): U64 =
   U64(hdr.stackPages)
 
 
+## Implements the trusted caps for path kernel helper.
 proc trustedCapsForPath(path: cstring): U32 =
   if cstringEq(path, "/bin/svcmgtd"):
     return SysCapServiceManager or SysCapProcessList or SysCapProcessKill
@@ -99,6 +105,7 @@ proc trustedCapsForPath(path: cstring): U32 =
   SysCapNone
 
 
+## Implements the granted caps for image kernel helper.
 proc grantedCapsForImage(path: cstring, hdr: ptr RkxHeader): U32 =
   if hdr == nil:
     return SysCapNone
@@ -106,6 +113,7 @@ proc grantedCapsForImage(path: cstring, hdr: ptr RkxHeader): U32 =
   hdr.capabilityMask and trustedCapsForPath(path)
 
 
+## Implements the allowed for uid kernel helper.
 proc allowedForUid(hdr: ptr RkxHeader, uid: U32): bool =
   if hdr == nil or hdr.allowedUidCount == U32(0):
     return true
@@ -119,6 +127,7 @@ proc allowedForUid(hdr: ptr RkxHeader, uid: U32): bool =
   false
 
 
+## Implements the replace user stack kernel helper.
 proc replaceUserStack(root: PageTable, stackTop: VAddr, stackPages: U64, arg: cstring,
                       userSp, argVa: var VAddr): int =
   if stackPages < U64(RkxMinStackPages) or stackPages > U64(RkxMaxStackPages):
@@ -139,6 +148,7 @@ proc replaceUserStack(root: PageTable, stackTop: VAddr, stackPages: U64, arg: cs
   0
 
 
+## Implements the install exec image kernel helper.
 proc installExecImage(p: ptr Process, root: PageTable, path: cstring, base, stackTop: VAddr,
                       arg: cstring, allowedUid: U32, checkAllowedUid: bool): int =
   if root == nil:
@@ -195,6 +205,7 @@ proc installExecImage(p: ptr Process, root: PageTable, path: cstring, base, stac
   0
 
 
+## Maps kernel ranges.
 proc mapKernelRanges(root: PageTable) =
   let textStart = alignDown(cast[VAddr](addr textStartSym), PageSize)
   let textSize = alignUp(cast[U64](addr textEndSym) - textStart, PageSize)
@@ -222,6 +233,7 @@ proc mapKernelRanges(root: PageTable) =
     panic("failed to map rtc mmio")
 
 
+## Creates kernel mapped page table.
 proc createKernelMappedPageTable*(): PageTable =
   let root = allocPageTable()
   if root == nil:
@@ -231,6 +243,7 @@ proc createKernelMappedPageTable*(): PageTable =
   root
 
 
+## Loads user process.
 proc loadUserProcess(path: cstring, base, stackTop: VAddr, arg: cstring): int32 =
   let p = allocUserProcessFromParent(nil)
   if p == nil:
@@ -249,26 +262,32 @@ proc loadUserProcess(path: cstring, base, stackTop: VAddr, arg: cstring): int32 
   p.pid
 
 
+## Creates shell user process.
 proc createShellUserProcess*(): int32 =
   loadUserProcess("/bin/shell", ShellBase, ShellStackTop, nil)
 
 
+## Creates login user process.
 proc createLoginUserProcess*(): int32 =
   loadUserProcess("/bin/login", AppBase, AppStackTop, nil)
 
 
+## Creates service manager user process.
 proc createServiceManagerUserProcess*(): int32 =
   loadUserProcess("/bin/svcmgtd", AppBase, AppStackTop, nil)
 
 
+## Creates fs server user process.
 proc createFsServerUserProcess*(): int32 =
   loadUserProcess("/bin/fsd", AppBase, AppStackTop, nil)
 
 
+## Creates block server user process.
 proc createBlockServerUserProcess*(): int32 =
   loadUserProcess("/bin/blockd", AppBase, AppStackTop, nil)
 
 
+## Implements the exec user app with identity kernel helper.
 proc execUserAppWithIdentity(path: cstring, arg: cstring, detached: bool,
                              uid, gid: U32): int32 =
   let parent = currentProc
@@ -301,6 +320,7 @@ proc execUserAppWithIdentity(path: cstring, arg: cstring, detached: bool,
   child.pid
 
 
+## Implements the exec user app kernel helper.
 proc execUserApp*(path: cstring, arg: cstring, detached: bool = false): int32 =
   let parent = currentProc
   let uid =
@@ -317,5 +337,6 @@ proc execUserApp*(path: cstring, arg: cstring, detached: bool = false): int32 =
   execUserAppWithIdentity(path, arg, detached, uid, gid)
 
 
+## Implements the exec user app as kernel helper.
 proc execUserAppAs*(path: cstring, arg: cstring, uid, gid: U32): int32 =
   execUserAppWithIdentity(path, arg, false, uid, gid)

@@ -1,3 +1,4 @@
+## Resolves an A record through the DNS client library.
 import ../../lib/core/io
 import ../../lib/net/net_dns
 import ../../lib/net/ipaddr
@@ -14,10 +15,12 @@ var
   nameserverIpBuf: array[NameserverIpBufSize, char]
   parsedArgs: UserArgs
 
+## Prints nslookup usage information.
 proc printUsage() =
   write("usage: nslookup <name>\n")
 
 
+## Loads the configured nameserver address from /etc/resolve.conf.
 proc loadNameserverIp(): cstring =
   let size = sysReadFile(cstring(ResolveConfPath), addr nameserverIpBuf[0], U64(NameserverIpBufSize - 1))
   if size < 0:
@@ -26,6 +29,7 @@ proc loadNameserverIp(): cstring =
   cast[cstring](addr nameserverIpBuf[11])
 
 
+## Resolves one hostname and prints the resulting IPv4 address.
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   if not parseUserArgs(arg, parsedArgs):
     printUsage()

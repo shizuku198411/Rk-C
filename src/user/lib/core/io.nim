@@ -1,22 +1,27 @@
+## Provides basic stdin/stdout helpers for user programs.
 import ./strutils
 import ./syscall
 
 
+## Writes write.
 proc write*(s: cstring) =
   discard sysWriteFd(1, cast[pointer](s), cstrlen(s))
 
 
+## Writes char.
 proc writeChar*(ch: char) =
   var c = ch
   discard sysWriteFd(1, addr c, 1)
 
 
+## Reads char.
 proc readChar*(): char =
   var c: char
   discard sysReadFd(0, addr c, 1)
   c
 
 
+## Writes unsigned.
 proc writeUnsigned*(value: U64) =
   var buf: array[32, char]
   var n = value
@@ -34,6 +39,7 @@ proc writeUnsigned*(value: U64) =
   discard sysWriteFd(1, addr buf[pos], U64(32 - pos))
 
 
+## Writes hex value.
 proc writeHexValue*(value: U64) =
   write("0x")
 
@@ -50,5 +56,6 @@ proc writeHexValue*(value: U64) =
     shift -= 4
 
 
+## Writes hex32 value.
 proc writeHex32Value*(value: U32) =
   writeHexValue(U64(value))

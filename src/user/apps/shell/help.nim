@@ -1,6 +1,8 @@
+## Prints the compact shell command list and points apps to --help.
 import ../../lib/core/io
 
 
+## Displays available shell commands and the app help convention.
 proc printHelp*() =
   write("available commands:\n")
   write("  help\n")

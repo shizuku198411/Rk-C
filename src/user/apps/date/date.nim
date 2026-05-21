@@ -1,3 +1,4 @@
+## Prints the current system date and time.
 import ../../lib/core/io
 import ../../lib/core/args
 import ../../lib/core/strutils
@@ -6,11 +7,13 @@ import ../../lib/core/syscall
 var parsedArgs: UserArgs
 
 
+## Writes a two-digit decimal value with leading zero support.
 proc write2(value: U32) =
   writeChar(char(ord('0') + int((value div 10) mod 10)))
   writeChar(char(ord('0') + int(value mod 10)))
 
 
+## Writes a four-digit decimal value with leading zero support.
 proc write4(value: U32) =
   writeChar(char(ord('0') + int((value div 1000) mod 10)))
   writeChar(char(ord('0') + int((value div 100) mod 10)))
@@ -18,6 +21,7 @@ proc write4(value: U32) =
   writeChar(char(ord('0') + int(value mod 10)))
 
 
+## Formats and prints a SysDateTime value.
 proc printDateTime(dt: ptr SysDateTime) =
   write4(dt.year)
   write("/")
@@ -33,10 +37,12 @@ proc printDateTime(dt: ptr SysDateTime) =
   write("\n")
 
 
+## Prints date usage information.
 proc printUsage() =
   write("usage: date\n")
 
 
+## Requests the current date from the kernel and prints it.
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   if not parseUserArgs(arg, parsedArgs):
     printUsage()

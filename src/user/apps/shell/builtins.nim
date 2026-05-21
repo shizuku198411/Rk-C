@@ -1,3 +1,4 @@
+## Implements shell built-in commands for directory, identity, and diagnostics.
 import ./history
 import ../../lib/core/io
 import ../../lib/core/pathutils
@@ -7,6 +8,7 @@ import ../../lib/core/syscall
 import ../../lib/core/userdb
 
 
+## Changes the current working directory after resolving the requested path.
 proc changeDirectory*(path: cstring) =
   if isEmpty(path):
     write("usage: cd <path>\n")
@@ -21,22 +23,24 @@ proc changeDirectory*(path: cstring) =
     write("cd: failed\n")
 
 
+## Authenticates and switches the interactive shell to another user account.
 proc switchUser*(name: cstring) =
   if isEmpty(name):
     write("usage: su <user>\n")
     return
 
   var entry: PasswdEntry
-  if not resolveUser(name, entry):
-    write("su: unknown user\n")
+  var passwordBuf: array[LoginLineMax, char]
+  write("password: ")
+  let password = readLoginLine(passwordBuf, false)
+  if not authenticateUser(name, password, entry):
+    write("su: incorrect username or password\n")
     return
 
   saveHistory()
 
   let rc = sysSetUser(entry.uid, entry.gid)
-  if rc == SysSetUserRootOnly:
-    write("su: root switch denied\n")
-  elif rc != 0:
+  if rc != 0:
     write("su: failed\n")
   else:
     discard sysSetCwd(cast[cstring](addr entry.home[0]))
@@ -44,6 +48,17 @@ proc switchUser*(name: cstring) =
     loadHistory()
 
 
+## Prints working directory.
+proc printPwd*() =
+  var buf: array[SysProcessCwdMax, char]
+  if sysGetCwd(addr buf[0], U64(SysProcessCwdMax)) < 0:
+    write("failed to get cwd\n")
+    return
+  write(cast[cstring](addr buf[0]))
+  write("\n")
+
+
+## Prints kernel trap counters for quick runtime diagnostics.
 proc printTrapCount*() =
   var trapCount: SysTrapCount
   if sysTraps(addr trapCount) != 0:
@@ -95,6 +110,7 @@ proc printTrapCount*() =
   write("\n")
 
 
+## Prints physical page bitmap totals from the kernel memory manager.
 proc printBitmapInfo*() =
   var info: SysBitmapInfo
   if sysGetBitMap(addr info) != 0:
@@ -111,3 +127,10 @@ proc printBitmapInfo*() =
   write("  free : ")
   writeUnsigned(info.free)
   write(" pages\n")
+
+
+## shutdown kernel
+proc kernelShutdown*() =
+  saveHistory()
+  if sysShutdown() != 0:
+    write("failed to shutdown\n")

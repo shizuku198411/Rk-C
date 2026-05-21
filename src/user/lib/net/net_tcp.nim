@@ -1,12 +1,15 @@
+## Provides userland TCP connection helpers through netd.
 import ../ipc/ipc_request
 import ../ipc/service_client
 import ../core/syscall
 
 
+## Packs ports.
 proc packPorts(srcPort, dstPort: U16): U64 =
   (U64(srcPort) shl 16) or U64(dstPort)
 
 
+## Performs TCP connect.
 proc tcpConnect*(dstIp: U32, srcPort, dstPort: U16): I32 =
   let pid = servicePidByKind(SysServiceKindNet)
   if pid <= 0:
@@ -26,6 +29,7 @@ proc tcpConnect*(dstIp: U32, srcPort, dstPort: U16): I32 =
   I32(reply.arg0)
 
 
+## Performs TCP send.
 proc tcpSend*(handle: I32, data: pointer, len: U32): I32 =
   if handle <= 0 or data == nil or len > SysIpcMessageMax:
     return -1
@@ -54,6 +58,7 @@ proc tcpSend*(handle: I32, data: pointer, len: U32): I32 =
   I32(reply.arg0)
 
 
+## Performs TCP receive.
 proc tcpReceive*(handle: I32, data: pointer, capacity: U32): I32 =
   if handle <= 0 or data == nil or capacity == 0:
     return -1
@@ -85,6 +90,7 @@ proc tcpReceive*(handle: I32, data: pointer, capacity: U32): I32 =
   I32(copyLen)
 
 
+## Performs TCP close.
 proc tcpClose*(handle: I32): I32 =
   if handle <= 0:
     return -1

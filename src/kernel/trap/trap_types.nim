@@ -1,3 +1,4 @@
+## Defines trap frame and trap-related kernel data structures.
 import ../../lib/types
 
 type

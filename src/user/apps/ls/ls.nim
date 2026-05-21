@@ -1,3 +1,4 @@
+## Lists directory entries in compact or long format.
 import ../../lib/core/io
 import ../../lib/core/args
 import ../../lib/core/options
@@ -19,6 +20,7 @@ var
   parsedArgs: UserArgs
   parsedOptions: ParsedOptions
 
+## Parses ls options and resolves the optional target path.
 proc parseLsArgs(arg: cstring, longFormat, allEntries: var bool): cstring =
   longFormat = false
   allEntries = false
@@ -39,10 +41,12 @@ proc parseLsArgs(arg: cstring, longFormat, allEntries: var bool): cstring =
   resolvePath(positionalAt(parsedOptions, 0))
 
 
+## Returns true when a directory entry should be hidden by default.
 proc isHiddenEntry(entry: ptr DirEntry): bool =
   entry.name[0] == '.'
 
 
+## Prints one directory entry with permissions, owner, size, and name.
 proc printLongEntry(entry: ptr DirEntry) =
   if entry.typ == DirEntryTypeDir or entry.typ == DirEntryTypeMount:
     write("d")
@@ -88,12 +92,14 @@ proc printLongEntry(entry: ptr DirEntry) =
     write("\n")
 
 
+## Prints only the entry name and a trailing slash for directories.
 proc printName(entry: ptr DirEntry) =
   write(cast[cstring](addr entry.name[0]))
   if entry.typ == DirEntryTypeDir or entry.typ == DirEntryTypeMount:
     write("/")
 
 
+## Prints one compact entry and tracks ten-column line wrapping.
 proc printCompactEntry(entry: ptr DirEntry, col: var int) =
   printName(entry)
   inc col
@@ -105,17 +111,20 @@ proc printCompactEntry(entry: ptr DirEntry, col: var int) =
     write("\t")
 
 
+## Emits the final newline for compact output when needed.
 proc finishCompact(col: int) =
   if col != 0:
     write("\n")
 
 
+## Prints ls usage information.
 proc printUsage() =
   write("usage: ls [-a] [-l] [path]\n")
   write("  -a    show entries starting with .\n")
   write("  -l    show entry name and size\n")
 
 
+## Lists the requested directory by reading entries in chunks.
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   var longFormat: bool
   var allEntries: bool

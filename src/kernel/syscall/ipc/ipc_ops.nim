@@ -1,3 +1,4 @@
+## Implements IPC syscalls and per-process IPC queue handling.
 import ../../../lib/syscall_types
 import ../../../lib/types
 import ../../mm/usercopy
@@ -7,6 +8,7 @@ import ../syscall_cap
 var sendBuf: array[SysIpcMessageMax, char]
 
 
+## Implements the enqueue ipc kernel helper.
 proc enqueueIpc(target: ptr Process, packet: ptr SysIpcPacket): int =
   if target == nil or packet == nil:
     return -1
@@ -19,6 +21,7 @@ proc enqueueIpc(target: ptr Process, packet: ptr SysIpcPacket): int =
   0
 
 
+## Dequeues ipc.
 proc dequeueIpc(p: ptr Process, packet: ptr SysIpcPacket): int =
   if p == nil or packet == nil:
     return -1
@@ -32,6 +35,7 @@ proc dequeueIpc(p: ptr Process, packet: ptr SysIpcPacket): int =
   0
 
 
+## Implements the packet to message kernel helper.
 proc packetToMessage(packet: ptr SysIpcPacket, msg: ptr SysIpcMessage) =
   msg[] = SysIpcMessage()
   msg.senderPid = packet.senderPid
@@ -45,6 +49,7 @@ proc packetToMessage(packet: ptr SysIpcPacket, msg: ptr SysIpcMessage) =
     inc i
 
 
+## Sends packet.
 proc sendPacket(target: ptr Process, packet: ptr SysIpcPacket): U64 =
   if target == nil or target.state == procZombie or target.state == procUnused:
     return U64(-1'i64)
@@ -69,6 +74,7 @@ proc sendPacket(target: ptr Process, packet: ptr SysIpcPacket): U64 =
   0
 
 
+## Handles the ipc send syscall operation.
 proc syscallIpcSend*(pidVal, msgVal: U64): U64 =
   if currentProc == nil or msgVal == 0:
     return U64(-1'i64)
@@ -92,6 +98,7 @@ proc syscallIpcSend*(pidVal, msgVal: U64): U64 =
   sendPacket(target, addr packet)
 
 
+## Handles the ipc receive syscall operation.
 proc syscallIpcReceive*(outMsg: U64): U64 =
   if currentProc == nil or outMsg == 0:
     return U64(-1'i64)
@@ -108,6 +115,7 @@ proc syscallIpcReceive*(outMsg: U64): U64 =
   0
 
 
+## Handles the ipc try receive syscall operation.
 proc syscallIpcTryReceive*(outMsg: U64): U64 =
   if currentProc == nil or outMsg == 0:
     return U64(-1'i64)
@@ -124,6 +132,7 @@ proc syscallIpcTryReceive*(outMsg: U64): U64 =
   0
 
 
+## Handles the ipc send packet syscall operation.
 proc syscallIpcSendPacket*(pidVal, packetVal: U64): U64 =
   if currentProc == nil or packetVal == 0:
     return U64(-1'i64)
@@ -136,6 +145,7 @@ proc syscallIpcSendPacket*(pidVal, packetVal: U64): U64 =
   sendPacket(target, addr packet)
 
 
+## Handles the ipc receive packet syscall operation.
 proc syscallIpcReceivePacket*(outPacket: U64): U64 =
   if currentProc == nil or outPacket == 0:
     return U64(-1'i64)
@@ -150,6 +160,7 @@ proc syscallIpcReceivePacket*(outPacket: U64): U64 =
   0
 
 
+## Handles the ipc try receive packet syscall operation.
 proc syscallIpcTryReceivePacket*(outPacket: U64): U64 =
   if currentProc == nil or outPacket == 0:
     return U64(-1'i64)
@@ -164,6 +175,7 @@ proc syscallIpcTryReceivePacket*(outPacket: U64): U64 =
   0
 
 
+## Handles the kill syscall operation.
 proc syscallKill*(pidVal: U64): U64 =
   let pid = int32(pidVal)
   if not canSyscallKillTarget(pid):

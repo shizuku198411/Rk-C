@@ -1,3 +1,4 @@
+## Implements X25519 key agreement.
 import ./crypto_types
 import ../../core/syscall
 
@@ -13,6 +14,7 @@ const
   Fe121665: FieldElement = [int64(0xdb41), 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 
 
+## Implements the car25519 helper.
 proc car25519(o: var FieldElement) =
   var i = 0
   while i < 16:
@@ -26,6 +28,7 @@ proc car25519(o: var FieldElement) =
     inc i
 
 
+## Implements the sel25519 helper.
 proc sel25519(p, q: var FieldElement, b: int64) =
   let c = not (b - 1)
   var i = 0
@@ -36,6 +39,7 @@ proc sel25519(p, q: var FieldElement, b: int64) =
     inc i
 
 
+## Unpacks unpack25519.
 proc unpack25519(o: var FieldElement, n: pointer) =
   let input = cast[ptr UncheckedArray[U8]](n)
   var i = 0
@@ -46,6 +50,7 @@ proc unpack25519(o: var FieldElement, n: pointer) =
   o[15] = o[15] and int64(0x7fff)
 
 
+## Packs pack25519.
 proc pack25519(o: pointer, n: FieldElement) =
   var t = n
   var m: FieldElement
@@ -77,6 +82,7 @@ proc pack25519(o: pointer, n: FieldElement) =
     inc i
 
 
+## Adds fe.
 proc addFe(o: var FieldElement, a, b: FieldElement) =
   var i = 0
   while i < 16:
@@ -84,6 +90,7 @@ proc addFe(o: var FieldElement, a, b: FieldElement) =
     inc i
 
 
+## Implements the sub fe helper.
 proc subFe(o: var FieldElement, a, b: FieldElement) =
   var i = 0
   while i < 16:
@@ -91,6 +98,7 @@ proc subFe(o: var FieldElement, a, b: FieldElement) =
     inc i
 
 
+## Implements the mul fe helper.
 proc mulFe(o: var FieldElement, a, b: FieldElement) =
   var t: array[31, int64]
   var i = 0
@@ -115,10 +123,12 @@ proc mulFe(o: var FieldElement, a, b: FieldElement) =
   car25519(o)
 
 
+## Implements the square fe helper.
 proc squareFe(o: var FieldElement, a: FieldElement) =
   mulFe(o, a, a)
 
 
+## Implements the inv25519 helper.
 proc inv25519(o: var FieldElement, i: FieldElement) =
   var c = i
   var a = 253
@@ -131,6 +141,7 @@ proc inv25519(o: var FieldElement, i: FieldElement) =
   o = c
 
 
+## Implements the clamp scalar helper.
 proc clampScalar(dst: pointer, src: pointer) =
   copyMem(dst, src, U32(X25519KeyLen))
   let outBuf = cast[ptr UncheckedArray[U8]](dst)
@@ -138,6 +149,7 @@ proc clampScalar(dst: pointer, src: pointer) =
   outBuf[31] = (outBuf[31] and 127'u8) or 64'u8
 
 
+## Performs X25519 x25519.
 proc x25519*(outShared: pointer, scalar: pointer, point: pointer): I32 =
   if outShared == nil or scalar == nil or point == nil:
     return -1
@@ -201,6 +213,7 @@ proc x25519*(outShared: pointer, scalar: pointer, point: pointer): I32 =
   0
 
 
+## Performs X25519 base.
 proc x25519Base*(outPublic: pointer, scalar: pointer): I32 =
   var base: array[X25519KeyLen, U8]
   base[0] = 9

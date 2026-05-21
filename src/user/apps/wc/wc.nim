@@ -1,3 +1,4 @@
+## Counts lines, words, and bytes for one file.
 import ../../lib/core/io
 import ../../lib/core/args
 import ../../lib/core/syscall
@@ -14,22 +15,26 @@ var
   pathBuf: array[PathMax, char]
 
 
+## Prints wc usage information.
 proc printUsage() =
   write("usage: wc <path>\n")
 
 
+## Returns true for word-separating horizontal whitespace.
 proc isSpace(c: char): bool =
   if c == ' ' or c == '\t' or c == '\r':
     return true
   false
 
 
+## Returns true for newline characters counted as lines.
 proc isNewLine(c: char): bool =
   if c == '\n':
     return true
   false
 
 
+## Prints the final wc counters and source path.
 proc printFileContents(ln, wc, size: U64, path: cstring) =
   writeUnsigned(ln)
   write(" ")
@@ -41,6 +46,7 @@ proc printFileContents(ln, wc, size: U64, path: cstring) =
   write("\n")
 
 
+## Reads a file, computes counters, and prints them.
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   if not parseUserArgs(arg, parsedArgs):
     printUsage()

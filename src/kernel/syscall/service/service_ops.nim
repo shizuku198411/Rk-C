@@ -1,3 +1,4 @@
+## Implements service registry syscall handlers.
 import ../../../lib/fixed_string
 import ../../../lib/service_catalog
 import ../../../lib/syscall_types
@@ -11,6 +12,7 @@ import ../syscall_cap
 var serviceInfos: array[serviceMax, SysServiceInfo]
 
 
+## Implements the service kind from value kernel helper.
 proc serviceKindFromValue(value: U64, kind: var ServiceKind): bool =
   if value == U64(SysServiceKindBlock):
     kind = serviceBlock
@@ -43,11 +45,13 @@ proc serviceKindFromValue(value: U64, kind: var ServiceKind): bool =
   false
 
 
+## Implements the service pid is usable kernel helper.
 proc servicePidIsUsable(pid: int32): bool =
   let p = findProcessByPid(pid)
   p != nil and p.state != procUnused and p.state != procZombie and p.user.active
 
 
+## Implements the service kind value kernel helper.
 proc serviceKindValue(kind: ServiceKind): U32 =
   case kind
   of serviceManager:
@@ -68,6 +72,7 @@ proc serviceKindValue(kind: ServiceKind): U32 =
     U32(0xffffffff'u32)
 
 
+## Fills service info.
 proc fillServiceInfo(kind: ServiceKind) =
   serviceInfos[kind] = SysServiceInfo()
   serviceInfos[kind].kind = serviceKindValue(kind)
@@ -83,6 +88,7 @@ proc fillServiceInfo(kind: ServiceKind) =
   discard copyCString(serviceInfos[kind].name, serviceNameByKind(serviceKindValue(kind)))
 
 
+## Handles the service manager register syscall operation.
 proc syscallServiceManagerRegister*(): U64 =
   if not canSyscallServiceManagerRegister():
     return U64(-1'i64)
@@ -91,6 +97,7 @@ proc syscallServiceManagerRegister*(): U64 =
   0
 
 
+## Handles the service register syscall operation.
 proc syscallServiceRegister*(kindVal, pidVal: U64): U64 =
   var kind = serviceBlock
   if not serviceKindFromValue(kindVal, kind):
@@ -106,6 +113,7 @@ proc syscallServiceRegister*(kindVal, pidVal: U64): U64 =
   0
 
 
+## Handles the service ready syscall operation.
 proc syscallServiceReady*(kindVal, pidVal: U64): U64 =
   var kind = serviceBlock
   if not serviceKindFromValue(kindVal, kind):
@@ -119,6 +127,7 @@ proc syscallServiceReady*(kindVal, pidVal: U64): U64 =
   0
 
 
+## Handles the service unregister syscall operation.
 proc syscallServiceUnregister*(kindVal: U64): U64 =
   var kind = serviceBlock
   if not serviceKindFromValue(kindVal, kind):
@@ -130,6 +139,7 @@ proc syscallServiceUnregister*(kindVal: U64): U64 =
   0
 
 
+## Handles the service list syscall operation.
 proc syscallServiceList*(outEntries, maxEntries: U64): U64 =
   if outEntries == 0 or maxEntries == 0:
     return U64(-1'i64)

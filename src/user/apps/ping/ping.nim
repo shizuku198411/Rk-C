@@ -1,3 +1,4 @@
+## Sends an ICMP echo request through netd.
 import ../../lib/core/io
 import ../../lib/ipc/ipc_request
 import ../../lib/ipc/service_client
@@ -12,11 +13,13 @@ var
   parsedArgs: UserArgs
 
 
+## Prints ping usage information.
 proc printUsage() =
   write("usage: ping [ip]\n")
   write("default: ping 10.0.1.1\n")
 
 
+## Parses the target IP, requests netd ping, and prints the result.
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   if not parseUserArgs(arg, parsedArgs):
     printUsage()

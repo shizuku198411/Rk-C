@@ -1,6 +1,8 @@
+## Provides fixed-size C string copy and comparison helpers.
 import types
 
 
+## Copies cstring.
 proc copyCString*(dst: var openArray[char], src: cstring): bool =
   if dst.len == 0:
     return false
@@ -20,6 +22,7 @@ proc copyCString*(dst: var openArray[char], src: cstring): bool =
   fits
 
 
+## Copies chars.
 proc copyChars*(dst: var openArray[char], src: openArray[char]) =
   var i = 0
   while i < dst.len and i < src.len:
@@ -31,6 +34,7 @@ proc copyChars*(dst: var openArray[char], src: openArray[char]) =
     inc i
 
 
+## Implements the cstring eq helper.
 proc cstringEq*(a, b: cstring): bool =
   if a == nil or b == nil:
     return false
@@ -44,6 +48,7 @@ proc cstringEq*(a, b: cstring): bool =
   false
 
 
+## Implements the fixed cstring eq helper.
 proc fixedCStringEq*(src: openArray[char], expected: cstring): bool =
   if expected == nil:
     return false
@@ -59,6 +64,7 @@ proc fixedCStringEq*(src: openArray[char], expected: cstring): bool =
   expected[src.len] == '\0'
 
 
+## Implements the fixed cstring eq helper.
 proc fixedCStringEq*(src: ptr UncheckedArray[char], capacity: int, expected: cstring): bool =
   if src == nil or expected == nil:
     return false
@@ -74,6 +80,7 @@ proc fixedCStringEq*(src: ptr UncheckedArray[char], capacity: int, expected: cst
   expected[capacity] == '\0'
 
 
+## Implements the cstrlen helper.
 proc cstrlen*(s: cstring): U64 =
   if s == nil:
     return 0

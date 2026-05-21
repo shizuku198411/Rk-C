@@ -1,3 +1,4 @@
+## Implements a minimal TLS client used by HTTPS requests.
 import ./net_tcp
 import ./crypto/aead_chacha20_poly1305
 import ./crypto/chacha20
@@ -75,6 +76,7 @@ var
   tlsLastError: I32
 
 
+## Performs TLS error name.
 proc tlsErrorName*(code: I32): cstring =
   case code
   of 0:
@@ -87,10 +89,12 @@ proc tlsErrorName*(code: I32): cstring =
     cstring("unknown TLS error")
 
 
+## Performs TLS last error name.
 proc tlsLastErrorName*(): cstring =
   tlsErrorName(tlsLastError)
 
 
+## Performs TLS crypto ready.
 proc tlsCryptoReady*(): bool =
   var zeroKey: array[32, U8]
   var zeroNonce: array[12, U8]
@@ -105,6 +109,7 @@ proc tlsCryptoReady*(): bool =
   true
 
 
+## Writes put8.
 proc put8(buf: var array[TlsMaxRecord, U8], pos: var U32, value: U8): bool =
   if pos >= U32(TlsMaxRecord):
     return false
@@ -114,6 +119,7 @@ proc put8(buf: var array[TlsMaxRecord, U8], pos: var U32, value: U8): bool =
   true
 
 
+## Writes put16.
 proc put16(buf: var array[TlsMaxRecord, U8], pos: var U32, value: U16): bool =
   if pos + 2 > U32(TlsMaxRecord):
     return false
@@ -124,6 +130,7 @@ proc put16(buf: var array[TlsMaxRecord, U8], pos: var U32, value: U16): bool =
   true
 
 
+## Writes put24.
 proc put24(buf: var array[TlsMaxRecord, U8], pos: var U32, value: U32): bool =
   if pos + 3 > U32(TlsMaxRecord):
     return false
@@ -135,17 +142,20 @@ proc put24(buf: var array[TlsMaxRecord, U8], pos: var U32, value: U32): bool =
   true
 
 
+## Implements the patch16 helper.
 proc patch16(buf: var array[TlsMaxRecord, U8], pos: U32, value: U16) =
   buf[pos] = U8((value shr 8) and 0xff'u16)
   buf[pos + 1] = U8(value and 0xff'u16)
 
 
+## Implements the patch24 helper.
 proc patch24(buf: var array[TlsMaxRecord, U8], pos: U32, value: U32) =
   buf[pos] = U8((value shr 16) and 0xff'u32)
   buf[pos + 1] = U8((value shr 8) and 0xff'u32)
   buf[pos + 2] = U8(value and 0xff'u32)
 
 
+## Copies bytes.
 proc copyBytes(buf: var array[TlsMaxRecord, U8], pos: var U32, data: pointer, len: U32): bool =
   if pos + len > U32(TlsMaxRecord):
     return false
@@ -155,14 +165,17 @@ proc copyBytes(buf: var array[TlsMaxRecord, U8], pos: var U32, data: pointer, le
   true
 
 
+## Gets get16.
 proc get16(data: ptr UncheckedArray[U8], pos: U32): U16 =
   (U16(data[pos]) shl 8) or U16(data[pos + 1])
 
 
+## Gets get24.
 proc get24(data: ptr UncheckedArray[U8], pos: U32): U32 =
   (U32(data[pos]) shl 16) or (U32(data[pos + 1]) shl 8) or U32(data[pos + 2])
 
 
+## Fills pseudo random.
 proc fillPseudoRandom(buf: pointer, len: U32) =
   let outBuf = cast[ptr UncheckedArray[U8]](buf)
   inc rngCounter
@@ -177,6 +190,7 @@ proc fillPseudoRandom(buf: pointer, len: U32) =
     inc i
 
 
+## Fills random.
 proc fillRandom(buf: pointer, len: U32) =
   if sysEntropy(buf, U64(len)) == I32(len):
     return
@@ -184,11 +198,13 @@ proc fillRandom(buf: pointer, len: U32) =
   fillPseudoRandom(buf, len)
 
 
+## Builds key pair.
 proc makeKeyPair(client: var TlsClient) =
   fillRandom(addr client.privateKey[0], U32(32))
   discard x25519Base(addr client.publicKey[0], addr client.privateKey[0])
 
 
+## Writes server name.
 proc writeServerName(host: cstring, pos: var U32): bool =
   let hostLen = U32(cstrlen(host))
   if hostLen == 0 or hostLen > 255:
@@ -214,6 +230,7 @@ proc writeServerName(host: cstring, pos: var U32): bool =
   true
 
 
+## Builds client hello.
 proc buildClientHello(client: var TlsClient, host: cstring, outLen: var U32): bool =
   var pos = U32(0)
   var randomBytes: array[32, U8]
@@ -302,6 +319,7 @@ proc buildClientHello(client: var TlsClient, host: cstring, outLen: var U32): bo
   true
 
 
+## Sends plain record.
 proc sendPlainRecord(handle: I32, contentType: U8, data: pointer, len: U32): I32 =
   if len + 5 > U32(TlsMaxRecord):
     return -1
@@ -316,6 +334,7 @@ proc sendPlainRecord(handle: I32, contentType: U8, data: pointer, len: U32): I32
   tcpSend(handle, addr cipherBuf[0], len + 5)
 
 
+## Implements the compact raw helper.
 proc compactRaw(client: var TlsClient) =
   if client.rawOff == 0:
     return
@@ -328,6 +347,7 @@ proc compactRaw(client: var TlsClient) =
   client.rawOff = 0
 
 
+## Fills raw.
 proc fillRaw(client: var TlsClient, need: U32): bool =
   while client.rawLen < need:
     compactRaw(client)
@@ -343,6 +363,7 @@ proc fillRaw(client: var TlsClient, need: U32): bool =
   true
 
 
+## Reads raw.
 proc readRaw(client: var TlsClient, outData: pointer, len: U32): bool =
   if not fillRaw(client, len):
     return false
@@ -356,6 +377,7 @@ proc readRaw(client: var TlsClient, outData: pointer, len: U32): bool =
   true
 
 
+## Receives record.
 proc receiveRecord(client: var TlsClient, outContentType: var U8,
                    outData: pointer, capacity: U32): I32 =
   var header: array[5, U8]
@@ -372,6 +394,7 @@ proc receiveRecord(client: var TlsClient, outContentType: var U8,
   I32(recordLen)
 
 
+## Parses server hello.
 proc parseServerHello(client: var TlsClient, data: pointer, len: U32): bool =
   if len < 42:
     return false
@@ -440,11 +463,13 @@ proc parseServerHello(client: var TlsClient, data: pointer, len: U32): bool =
   sawVersion and sawKeyShare
 
 
+## Implements the traffic key helper.
 proc trafficKey(secret, outKey, outIv: pointer) =
   discard hkdfExpandLabelSha256(secret, "key", nil, U32(0), outKey, U32(32))
   discard hkdfExpandLabelSha256(secret, "iv", nil, U32(0), outIv, U32(12))
 
 
+## Derives handshake secrets.
 proc deriveHandshakeSecrets(client: var TlsClient) =
   var zeros: array[32, U8]
   var emptyHash: array[32, U8]
@@ -475,6 +500,7 @@ proc deriveHandshakeSecrets(client: var TlsClient) =
              addr client.serverHandshakeIv[0])
 
 
+## Builds nonce.
 proc makeNonce(iv: pointer, seq: U64, outNonce: pointer) =
   copyMem(outNonce, iv, U32(12))
   let nonce = cast[ptr UncheckedArray[U8]](outNonce)
@@ -484,6 +510,7 @@ proc makeNonce(iv: pointer, seq: U64, outNonce: pointer) =
     inc i
 
 
+## Decrypts record.
 proc decryptRecord(key, iv: pointer, seq: var U64, outerType: U8,
                    encrypted: pointer, encryptedLen: U32,
                    outInnerType: var U8, outPlainLen: var U32): bool =
@@ -520,6 +547,7 @@ proc decryptRecord(key, iv: pointer, seq: var U64, outerType: U8,
   true
 
 
+## Encrypts record.
 proc encryptRecord(handle: I32, key, iv: pointer, seq: var U64,
                    innerType: U8, data: pointer, len: U32): I32 =
   if len + 1 + U32(Poly1305TagLen) + 5 > U32(TlsMaxRecord):
@@ -559,6 +587,7 @@ proc encryptRecord(handle: I32, key, iv: pointer, seq: var U64,
   -1
 
 
+## Verifies finished.
 proc verifyFinished(secret: pointer, finishedData: pointer, finishedLen: U32,
                     transcript: var Sha256Ctx): bool =
   if finishedLen != U32(32):
@@ -574,6 +603,7 @@ proc verifyFinished(secret: pointer, finishedData: pointer, finishedLen: U32,
   secureEqual(addr expected[0], finishedData, U32(32))
 
 
+## Implements the process server handshake helper.
 proc processServerHandshake(client: var TlsClient, data: pointer, len: U32,
                             sawFinished: var bool): bool =
   let input = cast[ptr UncheckedArray[U8]](data)
@@ -604,6 +634,7 @@ proc processServerHandshake(client: var TlsClient, data: pointer, len: U32,
   true
 
 
+## Reads server handshake.
 proc readServerHandshake(client: var TlsClient): bool =
   var sawFinished = false
   while not sawFinished:
@@ -632,6 +663,7 @@ proc readServerHandshake(client: var TlsClient): bool =
   true
 
 
+## Sends client finished.
 proc sendClientFinished(client: var TlsClient): bool =
   var finishedKey: array[32, U8]
   var transcriptHash: array[32, U8]
@@ -658,6 +690,7 @@ proc sendClientFinished(client: var TlsClient): bool =
   true
 
 
+## Derives application secrets.
 proc deriveApplicationSecrets(client: var TlsClient) =
   var zeros: array[32, U8]
   var emptyHash: array[32, U8]
@@ -688,6 +721,7 @@ proc deriveApplicationSecrets(client: var TlsClient) =
              addr client.serverAppIv[0])
 
 
+## Clears clear.
 proc clear*(client: var TlsClient) =
   client.handle = -1
   client.lastError = 0
@@ -720,9 +754,11 @@ proc clear*(client: var TlsClient) =
   sha256Init(client.transcript)
 
 
+## Closes a TLS connection and releases its underlying TCP handle.
 proc tlsClose*(client: var TlsClient): I32
 
 
+## Performs TLS connect.
 proc tlsConnect*(client: var TlsClient, ip: U32, port: U16, host: cstring): I32 =
   clear(client)
   tlsLastError = 0
@@ -796,6 +832,7 @@ proc tlsConnect*(client: var TlsClient, ip: U32, port: U16, host: cstring): I32 
   client.handle
 
 
+## Performs TLS send.
 proc tlsSend*(client: var TlsClient, data: pointer, len: U32): I32 =
   if client.handle <= 0 or data == nil or len == 0:
     return -1
@@ -804,6 +841,7 @@ proc tlsSend*(client: var TlsClient, data: pointer, len: U32): I32 =
                 client.clientAppSeq, TlsRecordApplicationData, data, len)
 
 
+## Copies pending app.
 proc copyPendingApp(client: var TlsClient, data: pointer, capacity: U32): I32 =
   if client.appLen == 0:
     return 0
@@ -821,6 +859,7 @@ proc copyPendingApp(client: var TlsClient, data: pointer, capacity: U32): I32 =
   I32(copyLen)
 
 
+## Performs TLS receive.
 proc tlsReceive*(client: var TlsClient, data: pointer, capacity: U32): I32 =
   if client.handle <= 0 or data == nil or capacity == 0:
     return -1
@@ -861,6 +900,7 @@ proc tlsReceive*(client: var TlsClient, data: pointer, capacity: U32): I32 =
     return -1
 
 
+## Closes a TLS connection and releases its underlying TCP handle.
 proc tlsClose*(client: var TlsClient): I32 =
   if client.handle > 0:
     let rc = tcpClose(client.handle)
@@ -871,6 +911,7 @@ proc tlsClose*(client: var TlsClient): I32 =
   0
 
 
+## Implements the slot index helper.
 proc slotIndex(handle: I32): int =
   if handle < TlsHandleBase:
     return -1
@@ -882,6 +923,7 @@ proc slotIndex(handle: I32): int =
   int(idx)
 
 
+## Performs TLS open.
 proc tlsOpen*(ip: U32, port: U16, host: cstring): I32 =
   var i = 0
   while i < TlsSlotCount:
@@ -899,6 +941,7 @@ proc tlsOpen*(ip: U32, port: U16, host: cstring): I32 =
   -1
 
 
+## Performs TLS send handle.
 proc tlsSendHandle*(handle: I32, data: pointer, len: U32): I32 =
   let idx = slotIndex(handle)
   if idx < 0:
@@ -907,6 +950,7 @@ proc tlsSendHandle*(handle: I32, data: pointer, len: U32): I32 =
   tlsSend(tlsSlots[idx], data, len)
 
 
+## Performs TLS receive handle.
 proc tlsReceiveHandle*(handle: I32, data: pointer, capacity: U32): I32 =
   let idx = slotIndex(handle)
   if idx < 0:
@@ -915,6 +959,7 @@ proc tlsReceiveHandle*(handle: I32, data: pointer, capacity: U32): I32 =
   tlsReceive(tlsSlots[idx], data, capacity)
 
 
+## Performs TLS close handle.
 proc tlsCloseHandle*(handle: I32): I32 =
   let idx = slotIndex(handle)
   if idx < 0:
@@ -923,6 +968,7 @@ proc tlsCloseHandle*(handle: I32): I32 =
   tlsClose(tlsSlots[idx])
 
 
+## Performs TLS version name handle.
 proc tlsVersionNameHandle*(handle: I32): cstring =
   let idx = slotIndex(handle)
   if idx < 0:
@@ -931,6 +977,7 @@ proc tlsVersionNameHandle*(handle: I32): cstring =
   cstring("TLS1.3")
 
 
+## Performs TLS cipher name handle.
 proc tlsCipherNameHandle*(handle: I32): cstring =
   let idx = slotIndex(handle)
   if idx < 0:
@@ -939,5 +986,6 @@ proc tlsCipherNameHandle*(handle: I32): cstring =
   cstring("TLS_CHACHA20_POLY1305_SHA256")
 
 
+## Returns whether tls handle is true.
 proc isTlsHandle*(handle: I32): bool =
   slotIndex(handle) >= 0

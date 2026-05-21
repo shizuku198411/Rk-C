@@ -1,3 +1,4 @@
+## Parses and writes group database records.
 import ../../../lib/types
 import ./strutils
 
@@ -15,6 +16,7 @@ type
     members*: array[GroupMembersMax, char]
 
 
+## Resets a group entry to empty fields and gid zero.
 proc clearGroupEntry*(entry: var GroupEntry) =
   var i = U32(0)
   while i < GroupNameMax:
@@ -29,6 +31,7 @@ proc clearGroupEntry*(entry: var GroupEntry) =
   entry.gid = U32(0)
 
 
+## Copies one delimited group field into a fixed-size destination buffer.
 proc copyGroupField(dst: var openArray[char], src: cstring, startPos, endPos: U32): bool =
   if dst.len == 0:
     return false
@@ -49,6 +52,7 @@ proc copyGroupField(dst: var openArray[char], src: cstring, startPos, endPos: U3
   true
 
 
+## Parses a delimited group field as an unsigned 32-bit integer.
 proc parseGroupFieldU32(line: cstring, startPos, endPos: U32, value: var U32): bool =
   var buf: array[16, char]
   if not copyGroupField(buf, line, startPos, endPos):
@@ -57,6 +61,7 @@ proc parseGroupFieldU32(line: cstring, startPos, endPos: U32, value: var U32): b
   parseU32(cast[cstring](addr buf[0]), value)
 
 
+## Parses one group database line into a GroupEntry.
 proc parseGroupLine*(line: cstring, entry: var GroupEntry): bool =
   clearGroupEntry(entry)
 
@@ -99,6 +104,7 @@ proc parseGroupLine*(line: cstring, entry: var GroupEntry): bool =
   copyGroupField(entry.members, line, membersStart, membersEnd)
 
 
+## Writes one GroupEntry as a group database line.
 proc writeGroupLine*(dst: pointer, capacity: U32, entry: GroupEntry): U32 =
   let outBuf = cast[ptr UncheckedArray[char]](dst)
   var pos = U32(0)

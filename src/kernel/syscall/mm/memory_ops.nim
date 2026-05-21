@@ -1,9 +1,11 @@
+## Implements memory-management related syscall handlers.
 import ../../../lib/syscall_types
 import ../../../lib/types
 import ../../lib/syscall_out
 import ../../mm/memory
 
 
+## Handles the get bit map syscall operation.
 proc syscallGetBitMap*(outInfo: U64): U64 =
   if outInfo == 0:
     return U64(-1'i64)

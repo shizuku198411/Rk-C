@@ -1,3 +1,4 @@
+## Removes one or more files from command-line paths.
 import ../../lib/core/io
 import ../../lib/core/args
 import ../../lib/core/pathutils
@@ -7,10 +8,12 @@ import ../../lib/core/syscall
 var parsedArgs: UserArgs
 
 
+## Prints rm usage information.
 proc printUsage() =
   write("usage: rm <path> [path...]\n")
 
 
+## Parses arguments and removes each requested file.
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   if not parseUserArgs(arg, parsedArgs):
     printUsage()

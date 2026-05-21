@@ -1,3 +1,4 @@
+## Defines shared directory entry type constants.
 import ../../lib/types
 
 const

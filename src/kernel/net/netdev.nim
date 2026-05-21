@@ -1,3 +1,4 @@
+## Implements low-level VirtIO network device initialization and packet I/O.
 import ../../arch/riscv64/arch
 import ../../lib/mem
 import ../../lib/syscall_types
@@ -31,33 +32,40 @@ var
   initialized: bool
 
 
+## Implements the mmio read kernel helper.
 proc mmioRead(off: U64): U32 =
   virtioMmioRead(mmioBase, off)
 
 
+## Implements the mmio write kernel helper.
 proc mmioWrite(off: U64, val: U32) =
   virtioMmioWrite(mmioBase, off, val)
 
 
+## Reads reg.
 proc readReg(base, off: U64): U32 =
   virtioMmioRead(base, off)
 
 
+## Implements the rx order push kernel helper.
 proc rxOrderPush(id: U16) =
   rxOrder[rxOrderTail mod U16(VqNum)] = id
   rxOrderTail = (rxOrderTail + 1) mod U16(VqNum)
 
 
+## Implements the rx order pop kernel helper.
 proc rxOrderPop(): U16 =
   let id = rxOrder[rxOrderHead mod U16(VqNum)]
   rxOrderHead = (rxOrderHead + 1) mod U16(VqNum)
   id
 
 
+## Resets queue.
 proc resetQueue(q: var VirtQueue) =
   discard resetVirtQueue(q, VqNum, VqBytes, VqAlign)
 
 
+## Scans for virtio net.
 proc scanVirtioNet(): bool =
   detectedInfo = SysNetDeviceInfo()
 
@@ -83,6 +91,7 @@ proc scanVirtioNet(): bool =
   false
 
 
+## Reads mac config.
 proc readMacConfig() =
   var i = 0
   while i < SysNetMacLen:
@@ -90,6 +99,7 @@ proc readMacConfig() =
     inc i
 
 
+## Sets setup queue.
 proc setupQueue(index: U32, q: var VirtQueue): bool =
   resetQueue(q)
   if q.mem == NilPAddr:
@@ -97,6 +107,7 @@ proc setupQueue(index: U32, q: var VirtQueue): bool =
   setupVirtQueue(mmioBase, index, VqNum, q)
 
 
+## Configures device.
 proc configureDevice(): bool =
   mmioWrite(RegStatus, 0)
   mmioWrite(RegStatus, StatusAcknowledge)
@@ -141,6 +152,7 @@ proc configureDevice(): bool =
   true
 
 
+## Sets setup rx buffers.
 proc setupRxBuffers(): bool =
   if rxBufMem == NilPAddr:
     rxBufMem = palloc(VqNum)
@@ -167,6 +179,7 @@ proc setupRxBuffers(): bool =
   true
 
 
+## Sets setup tx buffer.
 proc setupTxBuffer(): bool =
   if txBufMem == NilPAddr:
     txBufMem = palloc(VqNum)
@@ -178,6 +191,7 @@ proc setupTxBuffer(): bool =
   true
 
 
+## Implements the netdev init kernel helper.
 proc netdevInit*(): int =
   if initialized:
     return 0
@@ -198,6 +212,7 @@ proc netdevInit*(): int =
   0
 
 
+## Implements the netdev info kernel helper.
 proc netdevInfo*(): SysNetDeviceInfo =
   if initialized:
     detectedInfo.initialized = 1
@@ -207,6 +222,7 @@ proc netdevInfo*(): SysNetDeviceInfo =
   detectedInfo
 
 
+## Implements the netdev mac kernel helper.
 proc netdevMac*(outMac: pointer): int =
   if outMac == nil:
     return -1
@@ -217,6 +233,7 @@ proc netdevMac*(outMac: pointer): int =
   0
 
 
+## Implements the requeue rx desc kernel helper.
 proc requeueRxDesc(id: U16) =
   let idx = volatileLoad(addr rxq.avail.idx)
   rxq.avail.ring[idx mod U16(VqNum)] = id
@@ -227,6 +244,7 @@ proc requeueRxDesc(id: U16) =
   mmioWrite(RegQueueNotify, 0)
 
 
+## Implements the rx num buffers kernel helper.
 proc rxNumBuffers(id: U16): U16 =
   if netHdrLen != NetHdrMrgLen:
     return U16(1)
@@ -241,6 +259,7 @@ proc rxNumBuffers(id: U16): U16 =
   n
 
 
+## Implements the netdev recv kernel helper.
 proc netdevRecv*(outBuf: pointer, capacity: U64): int =
   if outBuf == nil or capacity == 0:
     return -1
@@ -288,6 +307,7 @@ proc netdevRecv*(outBuf: pointer, capacity: U64): int =
   int(frameLen)
 
 
+## Implements the netdev send kernel helper.
 proc netdevSend*(inBuf: pointer, size: U64): int =
   if inBuf == nil or size == 0 or size > SysNetPacketMax:
     return -1

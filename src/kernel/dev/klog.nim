@@ -1,3 +1,4 @@
+## Maintains the in-kernel circular log buffer.
 import ../../lib/types
 
 const
@@ -10,10 +11,12 @@ var
   logDropped*: U64
 
 
+## Implements the next pos kernel helper.
 proc nextPos(pos: U64): U64 =
   (pos + U64(1)) mod KernelLogSize
 
 
+## Implements the push klog char kernel helper.
 proc pushKlogChar*(ch: char) =
   logBuf[logWritePos] = ch
   logWritePos = nextPos(logWritePos)
@@ -24,6 +27,7 @@ proc pushKlogChar*(ch: char) =
     inc logDropped
 
 
+## Reads klog.
 proc readKlog*(dst: ptr UncheckedArray[char], capacity: U64): U64 =
   if dst == nil or capacity == U64(0):
     return U64(0)

@@ -1,3 +1,4 @@
+## Defines shared user and group id constants.
 import types
 
 const

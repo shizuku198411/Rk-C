@@ -1,3 +1,4 @@
+## Formats syscall trace output for debugging user processes.
 import ../../lib/types
 import ../../lib/syscall_ids
 import ../dev/console
@@ -17,6 +18,7 @@ var
   traceStrBuf: array[traceStrBufSize, char]
   tracePreviewBuf: array[tracePreviewBufSize, U8]
 
+## Handles the name syscall operation.
 proc syscallName*(num: U64): cstring = 
   case num:
   of SysWrite: cstring("write")
@@ -102,6 +104,7 @@ proc syscallName*(num: U64): cstring =
   else: cstring("unknown")
 
 
+## Implements the should trace kernel helper.
 proc shouldTrace(): bool =
   if not syscallTraceEnabled:
     return false
@@ -112,6 +115,7 @@ proc shouldTrace(): bool =
   true
 
 
+## Prints user cstring arg.
 proc printUserCStringArg(ptrVal: U64) =
   if ptrVal == 0:
     print("null")
@@ -126,6 +130,7 @@ proc printUserCStringArg(ptrVal: U64) =
   print("\"")
 
 
+## Prints escaped byte.
 proc printEscapedByte(ch: U8) =
   case ch
   of U8('\n'):
@@ -145,6 +150,7 @@ proc printEscapedByte(ch: U8) =
       print(".")
 
 
+## Prints buffer preview.
 proc printBufferPreview(ptrVal, len: U64) =
   if not syscallTraceVerbose:
     return
@@ -168,31 +174,37 @@ proc printBufferPreview(ptrVal, len: U64) =
   print("\"")
 
 
+## Prints name.
 proc printName(name: cstring) =
   print(name)
   print("=")
 
 
+## Prints named ptr.
 proc printNamedPtr(name: cstring, value: U64) =
   printName(name)
   printPtr(value)
 
 
+## Prints named u64.
 proc printNamedU64(name: cstring, value: U64) =
   printName(name)
   printUnsigned(value)
 
 
+## Prints named i64.
 proc printNamedI64(name: cstring, value: U64) =
   printName(name)
   printSigned(int64(value))
 
 
+## Prints named cstring.
 proc printNamedCString(name: cstring, value: U64) =
   printName(name)
   printUserCStringArg(value)
 
 
+## Prints named bool.
 proc printNamedBool(name: cstring, value: U64) =
   printName(name)
   if value == 0:
@@ -201,6 +213,7 @@ proc printNamedBool(name: cstring, value: U64) =
     print("true")
 
 
+## Prints trace ctl cmd.
 proc printTraceCtlCmd(value: U64) =
   case value
   of 0:
@@ -215,11 +228,13 @@ proc printTraceCtlCmd(value: U64) =
     printUnsigned(value)
 
 
+## Prints named trace ctl cmd.
 proc printNamedTraceCtlCmd(name: cstring, value: U64) =
   printName(name)
   printTraceCtlCmd(value)
 
 
+## Prints default args.
 proc printDefaultArgs(frame: ptr TrapFrame) =
   printNamedPtr("a0", frame.a0)
   print(", ")
@@ -228,6 +243,7 @@ proc printDefaultArgs(frame: ptr TrapFrame) =
   printNamedPtr("a2", frame.a2)
 
 
+## Prints syscall args.
 proc printSyscallArgs(frame: ptr TrapFrame) =
   case frame.a3
   of SysWrite:
@@ -435,6 +451,7 @@ proc printSyscallArgs(frame: ptr TrapFrame) =
     printDefaultArgs(frame)
 
 
+## Implements the trace syscall enter kernel helper.
 proc traceSyscallEnter*(frame: ptr TrapFrame) =
   if not shouldTrace():
     return
@@ -454,6 +471,7 @@ proc traceSyscallEnter*(frame: ptr TrapFrame) =
   putChar('\n')
 
 
+## Implements the trace syscall exit kernel helper.
 proc traceSyscallExit*(frame: ptr TrapFrame) =
   if not shouldTrace():
     return

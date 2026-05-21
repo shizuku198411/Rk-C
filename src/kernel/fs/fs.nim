@@ -1,3 +1,4 @@
+## Implements the root filesystem, appfs, devfs views, VFS dispatch, and permissions.
 import ../../lib/fixed_string
 import ../../lib/fs_permissions
 import ../../lib/mem
@@ -101,13 +102,19 @@ let devEntryNames = [
 ]
 
 
+## Implements the fs write file kernel helper.
 proc fsWriteFile*(path: cstring, data: pointer, size: U64): int
+## Implements the fs write file with flags kernel helper.
 proc fsWriteFileWithFlags*(path: cstring, data: pointer, size: U64, flags: U32): int
+## Implements the fs rename kernel helper.
 proc fsRename*(oldPath, newPath: cstring): int
+## Implements the fs chmod kernel helper.
 proc fsChmod*(path: cstring, mode: U32): int
+## Implements the fs chown kernel helper.
 proc fsChown*(path: cstring, uid, gid: U32): int
 
 
+## Implements the default node mode kernel helper.
 proc defaultNodeMode(parent: int, name: cstring, typ: U32): U32 =
   if typ == FsTypeFile:
     return FsModeFileDefault
@@ -119,6 +126,7 @@ proc defaultNodeMode(parent: int, name: cstring, typ: U32): U32 =
   FsModeDirDefault
 
 
+## Initializes node metadata.
 proc initNodeMetadata(node: ptr FsNode, parent: int, name: cstring, typ: U32) =
   if node == nil:
     return
@@ -128,6 +136,7 @@ proc initNodeMetadata(node: ptr FsNode, parent: int, name: cstring, typ: U32) =
   node.mode = defaultNodeMode(parent, name, typ)
 
 
+## Implements the ensure node metadata kernel helper.
 proc ensureNodeMetadata(idx: int): bool =
   if idx < 0 or idx >= FsMaxNodes:
     return false
@@ -145,6 +154,7 @@ proc ensureNodeMetadata(idx: int): bool =
   true
 
 
+## Implements the ensure all node metadata kernel helper.
 proc ensureAllNodeMetadata(): bool =
   var changed = false
   var i = 0
@@ -154,30 +164,35 @@ proc ensureAllNodeMetadata(): bool =
   changed
 
 
+## Checks whether read node is allowed.
 proc canReadNode(uid, gid: U32, idx: int): bool =
   idx >= 0 and idx < FsMaxNodes and superBlock.nodes[idx].used != U32(0) and
     fsModeAllowsRead(superBlock.nodes[idx].uid, superBlock.nodes[idx].gid,
       superBlock.nodes[idx].mode, uid, gid)
 
 
+## Checks whether write node is allowed.
 proc canWriteNode(uid, gid: U32, idx: int): bool =
   idx >= 0 and idx < FsMaxNodes and superBlock.nodes[idx].used != U32(0) and
     fsModeAllowsWrite(superBlock.nodes[idx].uid, superBlock.nodes[idx].gid,
       superBlock.nodes[idx].mode, uid, gid)
 
 
+## Checks whether execute node is allowed.
 proc canExecuteNode(uid, gid: U32, idx: int): bool =
   idx >= 0 and idx < FsMaxNodes and superBlock.nodes[idx].used != U32(0) and
     fsModeAllowsExecute(superBlock.nodes[idx].uid, superBlock.nodes[idx].gid,
       superBlock.nodes[idx].mode, uid, gid)
 
 
+## Checks whether search node is allowed.
 proc canSearchNode(uid, gid: U32, idx: int): bool =
   idx >= 0 and idx < FsMaxNodes and superBlock.nodes[idx].used != U32(0) and
     (superBlock.nodes[idx].typ == FsTypeDir or superBlock.nodes[idx].typ == FsTypeMount) and
     canExecuteNode(uid, gid, idx)
 
 
+## Copies info string.
 proc copyInfoString(dst: var array[SysFsInfoNameMax, char], src: cstring) =
   var i = U32(0)
   while i + U32(1) < SysFsInfoNameMax and src[i] != '\0':
@@ -188,6 +203,7 @@ proc copyInfoString(dst: var array[SysFsInfoNameMax, char], src: cstring) =
     inc i
 
 
+## Implements the path matches mount kernel helper.
 proc pathMatchesMount(path: cstring, mountPath: cstring, mountLen: int): bool =
   if path == nil or mountPath == nil or mountLen <= 0:
     return false
@@ -200,12 +216,14 @@ proc pathMatchesMount(path: cstring, mountPath: cstring, mountLen: int): bool =
   path[mountLen] == '\0' or path[mountLen] == '/'
 
 
+## Implements the mount local path kernel helper.
 proc mountLocalPath(path: cstring, mountLen: int): cstring =
   if path[mountLen] == '\0':
     return "/"
   cast[cstring](unsafeAddr path[mountLen])
 
 
+## Implements the vfs mount kernel helper.
 proc vfsMount(path: cstring, backend: VfsBackend) =
   if path == nil or path[0] == '\0':
     panic("invalid vfs mount path")
@@ -220,6 +238,7 @@ proc vfsMount(path: cstring, backend: VfsBackend) =
   inc mountCount
 
 
+## Finds mount.
 proc findMount(path: cstring): int =
   var best = -1
   var i = 0
@@ -232,6 +251,7 @@ proc findMount(path: cstring): int =
   best
 
 
+## Clears mounts.
 proc clearMounts() =
   var i = 0
   while i < VfsMaxMounts:
@@ -240,10 +260,12 @@ proc clearMounts() =
   mountCount = 0
 
 
+## Returns whether bin root is true.
 proc isBinRoot(path: cstring): bool =
   cstringEq(path, "/bin") or cstringEq(path, "/bin/")
 
 
+## Returns whether bin path is true.
 proc isBinPath(path: cstring): bool =
   if path == nil:
     return false
@@ -253,14 +275,17 @@ proc isBinPath(path: cstring): bool =
       path[3] == 'n' and path[4] == '/')
 
 
+## Returns whether dev root is true.
 proc isDevRoot(path: cstring): bool =
   cstringEq(path, "/dev") or cstringEq(path, "/dev/")
 
 
+## Returns whether proc root is true.
 proc isProcRoot(path: cstring): bool =
   cstringEq(path, "/proc") or cstringEq(path, "/proc/")
 
 
+## Returns whether proc path is true.
 proc isProcPath(path: cstring): bool =
   if path == nil:
     return false
@@ -270,6 +295,7 @@ proc isProcPath(path: cstring): bool =
       path[3] == 'o' and path[4] == 'c' and path[5] == '/')
 
 
+## Resolves dev path.
 proc resolveDevPath(path: cstring): int =
   if path == nil or not (path[0] == '/' and path[1] == 'd' and path[2] == 'e' and
       path[3] == 'v' and path[4] == '/'):
@@ -288,6 +314,7 @@ proc resolveDevPath(path: cstring): int =
   -1
 
 
+## Implements the appfs read bytes kernel helper.
 proc appfsReadBytes(absOff: U64, outBuf: pointer, n: U64): int =
   if outBuf == nil and n > 0:
     return -1
@@ -313,6 +340,7 @@ proc appfsReadBytes(absOff: U64, outBuf: pointer, n: U64): int =
   0
 
 
+## Implements the appfs name eq kernel helper.
 proc appfsNameEq(entry: ptr AppfsEntry, name: cstring): bool =
   if entry == nil:
     return false
@@ -320,6 +348,7 @@ proc appfsNameEq(entry: ptr AppfsEntry, name: cstring): bool =
   fixedCStringEq(cast[ptr UncheckedArray[char]](addr entry.name[0]), FsNameMax, name)
 
 
+## Resolves appfs path.
 proc resolveAppfsPath(path: cstring): int =
   if path == nil or not appfsReady:
     return -1
@@ -345,6 +374,7 @@ proc resolveAppfsPath(path: cstring): int =
   -1
 
 
+## Implements the appfs load kernel helper.
 proc appfsLoad(): int =
   var hdr: AppfsHeader
   let base = AppfsStartBlock * BlockSize
@@ -363,6 +393,7 @@ proc appfsLoad(): int =
   0
 
 
+## Clears block.
 proc clearBlock() =
   var i = U64(0)
   while i < BlockSize:
@@ -370,6 +401,7 @@ proc clearBlock() =
     inc i
 
 
+## Finds child.
 proc findChild(parent: int, name: cstring): int =
   var i = 0
   while i < FsMaxNodes:
@@ -385,6 +417,7 @@ proc findChild(parent: int, name: cstring): int =
   -1
 
 
+## Returns whether children is present.
 proc hasChildren(idx: int): bool =
   var i = 0
   while i < FsMaxNodes:
@@ -394,6 +427,7 @@ proc hasChildren(idx: int): bool =
   false
 
 
+## Writes super.
 proc writeSuper(): int =
   let src = cast[ptr UncheckedArray[U8]](addr superBlock)
   var copied = U64(0)
@@ -411,6 +445,7 @@ proc writeSuper(): int =
   0
 
 
+## Reads super.
 proc readSuper(): int =
   var copied = U64(0)
   var blk = U64(0)
@@ -461,6 +496,7 @@ proc readSuper(): int =
   0
 
 
+## Allocates node.
 proc allocNode(parent: int, name: cstring, typ: U32): int =
   let existing = findChild(parent, name)
   if existing >= 0:
@@ -482,6 +518,7 @@ proc allocNode(parent: int, name: cstring, typ: U32): int =
   -1
 
 
+## Resolves path.
 proc resolvePath(path: cstring): int =
   if path == nil or path[0] == '\0':
     return -1
@@ -499,6 +536,7 @@ proc resolvePath(path: cstring): int =
   current
 
 
+## Resolves path with search.
 proc resolvePathWithSearch(uid, gid: U32, path: cstring): int =
   if path == nil or path[0] == '\0':
     return -1
@@ -519,6 +557,7 @@ proc resolvePathWithSearch(uid, gid: U32, path: cstring): int =
   current
 
 
+## Resolves parent.
 proc resolveParent(path: cstring, leaf: var array[FsNameMax, char]): int =
   if path == nil or path[0] == '\0':
     return -1
@@ -537,6 +576,7 @@ proc resolveParent(path: cstring, leaf: var array[FsNameMax, char]): int =
   -1
 
 
+## Resolves parent with search.
 proc resolveParentWithSearch(uid, gid: U32, path: cstring, leaf: var array[FsNameMax, char]): int =
   if path == nil or path[0] == '\0':
     return -1
@@ -558,6 +598,7 @@ proc resolveParentWithSearch(uid, gid: U32, path: cstring, leaf: var array[FsNam
   -1
 
 
+## Writes file bytes.
 proc writeFileBytes(node: FsNode, data: pointer, size: U64): int =
   if data == nil and size > 0:
     return -1
@@ -581,6 +622,7 @@ proc writeFileBytes(node: FsNode, data: pointer, size: U64): int =
   0
 
 
+## Reads node bytes.
 proc readNodeBytes(node: FsNode, dst: pointer, capacity: U64): int =
   if dst == nil:
     return -1
@@ -608,6 +650,7 @@ proc readNodeBytes(node: FsNode, dst: pointer, capacity: U64): int =
   int(node.size)
 
 
+## Implements the format fs kernel helper.
 proc formatFs() =
   superBlock = FsSuper()
   superBlock.magic = FsMagic
@@ -625,12 +668,14 @@ proc formatFs() =
     panic("fs format failed")
 
 
+## Implements the ensure root dir kernel helper.
 proc ensureRootDir(name: cstring, typ: U32): bool =
   let before = superBlock.count
   discard allocNode(0, name, typ)
   superBlock.count != before
 
 
+## Implements the ensure root dir owned kernel helper.
 proc ensureRootDirOwned(name: cstring, typ, uid, gid, mode: U32): bool =
   var changed = ensureRootDir(name, typ)
   let idx = findChild(0, name)
@@ -650,6 +695,7 @@ proc ensureRootDirOwned(name: cstring, typ, uid, gid, mode: U32): bool =
   changed
 
 
+## Implements the ensure dir kernel helper.
 proc ensureDir(parentIdx: int, name: cstring, typ: U32): bool =
   if parentIdx < 0 or superBlock.nodes[parentIdx].typ != FsTypeDir:
     return false
@@ -667,6 +713,7 @@ proc ensureDir(parentIdx: int, name: cstring, typ: U32): bool =
   superBlock.count != before
 
 
+## Implements the cstring data size kernel helper.
 proc cstringDataSize(data: cstring): U64 =
   var size = U64(0)
   while data[size] != '\0':
@@ -675,6 +722,7 @@ proc cstringDataSize(data: cstring): U64 =
   size
 
 
+## Implements the ensure file content kernel helper.
 proc ensureFileContent(parentIdx: int, name, data: cstring, uid, gid, mode: U32): bool =
   if parentIdx < 0 or superBlock.nodes[parentIdx].typ != FsTypeDir:
     return false
@@ -708,6 +756,7 @@ proc ensureFileContent(parentIdx: int, name, data: cstring, uid, gid, mode: U32)
   true
 
 
+## Implements the fs init kernel helper.
 proc fsInit*() =
   blockServiceInit()
   
@@ -763,6 +812,7 @@ proc fsInit*() =
   fsReady = true
 
 
+## Implements the rootfs used blocks kernel helper.
 proc rootfsUsedBlocks(): U64 =
   var blocks = U64(0)
   var i = 0
@@ -773,6 +823,7 @@ proc rootfsUsedBlocks(): U64 =
   blocks
 
 
+## Implements the appfs used bytes kernel helper.
 proc appfsUsedBytes(): U64 =
   if not appfsReady:
     return U64(0)
@@ -787,6 +838,7 @@ proc appfsUsedBytes(): U64 =
   bytes
 
 
+## Sets fs info.
 proc setFsInfo(entry: ptr SysFsInfoEntry, name, fsType, mount: cstring,
                blockSize, totalBlocks, usedBlocks, totalFiles, usedFiles: U64,
                readonly: U32) =
@@ -812,6 +864,7 @@ proc setFsInfo(entry: ptr SysFsInfoEntry, name, fsType, mount: cstring,
   entry.readonly = readonly
 
 
+## Implements the fs info kernel helper.
 proc fsInfo*(outEntries: ptr SysFsInfoEntry, maxEntries: U64): I32 =
   if outEntries == nil or maxEntries == U64(0):
     return -1
@@ -872,6 +925,7 @@ proc fsInfo*(outEntries: ptr SysFsInfoEntry, maxEntries: U64): I32 =
   I32(count)
 
 
+## Implements the mount point allows search kernel helper.
 proc mountPointAllowsSearch(uid, gid: U32, mountIdx: int): bool =
   if mountIdx < 0 or mountIdx >= mountCount:
     return false
@@ -881,36 +935,44 @@ proc mountPointAllowsSearch(uid, gid: U32, mountIdx: int): bool =
   canSearchNode(uid, gid, idx)
 
 
+## Implements the appfs root idx with search kernel helper.
 proc appfsRootIdxWithSearch(uid, gid: U32): int =
   resolvePathWithSearch(uid, gid, cstring"/bin")
 
 
+## Implements the appfs root allows read kernel helper.
 proc appfsRootAllowsRead(uid, gid: U32): bool =
   let idx = appfsRootIdxWithSearch(uid, gid)
   canReadNode(uid, gid, idx)
 
 
+## Implements the appfs root allows search kernel helper.
 proc appfsRootAllowsSearch(uid, gid: U32): bool =
   let idx = appfsRootIdxWithSearch(uid, gid)
   canSearchNode(uid, gid, idx)
 
 
+## Implements the appfs file allows read kernel helper.
 proc appfsFileAllowsRead(uid, gid: U32): bool =
   fsModeAllowsRead(RootUid, RootGid, FsModeReadonlyFile, uid, gid)
 
 
+## Implements the appfs file allows execute kernel helper.
 proc appfsFileAllowsExecute(uid, gid: U32): bool =
   fsModeAllowsExecute(RootUid, RootGid, FsModeReadonlyFile, uid, gid)
 
 
+## Implements the dev file allows read kernel helper.
 proc devFileAllowsRead(uid, gid: U32): bool =
   fsModeAllowsRead(RootUid, RootGid, FsModeDeviceFile, uid, gid)
 
 
+## Implements the dev file allows write kernel helper.
 proc devFileAllowsWrite(uid, gid: U32): bool =
   fsModeAllowsWrite(RootUid, RootGid, FsModeDeviceFile, uid, gid)
 
 
+## Implements the fs can read path kernel helper.
 proc fsCanReadPath*(uid, gid: U32, path: cstring): bool =
   if not fsReady or path == nil:
     return false
@@ -940,6 +1002,7 @@ proc fsCanReadPath*(uid, gid: U32, path: cstring): bool =
   canReadNode(uid, gid, idx)
 
 
+## Implements the fs can write path kernel helper.
 proc fsCanWritePath*(uid, gid: U32, path: cstring): bool =
   if not fsReady or path == nil:
     return false
@@ -962,6 +1025,7 @@ proc fsCanWritePath*(uid, gid: U32, path: cstring): bool =
   canWriteNode(uid, gid, idx)
 
 
+## Implements the fs can execute path kernel helper.
 proc fsCanExecutePath*(uid, gid: U32, path: cstring): bool =
   if not fsReady or path == nil:
     return false
@@ -987,6 +1051,7 @@ proc fsCanExecutePath*(uid, gid: U32, path: cstring): bool =
   canExecuteNode(uid, gid, idx)
 
 
+## Implements the fs execute status kernel helper.
 proc fsExecuteStatus*(uid, gid: U32, path: cstring): I32 =
   if not fsReady or path == nil:
     return SysErrInval
@@ -1036,6 +1101,7 @@ proc fsExecuteStatus*(uid, gid: U32, path: cstring): I32 =
   SysErrOk
 
 
+## Implements the fs can search dir path kernel helper.
 proc fsCanSearchDirPath*(uid, gid: U32, path: cstring): bool =
   if not fsReady or path == nil:
     return false
@@ -1058,6 +1124,7 @@ proc fsCanSearchDirPath*(uid, gid: U32, path: cstring): bool =
   canSearchNode(uid, gid, idx)
 
 
+## Implements the fs can modify dir path kernel helper.
 proc fsCanModifyDirPath*(uid, gid: U32, path: cstring): bool =
   if not fsReady or path == nil:
     return false
@@ -1077,6 +1144,7 @@ proc fsCanModifyDirPath*(uid, gid: U32, path: cstring): bool =
   canSearchNode(uid, gid, idx) and canWriteNode(uid, gid, idx)
 
 
+## Implements the fs can modify parent path kernel helper.
 proc fsCanModifyParentPath*(uid, gid: U32, path: cstring): bool =
   if not fsReady or path == nil:
     return false
@@ -1097,6 +1165,7 @@ proc fsCanModifyParentPath*(uid, gid: U32, path: cstring): bool =
   canSearchNode(uid, gid, parent) and canWriteNode(uid, gid, parent)
 
 
+## Implements the sticky allows remove kernel helper.
 proc stickyAllowsRemove(uid: U32, parent, target: int): bool =
   if parent < 0 or target < 0:
     return false
@@ -1106,6 +1175,7 @@ proc stickyAllowsRemove(uid: U32, parent, target: int): bool =
   uid == RootUid or uid == superBlock.nodes[parent].uid or uid == superBlock.nodes[target].uid
 
 
+## Implements the fs can remove path kernel helper.
 proc fsCanRemovePath*(uid, gid: U32, path: cstring): bool =
   if not fsReady or path == nil:
     return false
@@ -1130,6 +1200,7 @@ proc fsCanRemovePath*(uid, gid: U32, path: cstring): bool =
   target > 0 and stickyAllowsRemove(uid, parent, target)
 
 
+## Implements the fs can chmod path kernel helper.
 proc fsCanChmodPath*(uid, gid: U32, path: cstring): bool =
   if not fsReady or path == nil:
     return false
@@ -1147,6 +1218,7 @@ proc fsCanChmodPath*(uid, gid: U32, path: cstring): bool =
   idx >= 0 and (uid == RootUid or uid == superBlock.nodes[idx].uid)
 
 
+## Fills node entry.
 proc fillNodeEntry(idx: int, outEntry: ptr FsDirEntry) =
   outEntry.typ = superBlock.nodes[idx].typ
   outEntry.size = superBlock.nodes[idx].size
@@ -1160,6 +1232,7 @@ proc fillNodeEntry(idx: int, outEntry: ptr FsDirEntry) =
     inc i
 
 
+## Fills appfs entry.
 proc fillAppfsEntry(idx: int, outEntry: ptr FsDirEntry) =
   outEntry.typ = FsDirEntryTypeFile
   outEntry.size = appfsEntries[idx].size
@@ -1173,6 +1246,7 @@ proc fillAppfsEntry(idx: int, outEntry: ptr FsDirEntry) =
     inc i
 
 
+## Fills dev entry.
 proc fillDevEntry(idx: int, outEntry: ptr FsDirEntry) =
   outEntry.typ = FsDirEntryTypeFile
   outEntry.size = 0
@@ -1193,6 +1267,7 @@ proc fillDevEntry(idx: int, outEntry: ptr FsDirEntry) =
     inc i
 
 
+## Fills virtual dir entry.
 proc fillVirtualDirEntry(name: cstring, outEntry: ptr FsDirEntry) =
   outEntry.typ = FsDirEntryTypeDir
   outEntry.size = 0
@@ -1212,6 +1287,7 @@ proc fillVirtualDirEntry(name: cstring, outEntry: ptr FsDirEntry) =
     inc i
 
 
+## Implements the fs read dir entry kernel helper.
 proc fsReadDirEntry*(path: cstring, entryIndex: U64, outEntry: ptr FsDirEntry): int =
   if not fsReady:
     return -1
@@ -1298,6 +1374,7 @@ proc fsReadDirEntry*(path: cstring, entryIndex: U64, outEntry: ptr FsDirEntry): 
   0
 
 
+## Implements the fs read dir entries kernel helper.
 proc fsReadDirEntries*(path: cstring, outEntries: ptr FsDirEntry, maxEntries: U64): int =
   if outEntries == nil or maxEntries == 0:
     return -1
@@ -1317,6 +1394,7 @@ proc fsReadDirEntries*(path: cstring, outEntries: ptr FsDirEntry, maxEntries: U6
   int(count)
 
 
+## Implements the fs is dir kernel helper.
 proc fsIsDir*(path: cstring): bool =
   if not fsReady or path == nil or path[0] != '/':
     return false
@@ -1344,6 +1422,7 @@ proc fsIsDir*(path: cstring): bool =
   superBlock.nodes[idx].typ == FsTypeDir or superBlock.nodes[idx].typ == FsTypeMount
 
 
+## Implements the fs file size kernel helper.
 proc fsFileSize*(path: cstring): int =
   if not fsReady or path == nil:
     return -1
@@ -1363,6 +1442,7 @@ proc fsFileSize*(path: cstring): int =
   int(superBlock.nodes[idx].size)
 
 
+## Implements the fs mkdir kernel helper.
 proc fsMkdir*(path: cstring): int =
   if not fsReady:
     return -1
@@ -1386,6 +1466,7 @@ proc fsMkdir*(path: cstring): int =
   writeSuper()
 
 
+## Implements the fs write text kernel helper.
 proc fsWriteText*(path: cstring, data: cstring): int =
   var size = U64(0)
   while data[size] != '\0' and size < FsFileBlocks * BlockSize:
@@ -1393,10 +1474,12 @@ proc fsWriteText*(path: cstring, data: cstring): int =
   fsWriteFile(path, cast[pointer](data), size)
 
 
+## Implements the fs write file kernel helper.
 proc fsWriteFile*(path: cstring, data: pointer, size: U64): int =
   fsWriteFileWithFlags(path, data, size, SysFsWriteDefault)
 
 
+## Implements the fs write file with flags kernel helper.
 proc fsWriteFileWithFlags*(path: cstring, data: pointer, size: U64, flags: U32): int =
   if not fsReady:
     return -1
@@ -1451,6 +1534,7 @@ proc fsWriteFileWithFlags*(path: cstring, data: pointer, size: U64, flags: U32):
   writeSuper()
 
 
+## Implements the fs unlink kernel helper.
 proc fsUnlink*(path: cstring): int =
   if not fsReady:
     return -1
@@ -1474,6 +1558,7 @@ proc fsUnlink*(path: cstring): int =
   writeSuper()
 
 
+## Implements the fs rmdir kernel helper.
 proc fsRmdir*(path: cstring): int =
   if not fsReady:
     return -1
@@ -1494,6 +1579,7 @@ proc fsRmdir*(path: cstring): int =
   writeSuper()
 
 
+## Returns whether descendant is true.
 proc isDescendant(idx, maybeParent: int): bool =
   var current = idx
   while current > 0:
@@ -1503,6 +1589,7 @@ proc isDescendant(idx, maybeParent: int): bool =
   false
 
 
+## Implements the fs rename kernel helper.
 proc fsRename*(oldPath, newPath: cstring): int =
   if not fsReady:
     return -1
@@ -1546,6 +1633,7 @@ proc fsRename*(oldPath, newPath: cstring): int =
   writeSuper()
 
 
+## Implements the fs chmod kernel helper.
 proc fsChmod*(path: cstring, mode: U32): int =
   if not fsReady or path == nil:
     return -1
@@ -1565,6 +1653,7 @@ proc fsChmod*(path: cstring, mode: U32): int =
   writeSuper()
 
 
+## Implements the fs chown kernel helper.
 proc fsChown*(path: cstring, uid, gid: U32): int =
   if not fsReady or path == nil:
     return -1
@@ -1585,6 +1674,7 @@ proc fsChown*(path: cstring, uid, gid: U32): int =
   writeSuper()
 
 
+## Implements the fs read file kernel helper.
 proc fsReadFile*(path: cstring, dst: pointer, capacity: U64): int =
   if not fsReady or path == nil or dst == nil:
     return -1
@@ -1626,6 +1716,7 @@ proc fsReadFile*(path: cstring, dst: pointer, capacity: U64): int =
   int(size)
 
 
+## Implements the fs read file range kernel helper.
 proc fsReadFileRange*(path: cstring, dst: pointer, offset, capacity: U64): int =
   if not fsReady or path == nil or dst == nil:
     return -1

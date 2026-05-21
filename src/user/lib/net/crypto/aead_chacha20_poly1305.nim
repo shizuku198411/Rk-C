@@ -1,9 +1,11 @@
+## Implements ChaCha20-Poly1305 AEAD encryption and decryption.
 import ./chacha20
 import ../../core/syscall
 import ./crypto_types
 import ./poly1305
 
 
+## Performs Poly1305 update padded.
 proc polyUpdatePadded(ctx: var Poly1305Ctx, data: pointer, len: U32) =
   var zeroPad: array[16, U8]
   if len > 0:
@@ -14,6 +16,7 @@ proc polyUpdatePadded(ctx: var Poly1305Ctx, data: pointer, len: U32) =
     poly1305Update(ctx, addr zeroPad[0], 16 - rem)
 
 
+## Performs Poly1305 aead tag.
 proc polyAeadTag(key: pointer, nonce: pointer, aad: pointer, aadLen: U32,
                  ciphertext: pointer, ciphertextLen: U32, outTag: pointer) =
   var firstBlock: array[64, U8]
@@ -30,6 +33,7 @@ proc polyAeadTag(key: pointer, nonce: pointer, aad: pointer, aadLen: U32,
   poly1305Final(ctx, outTag)
 
 
+## Performs ChaCha20 chacha20 poly1305 encrypt.
 proc chacha20Poly1305Encrypt*(key: pointer, nonce: pointer, aad: pointer, aadLen: U32,
                               plaintext: pointer, plaintextLen: U32,
                               ciphertext: pointer, tag: pointer): I32 =
@@ -45,6 +49,7 @@ proc chacha20Poly1305Encrypt*(key: pointer, nonce: pointer, aad: pointer, aadLen
   0
 
 
+## Performs ChaCha20 chacha20 poly1305 decrypt.
 proc chacha20Poly1305Decrypt*(key: pointer, nonce: pointer, aad: pointer, aadLen: U32,
                               ciphertext: pointer, ciphertextLen: U32,
                               tag: pointer, plaintext: pointer): I32 =

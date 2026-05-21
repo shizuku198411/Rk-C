@@ -1,3 +1,4 @@
+## Parses raw user app argument strings into argv-style arrays.
 import ../../../lib/types
 import ./strutils
 
@@ -12,6 +13,7 @@ type
     storage: array[UserArgMax, array[UserArgLenMax, char]]
 
 
+## Clears args.
 proc clearArgs(args: var UserArgs) =
   args.argc = 0
 
@@ -27,6 +29,7 @@ proc clearArgs(args: var UserArgs) =
     inc i
 
 
+## Parses user args.
 proc parseUserArgs*(arg: cstring, args: var UserArgs): bool =
   clearArgs(args)
 
@@ -61,6 +64,7 @@ proc parseUserArgs*(arg: cstring, args: var UserArgs): bool =
   true
 
 
+## Implements the arg at helper.
 proc argAt*(args: var UserArgs, index: U32): cstring =
   if index >= args.argc:
     return nil
@@ -68,6 +72,7 @@ proc argAt*(args: var UserArgs, index: U32): cstring =
   args.argv[index]
 
 
+## Returns whether arg is present.
 proc hasArg*(args: var UserArgs, value: cstring): bool =
   var i = U32(0)
   while i < args.argc:
@@ -79,6 +84,7 @@ proc hasArg*(args: var UserArgs, value: cstring): bool =
   false
 
 
+## Copies argv tail.
 proc copyArgvTail*(args: var UserArgs, start: U32, dst: pointer, dstLen: U32): bool =
   let outBuf = cast[ptr UncheckedArray[char]](dst)
   var outPos = U32(0)

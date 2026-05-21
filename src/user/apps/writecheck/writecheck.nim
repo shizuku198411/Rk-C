@@ -1,3 +1,4 @@
+## Validates write-file modes for create, append, overwrite, and denial cases.
 import ../../lib/core/io
 import ../../lib/core/strutils
 import ../../lib/core/syscall
@@ -11,10 +12,12 @@ const
 var buf: array[64, char]
 
 
+## Prints writecheck usage information.
 proc printUsage() =
   write("usage: writecheck\n")
 
 
+## Returns whether a file exactly matches the expected string.
 proc expectFile(path, expected: cstring): bool =
   let n = sysReadFile(path, addr buf[0], U64(63))
   if n < 0:
@@ -23,6 +26,7 @@ proc expectFile(path, expected: cstring): bool =
   cstringEq(cast[cstring](addr buf[0]), expected)
 
 
+## Requires a write operation to succeed.
 proc mustWrite(path, text: cstring, flags: U32, label: cstring) =
   if sysWriteFileMode(path, cast[pointer](text), cstrlen(text), flags) != 0:
     write("writecheck: ")
@@ -31,6 +35,7 @@ proc mustWrite(path, text: cstring, flags: U32, label: cstring) =
     sysExit(1)
 
 
+## Requires a write operation to be denied.
 proc mustDeny(path, text: cstring, flags: U32, label: cstring) =
   if sysWriteFileMode(path, cast[pointer](text), cstrlen(text), flags) == 0:
     write("writecheck: ")
@@ -39,6 +44,7 @@ proc mustDeny(path, text: cstring, flags: U32, label: cstring) =
     sysExit(1)
 
 
+## Requires a file to contain the expected value and prints success.
 proc requireFile(path, expected, label: cstring) =
   if not expectFile(path, expected):
     write("writecheck: ")
@@ -50,6 +56,7 @@ proc requireFile(path, expected, label: cstring) =
   write(" ok\n")
 
 
+## Runs the write-mode validation sequence.
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   if cstringEq(arg, cstring"--help"):
     printUsage()

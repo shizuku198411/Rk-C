@@ -1,3 +1,4 @@
+## Prints kernel message log contents.
 import ../../lib/core/args
 import ../../lib/core/io
 import ../../lib/core/strutils
@@ -11,10 +12,12 @@ var
   parsedArgs: UserArgs
 
 
+## Prints dmesg usage information.
 proc printUsage() =
   write("usage: dmesg\n")
 
 
+## Reads the kernel log buffer and writes it to stdout.
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   discard parseUserArgs(arg, parsedArgs)
 

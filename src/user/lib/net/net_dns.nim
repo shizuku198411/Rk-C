@@ -1,3 +1,4 @@
+## Implements DNS A-record resolution over the UDP network API.
 import ./net_udp
 import ./netutls
 import ../core/strutils
@@ -16,20 +17,24 @@ var
   rxBuf: array[DnsPacketMax, U8]
 
 
+## Writes put16.
 proc put16(buf: var array[DnsPacketMax, U8], off: int, value: U16) =
   buf[off] = U8((value shr 8) and 0xff'u16)
   buf[off + 1] = U8(value and 0xff'u16)
 
 
+## Gets get16.
 proc get16(buf: ptr array[DnsPacketMax, U8], off: int): U16 =
   (U16(buf[][off]) shl 8) or U16(buf[][off + 1])
 
 
+## Gets get32.
 proc get32(buf: ptr array[DnsPacketMax, U8], off: int): U32 =
   (U32(buf[][off]) shl 24) or (U32(buf[][off + 1]) shl 16) or
     (U32(buf[][off + 2]) shl 8) or U32(buf[][off + 3])
 
 
+## Parses nameserver ip.
 proc parseNameserverIp(contents: cstring, outIp: var U32): bool =
   var pos: U32 = 0
 
@@ -44,6 +49,7 @@ proc parseNameserverIp(contents: cstring, outIp: var U32): bool =
   parseIpv4(contents, pos, outIp)
 
 
+## Loads name server ip.
 proc loadNameServerIp(outIp: var U32): bool =
   const BufSize = 64
   var buf: array[BufSize, char]
@@ -58,6 +64,7 @@ proc loadNameServerIp(outIp: var U32): bool =
   parseNameserverIp(contents, outIp)
 
 
+## Clears tx.
 proc clearTx() =
   var i = 0
   while i < DnsPacketMax:
@@ -65,6 +72,7 @@ proc clearTx() =
     inc i
 
 
+## Implements the encode dns name helper.
 proc encodeDnsName(off: int, name: cstring): int =
   var pos = 0
   var outPos = off
@@ -97,6 +105,7 @@ proc encodeDnsName(off: int, name: cstring): int =
   outPos + 1
 
 
+## Builds dns query.
 proc buildDnsQuery(name: cstring): int =
   clearTx()
   put16(txBuf, 0, DnsQueryIdent)
@@ -115,6 +124,7 @@ proc buildDnsQuery(name: cstring): int =
   qnameEnd + 4
 
 
+## Implements the skip dns name helper.
 proc skipDnsName(start, limit: int): int =
   var pos = start
   while pos < limit:
@@ -130,6 +140,7 @@ proc skipDnsName(start, limit: int): int =
   -1
 
 
+## Parses dns answer.
 proc parseDnsAnswer(size: int, outIp: var U32): bool =
   if size < 12:
     return false
@@ -177,6 +188,7 @@ proc parseDnsAnswer(size: int, outIp: var U32): bool =
   false
 
 
+## Finds any arecord.
 proc findAnyARecord(size: int, outIp: var U32): bool =
   var pos = 12
   while pos + 15 < size:
@@ -199,6 +211,7 @@ proc findAnyARecord(size: int, outIp: var U32): bool =
   false
 
 
+## Resolves a.
 proc resolveA*(name: cstring, outIp: var U32): bool =
   if isEmpty(name):
     return false

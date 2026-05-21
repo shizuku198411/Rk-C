@@ -1,6 +1,8 @@
+## Provides helpers for packing structured data into IPC packets.
 import ../core/syscall
 
 
+## Sets bool result packet.
 proc setBoolResultPacket*(packet: ptr SysIpcPacket, op: U32, ok: bool) =
   packet[] = SysIpcPacket()
   packet.op = op
@@ -11,6 +13,7 @@ proc setBoolResultPacket*(packet: ptr SysIpcPacket, op: U32, ok: bool) =
       U64(-1'i64)
 
 
+## Sets i32 result packet.
 proc setI32ResultPacket*(packet: ptr SysIpcPacket, op: U32, result: I32) =
   packet[] = SysIpcPacket()
   packet.op = op
@@ -21,6 +24,7 @@ proc setI32ResultPacket*(packet: ptr SysIpcPacket, op: U32, result: I32) =
       U64(-1'i64)
 
 
+## Copies to packet data.
 proc copyToPacketData*(packet: ptr SysIpcPacket, src: pointer, len: U32): U32 =
   if packet == nil or src == nil:
     return U32(0)
@@ -35,6 +39,7 @@ proc copyToPacketData*(packet: ptr SysIpcPacket, src: pointer, len: U32): U32 =
   i
 
 
+## Copies from packet data.
 proc copyFromPacketData*(dst: pointer, packet: ptr SysIpcPacket, capacity: U32): U32 =
   if dst == nil or packet == nil:
     return U32(0)
