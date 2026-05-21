@@ -148,6 +148,9 @@ proc isDescendantOf(pid, rootPid: I32, count: I32): bool =
 proc shouldPrintProcess(entry: ptr SysProcessInfo, count: I32, fullList: bool): bool =
   if entry.state == SysProcessUnused:
     return false
+  
+  if entry.pid == 1:
+    return false
 
   if fullList:
     return true
