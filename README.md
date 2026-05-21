@@ -2,35 +2,77 @@
   <img src="./assets/Rk-C_logo.png" alt="Rk-C Logo" width="250">
 </p>
 
-Rk-C is an experimental microkernel-style operating system for RISC-V 64-bit,
-implemented mainly in Nim.
+Rk-C is an experimental RISC-V 64-bit microkernel-style operating system written
+mainly in Nim.
 
-It targets QEMU's `virt` machine, boots through OpenSBI, enters S-mode as an ELF
-kernel, and runs U-mode programs packaged as RKX images from a disk-backed
-`/bin`.
+The kernel keeps the privileged core small: boot, traps, scheduling, virtual
+memory, user process execution, IPC, and the minimal hardware-facing syscalls.
+System policy and device-facing subsystems are moved into U-mode servers, so the
+running system is built from cooperating services such as `svcmgtd`,
+`procmgtd`, `fsd`, `blockd`, `procfsd`, `netd`, and `userd`.
 
-The project is intentionally small, but it already has a real userland/server
-shape: core mechanisms remain in the kernel, while process management, block
-I/O, filesystem operations, service management, procfs, and networking are
-served from userland processes over IPC.
+Rk-C currently boots on QEMU `virt` through OpenSBI, runs protected U-mode
+programs, supports a shell-driven userland, and includes enough filesystem,
+process, service, account, and networking features to exercise the
+microkernel design end-to-end.
 
 ## Highlights
 
-- RISC-V 64-bit S-mode kernel on QEMU `virt`
-- OpenSBI `fw_jump` boot flow
+Kernel and architecture:
+
+- RISC-V 64-bit S-mode kernel for QEMU `virt`
+- OpenSBI `fw_jump` boot flow into `kernel.elf`
 - Sv39 paging with per-process address spaces
-- RKX executable format with separate text, rodata, data, bss, and stack
-  mappings
-- W^X user mappings and NX user stacks
-- timer-driven preemptive scheduling for user processes
-- hardened usercopy validation for syscall pointer arguments
-- structured IPC and request/reply service protocols
-- service registry, ready ACKs, restart/degraded handling, and supervision
-  status/logs
-- userland servers for process, block, filesystem, procfs, and networking
-- appfs-packed `/bin`, tmpfs-backed `/tmp`, and `/proc`
-- shell commands, pipes, redirection, background apps, syscall tracing, and
-  smoke tests
+- Timer-driven preemptive scheduling and process lifecycle management
+- U-mode execution with trap/syscall dispatch and fault reporting
+- RKX user executable loader with text, rodata, data, bss, and stack mappings
+- W^X user mappings and non-executable user stacks
+- User pointer validation and hardened usercopy helpers
+- File descriptors, standard streams, pipes, `dup2`, and pollable events
+- Entropy syscall used by TLS client code
+- Syscall tracing with global, per-PID, and per-command modes
+
+Microkernel and service model:
+
+- Structured IPC packets and request/reply helpers
+- Service registry with ready ACKs, restart/degraded state, status, and logs
+- Root-only service control through RKX metadata and IPC sender credentials
+- Userland service manager: `svcmgtd`
+- Userland process manager: `procmgtd`
+- Userland block server: `blockd`
+- Userland filesystem server: `fsd`
+- Userland procfs server: `procfsd`
+- Userland network server: `netd`
+- Userland account database server: `userd`
+
+Filesystem and accounts:
+
+- Disk-backed root filesystem plus appfs-packed command images
+- tmpfs mount for `/tmp`
+- procfs mount for `/proc`
+- Device-like files under `/dev` for standard I/O
+- Unix-like file ownership and mode checks
+- `/etc/passwd`, `/etc/group`, and PBKDF2-HMAC-SHA256 `/etc/shadow`
+- Login flow that starts a shell under the authenticated UID/GID
+
+Networking:
+
+- VirtIO MMIO network device support
+- MAC address discovery and RX/TX queue handling
+- ARP, IPv4, ICMP, UDP, DNS, TCP, and HTTP client support
+- Experimental TLS 1.3 HTTPS client path
+- TAP networking by default, with QEMU user networking as an option
+
+Userland:
+
+- Interactive shell with cwd-aware prompt, history, background jobs, pipes, and
+  output redirection
+- Core commands such as `ls`, `cat`, `mkdir`, `rm`, `rmdir`, `cp`, `mv`, `df`,
+  `ps`, `kill`, `svc`, `id`, `chmod`, `chown`, `edit`, `stracectl`, and `dmesg`
+- Network tools such as `ping`, `nslookup`, `tcpcheck`, and `curl`
+- RKX metadata inspection with `rkxinfo`
+- QEMU smoke tests for apps, services, permissions, faults, IPC, pipes, and
+  network paths
 
 ## Architecture
 
