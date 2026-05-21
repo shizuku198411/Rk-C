@@ -72,6 +72,10 @@ const
   SysIpcOpGroupResolveNameRequest* = U32(37)
   SysIpcOpGroupResolveGidRequest* = U32(38)
   SysIpcOpGroupResolveResponse* = U32(39)
+  SysIpcOpUserAuthRequest* = U32(40)
+  SysIpcOpUserAuthResponse* = U32(41)
+  SysIpcOpUserSetPasswordRequest* = U32(42)
+  SysIpcOpUserSetPasswordResponse* = U32(43)
 
   SysFdMax* = U32(8)
   SysFdPathMax* = U32(128)

@@ -59,24 +59,33 @@ proc parseFieldU32(line: cstring, startPos, endPos: U32, value: var U32): bool =
   parseU32(cast[cstring](addr buf[0]), value)
 
 
+proc trimLineEnd(line: cstring, startPos, pos: U32): U32 =
+  var endPos = pos
+  while endPos > startPos and
+      (line[endPos - U32(1)] == char(10) or line[endPos - U32(1)] == char(13)):
+    dec endPos
+
+  endPos
+
+
 proc parsePasswdLine*(line: cstring, entry: var PasswdEntry): bool =
   clearEntry(entry)
 
-  var fields: array[5, U32]
+  var fields: array[6, U32]
   fields[0] = U32(0)
 
   var fieldCount = U32(1)
   var pos = U32(0)
   while line[pos] != '\0':
     if line[pos] == ':':
-      if fieldCount >= U32(5):
+      if fieldCount >= U32(6):
         return false
 
       fields[fieldCount] = pos + U32(1)
       inc fieldCount
     inc pos
 
-  if fieldCount != U32(4):
+  if fieldCount != U32(4) and fieldCount != U32(5):
     return false
 
   let nameStart = fields[0]
@@ -86,10 +95,11 @@ proc parsePasswdLine*(line: cstring, entry: var PasswdEntry): bool =
   let nameEnd = uidStart - U32(1)
   let uidEnd = gidStart - U32(1)
   let gidEnd = homeStart - U32(1)
-  var homeEnd = pos
-  while homeEnd > homeStart and
-      (line[homeEnd - U32(1)] == char(10) or line[homeEnd - U32(1)] == char(13)):
-    dec homeEnd
+  let homeEnd =
+    if fieldCount == U32(5):
+      fields[4] - U32(1)
+    else:
+      trimLineEnd(line, homeStart, pos)
 
   if nameEnd == nameStart or homeEnd == homeStart:
     return false
@@ -103,7 +113,10 @@ proc parsePasswdLine*(line: cstring, entry: var PasswdEntry): bool =
   if not parseFieldU32(line, gidStart, gidEnd, entry.gid):
     return false
 
-  copyField(entry.home, line, homeStart, homeEnd)
+  if not copyField(entry.home, line, homeStart, homeEnd):
+    return false
+
+  true
 
 
 proc writePasswdLine*(dst: pointer, capacity: U32, entry: PasswdEntry): U32 =
@@ -146,3 +159,7 @@ proc writePasswdLine*(dst: pointer, capacity: U32, entry: PasswdEntry): U32 =
   appendCString(cast[cstring](addr entry.home[0]))
   appendChar('\n')
   pos
+
+
+proc writePasswdPublicLine*(dst: pointer, capacity: U32, entry: PasswdEntry): U32 =
+  writePasswdLine(dst, capacity, entry)

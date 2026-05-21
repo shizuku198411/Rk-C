@@ -96,8 +96,8 @@ proc bootTask() {.cdecl.} =
 
   waitForInitialServices()
 
-  if createShellUserProcess() < 0:
-    panic("failed to create shell")
+  if createLoginUserProcess() < 0:
+    panic("failed to create login")
 
   if currentProc != nil:
     currentProc.detached = true

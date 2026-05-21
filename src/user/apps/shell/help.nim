@@ -4,6 +4,7 @@ import ../../lib/core/io
 proc printHelp*() =
   write("available commands:\n")
   write("  help\n")
+  write("  login\n")
   write("  cd\n")
   write("  su\n")
   write("  ls\n")

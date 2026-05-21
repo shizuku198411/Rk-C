@@ -136,6 +136,14 @@ class QemuConsole:
         self.send(command + "\n")
         return self.wait_for(PROMPT_MARKER, timeout)
 
+    def login(self, username: str, password: str, timeout: float) -> str:
+        boot = self.wait_for("login: ", timeout)
+        self.send(username + "\n")
+        boot += self.wait_for("password: ", timeout)
+        self.send(password + "\n")
+        boot += self.wait_for(PROMPT_MARKER, timeout)
+        return boot
+
 
 def strip_ansi(text: str) -> str:
     return ANSI_RE.sub("", text)
@@ -213,6 +221,7 @@ def normal_tests() -> list[TestCase]:
         "capcheck": "usage: capcheck",
         "pollcheck": "usage: pollcheck",
         "writecheck": "usage: writecheck",
+        "login": "usage: login",
     }
     for app, expected in help_cases.items():
         tests.append(TestCase(f"{app} --help", f"{app} --help", [expected]))
@@ -669,7 +678,7 @@ def main() -> int:
     case_number = 1
     try:
         qemu.start()
-        boot = qemu.wait_for(PROMPT_MARKER, args.boot_timeout)
+        boot = qemu.login("root", "root", args.boot_timeout)
         boot_clean = strip_ansi(boot)
         boot_errors = []
         for expected in ["service ready procmgtd", "service ready blockd", "service ready fsd"]:

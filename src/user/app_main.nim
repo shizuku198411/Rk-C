@@ -8,6 +8,8 @@ discard sizeof(CSize)
 
 when defined(userApp_shell):
   import apps/shell/shell
+elif defined(userApp_login):
+  import apps/login/login
 elif defined(userApp_ls):
   import apps/ls/ls
 elif defined(userApp_cat):

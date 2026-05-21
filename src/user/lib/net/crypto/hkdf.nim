@@ -10,6 +10,9 @@ proc hmacSha256*(key: pointer, keyLen: U32, data: pointer, dataLen: U32, outMac:
   var outerPad: array[Sha256BlockLen, U8]
   var keyHash: array[Sha256DigestLen, U8]
 
+  zeroMem(addr keyBlock[0], U32(Sha256BlockLen))
+  zeroMem(addr keyHash[0], U32(Sha256DigestLen))
+
   if keyLen > U32(Sha256BlockLen):
     sha256(key, keyLen, addr keyHash[0])
     copyMem(addr keyBlock[0], addr keyHash[0], U32(Sha256DigestLen))

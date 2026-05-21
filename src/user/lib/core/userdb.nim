@@ -31,6 +31,38 @@ proc copyCStringToPacket(packet: var SysIpcPacket, value: cstring): bool =
   true
 
 
+proc copyAuthToPacket(packet: var SysIpcPacket, name, password: cstring): bool =
+  var pos = U32(0)
+
+  var i = U32(0)
+  while name[i] != '\0':
+    if pos + U32(1) >= SysIpcMessageMax:
+      return false
+
+    packet.data[pos] = name[i]
+    inc pos
+    inc i
+
+  if pos + U32(1) >= SysIpcMessageMax:
+    return false
+
+  packet.data[pos] = '\0'
+  inc pos
+
+  i = U32(0)
+  while password[i] != '\0':
+    if pos + U32(1) >= SysIpcMessageMax:
+      return false
+
+    packet.data[pos] = password[i]
+    inc pos
+    inc i
+
+  packet.data[pos] = '\0'
+  packet.len = pos + U32(1)
+  true
+
+
 proc copyReplyLine(): cstring =
   var i = U32(0)
   while i + U32(1) < GroupLineMax and i < userReply.len:
@@ -70,6 +102,48 @@ proc resolveUser*(name: cstring, entry: var PasswdEntry): bool =
 
 proc resolveUid*(uid: U32, entry: var PasswdEntry): bool =
   requestUser(SysIpcOpUserResolveUidRequest, nil, uid, entry)
+
+
+proc authenticateUser*(name, password: cstring, entry: var PasswdEntry): bool =
+  if isEmpty(name) or password == nil:
+    return false
+
+  let pid = servicePidByKind(SysServiceKindUser)
+  if pid <= 0:
+    return false
+
+  clearPacket(userRequest)
+  userRequest.op = SysIpcOpUserAuthRequest
+  if not copyAuthToPacket(userRequest, name, password):
+    return false
+
+  if requestIpcReply(pid, addr userRequest, addr userReply, SysIpcOpUserAuthResponse) != 0:
+    return false
+
+  if userReply.arg0 != U64(0):
+    return false
+
+  parsePasswdLine(copyReplyLine(), entry)
+
+
+proc setUserPassword*(uid: U32, password: cstring): bool =
+  if password == nil:
+    return false
+
+  let pid = servicePidByKind(SysServiceKindUser)
+  if pid <= 0:
+    return false
+
+  clearPacket(userRequest)
+  userRequest.op = SysIpcOpUserSetPasswordRequest
+  userRequest.arg0 = U64(uid)
+  if not copyCStringToPacket(userRequest, password):
+    return false
+
+  if requestIpcReply(pid, addr userRequest, addr userReply, SysIpcOpUserSetPasswordResponse) != 0:
+    return false
+
+  userReply.arg0 == U64(0)
 
 
 proc requestGroup(op: U32, name: cstring, gid: U32, entry: var GroupEntry): bool =
