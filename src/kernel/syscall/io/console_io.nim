@@ -1,3 +1,4 @@
+## Implements console read/write syscall handlers.
 import ../../../lib/types
 import ../../../arch/riscv64/arch
 import ../../dev/console
@@ -5,6 +6,7 @@ import ../../mm/usercopy
 import ../../task/process
 
 
+## Handles the console write syscall operation.
 proc syscallConsoleWrite*(buf: U64, len: U64): U64 =
   if len == 0:
     return 0
@@ -22,6 +24,7 @@ proc syscallConsoleWrite*(buf: U64, len: U64): U64 =
   len
 
 
+## Handles the console read syscall operation.
 proc syscallConsoleRead*(buf: U64, len: U64): U64 =
   if len == 0:
     return 0

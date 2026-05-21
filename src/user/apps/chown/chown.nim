@@ -1,3 +1,4 @@
+## Changes file ownership by username or numeric uid:gid.
 import ../../lib/core/args
 import ../../lib/core/io
 import ../../lib/core/passwd
@@ -10,12 +11,14 @@ import ../../lib/core/userdb
 var parsedArgs: UserArgs
 
 
+## Prints chown usage information.
 proc printUsage() =
   write("usage: chown <uid>:<gid> <path>\n")
   write("       chown <user> <path>\n")
   write("       chown --help\n")
 
 
+## Parses an unsigned decimal integer.
 proc parseDecimal(s: cstring, value: var U32): bool =
   if s == nil or s[0] == '\0':
     return false
@@ -33,6 +36,7 @@ proc parseDecimal(s: cstring, value: var U32): bool =
   true
 
 
+## Resolves a username or uid:gid ownership specifier.
 proc parseOwnerSpec(spec: cstring, uid, gid: var U32): bool =
   var entry: PasswdEntry
   if resolveUser(spec, entry):
@@ -73,6 +77,7 @@ proc parseOwnerSpec(spec: cstring, uid, gid: var U32): bool =
   entry.gid == gid
 
 
+## Prints the most specific chown error available from last-error state.
 proc printError() =
   let err = sysLastError()
   if err == SysErrPerm:
@@ -83,6 +88,7 @@ proc printError() =
     write("chown: failed\n")
 
 
+## Parses arguments, resolves the path, and applies ownership.
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   if not parseUserArgs(arg, parsedArgs):
     printUsage()

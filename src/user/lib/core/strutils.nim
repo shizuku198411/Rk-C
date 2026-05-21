@@ -1,17 +1,21 @@
+## Provides small string parsing and inspection helpers for userland.
 import ../../../lib/fixed_string
 import ../../../lib/types
 
 export fixed_string
 
 
+## Returns whether with2.
 proc startsWith2*(s: cstring, a, b: char): bool =
   s != nil and s[0] == a and s[1] == b
 
 
+## Returns whether empty is true.
 proc isEmpty*(s: cstring): bool =
   s == nil or s[0] == '\0'
 
 
+## Returns whether with prefix.
 proc startsWithPrefix*(s: cstring, prefix: cstring): bool =
   var i: U32 = 0
 
@@ -22,6 +26,7 @@ proc startsWithPrefix*(s: cstring, prefix: cstring): bool =
   true
 
 
+## Implements the cstring contains helper.
 proc cstringContains*(s: ptr UncheckedArray[char], needle: cstring): bool =
   if s == nil or needle == nil:
     return false
@@ -38,14 +43,17 @@ proc cstringContains*(s: ptr UncheckedArray[char], needle: cstring): bool =
   false
 
 
+## Returns whether space is true.
 proc isSpace*(ch: char): bool =
   ch == ' ' or ch == '\t' or ch == '\r' or ch == '\n'
 
 
+## Returns whether digit is true.
 proc isDigit*(ch: char): bool =
   ch >= '0' and ch <= '9'
 
 
+## Gets line.
 proc getLine*(src: ptr char, srcSize: int, pos: var int, dst: ptr char, dstSize: int): int =
   var lineLen = 0
 
@@ -71,6 +79,7 @@ proc getLine*(src: ptr char, srcSize: int, pos: var int, dst: ptr char, dstSize:
   lineLen
 
 
+## Parses u64.
 proc parseU64*(s: cstring, outValue: var U64): bool =
   var
     pos = U32(0)
@@ -104,6 +113,7 @@ proc parseU64*(s: cstring, outValue: var U64): bool =
   true
 
 
+## Parses u32.
 proc parseU32*(s: cstring, outValue: var U32): bool =
   var value = U64(0)
   if not parseU64(s, value):

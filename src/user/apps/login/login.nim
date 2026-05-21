@@ -1,3 +1,4 @@
+## Provides the login loop that authenticates users and starts their shell.
 import ../../lib/core/io
 import ../../lib/core/passwd
 import ../../lib/core/strutils
@@ -10,6 +11,7 @@ var
   passwordBuf: array[LoginLineMax, char]
 
 
+## Starts a shell process with the authenticated user's identity and home cwd.
 proc runShell(entry: PasswdEntry) =
   discard sysSetCwd(cast[cstring](addr entry.home[0]))
 
@@ -21,6 +23,7 @@ proc runShell(entry: PasswdEntry) =
   discard sysWait(shellPid)
 
 
+## Runs the login prompt forever and respawns a shell after logout.
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   if cstringEq(arg, cstring"--help"):
     write("usage: login\n")

@@ -1,3 +1,4 @@
+## Implements SHA-256 hashing.
 import ./crypto_types
 import ../../core/syscall
 
@@ -28,34 +29,42 @@ const K: array[64, U32] = [
 ]
 
 
+## Rotates a 32-bit word right.
 proc rotr(x: U32, n: int): U32 =
   (x shr n) or (x shl (32 - n))
 
 
+## Computes the SHA-256 choose function.
 proc ch(x, y, z: U32): U32 =
   (x and y) xor ((not x) and z)
 
 
+## Computes the SHA-256 majority function.
 proc maj(x, y, z: U32): U32 =
   (x and y) xor (x and z) xor (y and z)
 
 
+## Computes the SHA-256 uppercase sigma0 function.
 proc bigSigma0(x: U32): U32 =
   rotr(x, 2) xor rotr(x, 13) xor rotr(x, 22)
 
 
+## Computes the SHA-256 uppercase sigma1 function.
 proc bigSigma1(x: U32): U32 =
   rotr(x, 6) xor rotr(x, 11) xor rotr(x, 25)
 
 
+## Computes the SHA-256 lowercase sigma0 function.
 proc smallSigma0(x: U32): U32 =
   rotr(x, 7) xor rotr(x, 18) xor (x shr 3)
 
 
+## Computes the SHA-256 lowercase sigma1 function.
 proc smallSigma1(x: U32): U32 =
   rotr(x, 17) xor rotr(x, 19) xor (x shr 10)
 
 
+## Compresses one SHA-256 message block into the context.
 proc compress(ctx: var Sha256Ctx, inputBlock: pointer) =
   var w: array[64, U32]
   var i = 0
@@ -100,6 +109,7 @@ proc compress(ctx: var Sha256Ctx, inputBlock: pointer) =
   ctx.state[7] = ctx.state[7] + h
 
 
+## Performs SHA-256 sha256 init.
 proc sha256Init*(ctx: var Sha256Ctx) =
   ctx.state[0] = 0x6a09e667'u32
   ctx.state[1] = 0xbb67ae85'u32
@@ -113,6 +123,7 @@ proc sha256Init*(ctx: var Sha256Ctx) =
   ctx.totalLen = 0
 
 
+## Performs SHA-256 sha256 update.
 proc sha256Update*(ctx: var Sha256Ctx, data: pointer, len: U32) =
   if data == nil or len == 0:
     return
@@ -138,6 +149,7 @@ proc sha256Update*(ctx: var Sha256Ctx, data: pointer, len: U32) =
       ctx.bufferLen = 0
 
 
+## Performs SHA-256 sha256 final.
 proc sha256Final*(ctx: var Sha256Ctx, outDigest: pointer) =
   if outDigest == nil:
     return
@@ -166,6 +178,7 @@ proc sha256Final*(ctx: var Sha256Ctx, outDigest: pointer) =
     inc i
 
 
+## Performs SHA-256 sha256.
 proc sha256*(data: pointer, len: U32, outDigest: pointer) =
   var ctx = Sha256Ctx()
   sha256Init(ctx)

@@ -1,3 +1,4 @@
+## Implements the user database service for passwd, shadow, group, and auth.
 import ../../lib/core/io
 import ../../lib/core/group
 import ../../lib/core/passwd
@@ -34,6 +35,7 @@ var
   groupCount: U32
 
 
+## Writes a signed integer to the console for userd diagnostics.
 proc writeI32(value: I32) =
   if value < 0:
     write("-")
@@ -43,6 +45,7 @@ proc writeI32(value: I32) =
   writeUnsigned(U64(value))
 
 
+## Clears the shared database file buffer.
 proc clearDbBuf() =
   var i = 0
   while i < DbBufSize:
@@ -50,11 +53,13 @@ proc clearDbBuf() =
     inc i
 
 
+## Resets the default user resolve reply packet.
 proc clearReply() =
   reply = SysIpcPacket()
   reply.op = SysIpcOpUserResolveResponse
 
 
+## Writes the built-in passwd defaults into the database buffer.
 proc copyDefaultPasswdToDb(): U32 =
   clearDbBuf()
 
@@ -79,6 +84,7 @@ proc copyDefaultPasswdToDb(): U32 =
   pos
 
 
+## Writes the built-in group defaults into the database buffer.
 proc copyDefaultGroupToDb(): U32 =
   clearDbBuf()
 
@@ -103,6 +109,7 @@ proc copyDefaultGroupToDb(): U32 =
   pos
 
 
+## Ensures /etc/passwd exists, creating the default database if needed.
 proc ensurePasswdFile(): bool =
   clearDbBuf()
   let n = sysReadFile(PasswdPath, addr dbBuf[0], U64(DbBufSize - 1))
@@ -126,6 +133,7 @@ proc ensurePasswdFile(): bool =
   true
 
 
+## Ensures /etc/group exists, creating the default database if needed.
 proc ensureGroupFile(): bool =
   clearDbBuf()
   let n = sysReadFile(GroupPath, addr dbBuf[0], U64(DbBufSize - 1))
@@ -149,6 +157,7 @@ proc ensureGroupFile(): bool =
   true
 
 
+## Replaces /etc/passwd with the built-in default database.
 proc resetPasswdFile(): bool =
   let size = copyDefaultPasswdToDb()
   let rc = sysWriteFileMode(
@@ -166,6 +175,7 @@ proc resetPasswdFile(): bool =
   true
 
 
+## Replaces /etc/group with the built-in default database.
 proc resetGroupFile(): bool =
   let size = copyDefaultGroupToDb()
   let rc = sysWriteFileMode(
@@ -183,6 +193,7 @@ proc resetGroupFile(): bool =
   true
 
 
+## Persists the in-memory passwd entries to /etc/passwd.
 proc saveUsers(): bool =
   clearDbBuf()
 
@@ -211,6 +222,7 @@ proc saveUsers(): bool =
   true
 
 
+## Persists the in-memory shadow entries to /etc/shadow with restricted mode.
 proc saveShadowUsers(): bool =
   clearDbBuf()
 
@@ -240,6 +252,7 @@ proc saveShadowUsers(): bool =
   true
 
 
+## Adds one built-in shadow line to the in-memory shadow table.
 proc addShadowDefault(line: cstring): bool =
   if shadowCount >= U32(UserMax):
     return false
@@ -253,6 +266,7 @@ proc addShadowDefault(line: cstring): bool =
   true
 
 
+## Rebuilds /etc/shadow from built-in default root and user hashes.
 proc resetShadowFile(): bool =
   shadowCount = U32(0)
   if not addShadowDefault(DefaultRootShadowLine):
@@ -263,6 +277,7 @@ proc resetShadowFile(): bool =
   saveShadowUsers()
 
 
+## Ensures /etc/shadow exists and has restricted permissions.
 proc ensureShadowFile(): bool =
   clearDbBuf()
   let n = sysReadFile(ShadowPath, addr dbBuf[0], U64(DbBufSize - 1))
@@ -274,6 +289,7 @@ proc ensureShadowFile(): bool =
   resetShadowFile()
 
 
+## Loads passwd entries from /etc/passwd into memory.
 proc loadUsers(): bool =
   clearDbBuf()
   let n = sysReadFile(PasswdPath, addr dbBuf[0], U64(DbBufSize - 1))
@@ -304,6 +320,7 @@ proc loadUsers(): bool =
   true
 
 
+## Loads shadow entries from /etc/shadow into memory.
 proc loadShadowUsers(): bool =
   clearDbBuf()
   let n = sysReadFile(ShadowPath, addr dbBuf[0], U64(DbBufSize - 1))
@@ -334,6 +351,7 @@ proc loadShadowUsers(): bool =
   true
 
 
+## Loads group entries from /etc/group into memory.
 proc loadGroups(): bool =
   clearDbBuf()
   let n = sysReadFile(GroupPath, addr dbBuf[0], U64(DbBufSize - 1))
@@ -364,6 +382,7 @@ proc loadGroups(): bool =
   true
 
 
+## Finds an in-memory passwd entry by username.
 proc findUserByName(name: cstring): ptr PasswdEntry =
   var i = U32(0)
   while i < userCount:
@@ -374,6 +393,7 @@ proc findUserByName(name: cstring): ptr PasswdEntry =
   nil
 
 
+## Finds an in-memory passwd entry by uid.
 proc findUserByUid(uid: U32): ptr PasswdEntry =
   var i = U32(0)
   while i < userCount:
@@ -384,6 +404,7 @@ proc findUserByUid(uid: U32): ptr PasswdEntry =
   nil
 
 
+## Finds an in-memory shadow entry by username.
 proc findShadowByName(name: cstring): ptr ShadowEntry =
   var i = U32(0)
   while i < shadowCount:
@@ -394,6 +415,7 @@ proc findShadowByName(name: cstring): ptr ShadowEntry =
   nil
 
 
+## Adds a built-in default shadow entry when it is missing.
 proc ensureDefaultShadow(name, line: cstring): bool =
   if findShadowByName(name) != nil:
     return false
@@ -403,6 +425,7 @@ proc ensureDefaultShadow(name, line: cstring): bool =
   false
 
 
+## Replaces an existing shadow entry with a built-in default line.
 proc replaceShadowDefault(name, line: cstring): bool =
   let shadow = findShadowByName(name)
   if shadow == nil:
@@ -416,6 +439,7 @@ proc replaceShadowDefault(name, line: cstring): bool =
   true
 
 
+## Migrates default accounts when older or invalid shadow entries are found.
 proc migrateMissingShadowUsers(): bool =
   var changed = false
 
@@ -445,6 +469,7 @@ proc migrateMissingShadowUsers(): bool =
   true
 
 
+## Finds an in-memory group entry by group name.
 proc findGroupByName(name: cstring): ptr GroupEntry =
   var i = U32(0)
   while i < groupCount:
@@ -455,6 +480,7 @@ proc findGroupByName(name: cstring): ptr GroupEntry =
   nil
 
 
+## Finds an in-memory group entry by gid.
 proc findGroupByGid(gid: U32): ptr GroupEntry =
   var i = U32(0)
   while i < groupCount:
@@ -465,6 +491,7 @@ proc findGroupByGid(gid: U32): ptr GroupEntry =
   nil
 
 
+## Sends a passwd resolve response to the requesting process.
 proc sendResolveReply(toPid: I32, entry: ptr PasswdEntry) =
   clearReply()
   if entry == nil:
@@ -477,6 +504,7 @@ proc sendResolveReply(toPid: I32, entry: ptr PasswdEntry) =
   discard sysIpcSendPacket(toPid, addr reply)
 
 
+## Sends a group resolve response to the requesting process.
 proc sendGroupResolveReply(toPid: I32, entry: ptr GroupEntry) =
   reply = SysIpcPacket()
   reply.op = SysIpcOpGroupResolveResponse
@@ -490,6 +518,7 @@ proc sendGroupResolveReply(toPid: I32, entry: ptr GroupEntry) =
   discard sysIpcSendPacket(toPid, addr reply)
 
 
+## Returns a C string view into the current packet payload.
 proc nextPacketCString(start: U32): cstring =
   if start >= SysIpcMessageMax:
     return nil
@@ -497,6 +526,7 @@ proc nextPacketCString(start: U32): cstring =
   cast[cstring](addr packet.data[start])
 
 
+## Finds the end offset of a NUL-terminated packet string.
 proc packetStringEnd(start: U32): U32 =
   var pos = start
   while pos < SysIpcMessageMax and packet.data[pos] != '\0':
@@ -505,6 +535,7 @@ proc packetStringEnd(start: U32): U32 =
   pos
 
 
+## Sends an authentication response with a public passwd entry on success.
 proc sendAuthReply(toPid: I32, entry: ptr PasswdEntry, ok: bool) =
   reply = SysIpcPacket()
   reply.op = SysIpcOpUserAuthResponse
@@ -518,6 +549,7 @@ proc sendAuthReply(toPid: I32, entry: ptr PasswdEntry, ok: bool) =
   discard sysIpcSendPacket(toPid, addr reply)
 
 
+## Handles a username/password authentication request.
 proc handleAuthRequest() =
   let name = nextPacketCString(U32(0))
   let nameEnd = packetStringEnd(U32(0))
@@ -540,6 +572,7 @@ proc handleAuthRequest() =
   )
 
 
+## Sends a password update response to the requesting process.
 proc sendSetPasswordReply(toPid: I32, ok: bool) =
   reply = SysIpcPacket()
   reply.op = SysIpcOpUserSetPasswordResponse
@@ -551,6 +584,7 @@ proc sendSetPasswordReply(toPid: I32, ok: bool) =
   discard sysIpcSendPacket(toPid, addr reply)
 
 
+## Handles a password update request and persists the new shadow hash.
 proc handleSetPasswordRequest() =
   let targetUid = U32(packet.arg0)
   if packet.uid != RootUid and packet.uid != targetUid:
@@ -585,6 +619,7 @@ proc handleSetPasswordRequest() =
   sendSetPasswordReply(packet.senderPid, saveShadowUsers())
 
 
+## Dispatches one received userd IPC packet by operation code.
 proc handlePacket() =
   if packet.op == SysIpcOpUserResolveNameRequest:
     sendResolveReply(packet.senderPid, findUserByName(cast[cstring](addr packet.data[0])))
@@ -600,6 +635,7 @@ proc handlePacket() =
     sendGroupResolveReply(packet.senderPid, findGroupByGid(U32(packet.arg0)))
 
 
+## Initializes user databases, marks userd ready, and serves IPC requests.
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   discard arg
 

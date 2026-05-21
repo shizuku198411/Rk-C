@@ -1,3 +1,4 @@
+## Provides POSIX-like filesystem mode permission checks.
 import types
 import user_ids
 
@@ -26,6 +27,7 @@ const
   FsModeDeviceFile* = U32(438)      # 0666
 
 
+## Checks filesystem permission helper mode allows.
 proc fsModeAllows*(nodeUid, nodeGid, mode, uid, gid: U32,
                    ownerBit, groupBit, otherBit: U32): bool =
   if uid == RootUid:
@@ -40,6 +42,7 @@ proc fsModeAllows*(nodeUid, nodeGid, mode, uid, gid: U32,
   (mode and otherBit) != U32(0)
 
 
+## Checks filesystem permission helper mode allows read.
 proc fsModeAllowsRead*(nodeUid, nodeGid, mode, uid, gid: U32): bool =
   fsModeAllows(
     nodeUid,
@@ -53,6 +56,7 @@ proc fsModeAllowsRead*(nodeUid, nodeGid, mode, uid, gid: U32): bool =
   )
 
 
+## Checks filesystem permission helper mode allows write.
 proc fsModeAllowsWrite*(nodeUid, nodeGid, mode, uid, gid: U32): bool =
   fsModeAllows(
     nodeUid,
@@ -66,6 +70,7 @@ proc fsModeAllowsWrite*(nodeUid, nodeGid, mode, uid, gid: U32): bool =
   )
 
 
+## Checks filesystem permission helper mode allows execute.
 proc fsModeAllowsExecute*(nodeUid, nodeGid, mode, uid, gid: U32): bool =
   fsModeAllows(
     nodeUid,

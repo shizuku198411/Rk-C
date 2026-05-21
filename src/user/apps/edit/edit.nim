@@ -1,3 +1,4 @@
+## Provides a small terminal text editor with save, exit, and cursor movement.
 import ../../lib/core/io
 import ../../lib/core/args
 import ../../lib/core/pathutils
@@ -22,6 +23,7 @@ var buffer: array[BufferMax, char]
 var parsedArgs: UserArgs
 
 
+## Prints edit usage information.
 proc printUsage() =
   write("usage: edit <path>\n")
   write("  save: C-x C-s\n")
@@ -29,10 +31,12 @@ proc printUsage() =
   write("  move: arrow keys\n")
 
 
+## Writes the current editor buffer to the target path.
 proc save(path: cstring, len: U64): bool =
   sysWriteFileMode(path, addr buffer[0], len, SysFsWriteCreate or SysFsWriteOverwrite) == 0
 
 
+## Loads an existing file into the editor buffer.
 proc load(path: cstring): U64 =
   let readLen = sysReadFile(path, addr buffer[0], U64(BufferMax))
   if readLen < 0:
@@ -40,10 +44,12 @@ proc load(path: cstring): U64 =
   U64(readLen)
 
 
+## Writes a terminal escape sequence.
 proc esc(s: cstring) =
   write(s)
 
 
+## Moves the terminal cursor to a one-based row and column.
 proc gotoPos(row, col: U64) =
   esc("\x1b[")
   writeUnsigned(row)
@@ -52,14 +58,17 @@ proc gotoPos(row, col: U64) =
   write("H")
 
 
+## Clears the current terminal line.
 proc clearLine() =
   esc("\x1b[2K")
 
 
+## Clears the terminal screen and moves the cursor home.
 proc clearScreen() =
   esc("\x1b[2J\x1b[H")
 
 
+## Finds the start offset of the line containing a buffer position.
 proc lineStartAt(pos: U64): U64 =
   var p = pos
   while p > 0 and buffer[p - 1] != '\n':
@@ -67,6 +76,7 @@ proc lineStartAt(pos: U64): U64 =
   p
 
 
+## Finds the end offset of a line starting at the given buffer offset.
 proc lineEndAt(start, len: U64): U64 =
   var p = start
   while p < len and buffer[p] != '\n':
@@ -74,6 +84,7 @@ proc lineEndAt(start, len: U64): U64 =
   p
 
 
+## Computes the zero-based line number containing a buffer position.
 proc lineOf(pos: U64): U64 =
   var line = 0'u64
   var p = 0'u64
@@ -84,6 +95,7 @@ proc lineOf(pos: U64): U64 =
   line
 
 
+## Finds the buffer offset for the start of a target line.
 proc findLineStart(targetLine, len: U64): U64 =
   if targetLine == 0:
     return 0
@@ -99,12 +111,14 @@ proc findLineStart(targetLine, len: U64): U64 =
   len
 
 
+## Computes the one-based cursor column clamped to the screen width.
 proc cursorColumn(cursor: U64): U64 =
   let start = lineStartAt(cursor)
   let col = cursor - start + 1
   if col > ScreenCols: ScreenCols else: col
 
 
+## Scrolls the visible top line so the cursor remains visible.
 proc ensureCursorVisible(cursor: U64, topLine: var U64) =
   let line = lineOf(cursor)
   if line < topLine:
@@ -113,6 +127,7 @@ proc ensureCursorVisible(cursor: U64, topLine: var U64) =
     topLine = line - EditRows + 1
 
 
+## Renders the fixed editor header.
 proc renderHeader() =
   gotoPos(HeaderRow, 1)
   esc("\x1b[47;30m")
@@ -121,6 +136,7 @@ proc renderHeader() =
   esc("\x1b[0m")
 
 
+## Renders the fixed help/status hint row.
 proc renderHelp(path: cstring) =
   gotoPos(HelpRow, 1)
   esc("\x1b[47;30m")
@@ -131,12 +147,14 @@ proc renderHelp(path: cstring) =
   esc("\x1b[0m")
 
 
+## Renders the bottom status message row.
 proc renderStatus(status: cstring) =
   gotoPos(StatusRow, 1)
   clearLine()
   write(status)
 
 
+## Redraws the editor viewport and restores the terminal cursor.
 proc renderBuffer(len, cursor, topLine: U64, path, status: cstring) =
   renderHeader()
 
@@ -163,6 +181,7 @@ proc renderBuffer(len, cursor, topLine: U64, path, status: cstring) =
   gotoPos(visibleLine, cursorColumn(cursor))
 
 
+## Inserts one printable character at the cursor.
 proc insertChar(ch: char, len, cursor: var U64): cstring =
   if len >= U64(BufferMax):
     return "[warn] Buffer full"
@@ -178,6 +197,7 @@ proc insertChar(ch: char, len, cursor: var U64): cstring =
   ""
 
 
+## Deletes the character before the cursor.
 proc backspace(len, cursor: var U64) =
   if cursor == 0:
     return
@@ -191,16 +211,19 @@ proc backspace(len, cursor: var U64) =
   dec len
 
 
+## Moves the editor cursor one byte left.
 proc moveLeft(cursor: var U64) =
   if cursor > 0:
     dec cursor
 
 
+## Moves the editor cursor one byte right.
 proc moveRight(cursor: var U64, len: U64) =
   if cursor < len:
     inc cursor
 
 
+## Moves the editor cursor to the previous line.
 proc moveUp(cursor: var U64) =
   let currentStart = lineStartAt(cursor)
   if currentStart == 0:
@@ -217,6 +240,7 @@ proc moveUp(cursor: var U64) =
     cursor = previousEnd
 
 
+## Moves the editor cursor to the next line.
 proc moveDown(cursor: var U64, len: U64) =
   let currentStart = lineStartAt(cursor)
   let currentEnd = lineEndAt(currentStart, len)
@@ -234,6 +258,7 @@ proc moveDown(cursor: var U64, len: U64) =
     cursor = nextEnd
 
 
+## Handles an ANSI escape sequence for arrow key movement.
 proc handleEscape(cursor: var U64, len: U64) =
   let marker = readChar()
   if marker != '[':
@@ -250,6 +275,7 @@ proc handleEscape(cursor: var U64, len: U64) =
     moveLeft(cursor)
 
 
+## Runs the editor input loop until save or exit.
 proc editorLoop(path: cstring, len: var U64) =
   var cursor = len
   var topLine = 0'u64
@@ -301,6 +327,7 @@ proc editorLoop(path: cstring, len: var U64) =
     renderBuffer(len, cursor, topLine, path, status)
 
 
+## Parses the file path, loads content, and starts the editor.
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   if not parseUserArgs(arg, parsedArgs):
     printUsage()

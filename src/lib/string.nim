@@ -1,6 +1,8 @@
+## Provides freestanding C string routines required by generated code.
 import types
 
 
+## Compares two C strings using C strcmp semantics.
 proc strcmp*(s1: cstring, s2: cstring): cint {.exportc: "strcmp", cdecl.} =
   var i = 0
 
@@ -10,6 +12,7 @@ proc strcmp*(s1: cstring, s2: cstring): cint {.exportc: "strcmp", cdecl.} =
   cint(ord(s1[i])) - cint(ord(s2[i]))
 
 
+## Returns the length of a C string.
 proc strlen*(s: cstring): CSize {.exportc: "strlen", cdecl.} =
   var n = CSize(0)
 

@@ -1,3 +1,4 @@
+## Implements process state, scheduling, waits, fd state, pipes, and signals.
 import ../../arch/riscv64/arch
 import ../../lib/calc
 import ../../lib/fixed_string
@@ -141,70 +142,108 @@ var
   pipes: array[SysPipeMax, PipeState]
 
 
+## Imports the assembly context switch routine.
 proc contextSwitch(prev: ptr Context, next: ptr Context) {.importc: "context_switch", cdecl.}
+## Runs the initial trampoline for a newly scheduled process.
 proc processBootstrap*() {.exportc: "process_bootstrap", cdecl.}
+## Selects the next runnable process and switches to it.
 proc schedule*()
+## Yields the current process to the scheduler.
 proc yieldCpu*()
+## Yields when the current process has a pending reschedule request.
 proc maybeYieldOnResched*()
+## Prints process state.
 proc printProcessState*(state: ProcessState)
+## Creates kernel process named.
 proc createKernelProcessNamed*(entry: KernelTask, name: cstring): int32
+## Puts the current process to sleep for current for input.
 proc sleepCurrentForInput*()
+## Puts the current process to sleep for current for ipc.
 proc sleepCurrentForIpc*()
+## Puts the current process to sleep for current for fs req.
 proc sleepCurrentForFsReq*(reqId: U64)
+## Puts the current process to sleep for current for block req.
 proc sleepCurrentForBlockReq*(reqId: U64)
+## Puts the current process to sleep for current for pid.
 proc sleepCurrentForPid*(pid: int32)
+## Puts the current process to sleep for current until tick.
 proc sleepCurrentUntilTick*(tick: U64)
+## Puts the current process to sleep for current for pipe read.
 proc sleepCurrentForPipeRead*(pipeId: I32)
+## Puts the current process to sleep for current for pipe write.
 proc sleepCurrentForPipeWrite*(pipeId: I32)
+## Puts the current process to sleep for current for poll.
 proc sleepCurrentForPoll*(deadlineTick: U64)
+## Wakes processes waiting for input waiters.
 proc wakeInputWaiters*()
+## Wakes processes waiting for ipc waiter.
 proc wakeIpcWaiter*(pid: int32)
+## Wakes processes waiting for fs waiter.
 proc wakeFsWaiter*(reqId: U64)
+## Wakes processes waiting for block waiter.
 proc wakeBlockWaiter*(reqId: U64)
+## Wakes processes waiting for pid waiters.
 proc wakePidWaiters*(pid: int32)
+## Wakes processes waiting for timer waiters.
 proc wakeTimerWaiters*(tick: U64)
+## Wakes processes waiting for pipe readers.
 proc wakePipeReaders*(pipeId: I32)
+## Wakes processes waiting for pipe writers.
 proc wakePipeWriters*(pipeId: I32)
+## Wakes processes waiting for poll waiters.
 proc wakePollWaiters*()
+## Clears wait.
 proc clearWait*(p: ptr Process)
+## Marks process zombie.
 proc markProcessZombie*(p: ptr Process, status: U64)
+## Sends process signal.
 proc sendProcessSignal*(pid: I32, signal: U32): int
+## Implements the take process signal kernel helper.
 proc takeProcessSignal*(p: ptr Process): U32
+## Implements the deliver current signals kernel helper.
 proc deliverCurrentSignals*()
 
 
+## Sets kernel page table.
 proc setKernelPageTable*(root: PageTable) =
   kernelPageTable = root
 
 
+## Sets root cwd.
 proc setRootCwd(p: ptr Process) =
   p.cwd[0] = '/'
   p.cwd[1] = '\0'
 
 
+## Sets identity.
 proc setIdentity(p: ptr Process, uid, gid: U32) =
   p.identity.uid = uid
   p.identity.gid = gid
 
 
+## Sets last error.
 proc setLastError*(err: I32) =
   if currentProc != nil:
     currentProc.lastError = err
 
 
+## Clears last error.
 proc clearLastError*() =
   setLastError(SysErrOk)
 
 
+## Sets exe path.
 proc setExePath(p: ptr Process, path: cstring) =
   discard copyCString(p.exePathBuf, path)
   p.exePath = cast[cstring](addr p.exePathBuf[0])
 
 
+## Copies cwd.
 proc copyCwd(dst: var array[SysProcessCwdMax, char], src: array[SysProcessCwdMax, char]) =
   copyChars(dst, src)
 
 
+## Clears ipc queue.
 proc clearIpcQueue(p: ptr Process) =
   p.ipc.head = 0
   p.ipc.tail = 0
@@ -216,6 +255,7 @@ proc clearIpcQueue(p: ptr Process) =
     inc i
 
 
+## Implements the signal bit kernel helper.
 proc signalBit(signal: U32): U32 =
   if signal == SysSignalNone or signal > SysSignalMax:
     return U32(0)
@@ -223,14 +263,17 @@ proc signalBit(signal: U32): U32 =
   U32(1'u32 shl signal)
 
 
+## Implements the pipe next kernel helper.
 proc pipeNext(index: U32): U32 =
   (index + 1) mod SysPipeBufSize
 
 
+## Returns whether pipe id is valid.
 proc validPipeId(pipeId: I32): bool =
   pipeId >= 0 and pipeId < I32(SysPipeMax) and pipes[U32(pipeId)].used
 
 
+## Allocates pipe.
 proc allocPipe*(): I32 =
   var i = U32(0)
   while i < SysPipeMax:
@@ -246,11 +289,13 @@ proc allocPipe*(): I32 =
   -1
 
 
+## Frees pipe.
 proc freePipe*(pipeId: I32) =
   if validPipeId(pipeId):
     pipes[U32(pipeId)] = PipeState()
 
 
+## Retains fd entry.
 proc retainFdEntry*(entry: FdEntry) =
   if entry.used and entry.kind == SysFdKindPipe and validPipeId(entry.pipeId):
     if (entry.flags and SysOpenRead) != 0:
@@ -259,6 +304,7 @@ proc retainFdEntry*(entry: FdEntry) =
       inc pipes[U32(entry.pipeId)].writers
 
 
+## Releases fd entry.
 proc releaseFdEntry*(entry: FdEntry) =
   if not entry.used or entry.kind != SysFdKindPipe or not validPipeId(entry.pipeId):
     return
@@ -275,6 +321,7 @@ proc releaseFdEntry*(entry: FdEntry) =
     pipe[] = PipeState()
 
 
+## Implements the pipe read kernel kernel helper.
 proc pipeReadKernel*(pipeId: I32, dst: ptr UncheckedArray[U8], len: U64): I32 =
   if dst == nil or not validPipeId(pipeId):
     return -1
@@ -298,6 +345,7 @@ proc pipeReadKernel*(pipeId: I32, dst: ptr UncheckedArray[U8], len: U64): I32 =
   I32(readLen)
 
 
+## Implements the pipe write kernel kernel helper.
 proc pipeWriteKernel*(pipeId: I32, src: ptr UncheckedArray[U8], len: U64): I32 =
   if src == nil or not validPipeId(pipeId):
     return -1
@@ -324,6 +372,7 @@ proc pipeWriteKernel*(pipeId: I32, src: ptr UncheckedArray[U8], len: U64): I32 =
   I32(written)
 
 
+## Implements the pipe readable kernel helper.
 proc pipeReadable*(pipeId: I32): bool =
   if not validPipeId(pipeId):
     return false
@@ -332,6 +381,7 @@ proc pipeReadable*(pipeId: I32): bool =
   pipe.count > 0 or pipe.writers == 0
 
 
+## Implements the pipe writable kernel helper.
 proc pipeWritable*(pipeId: I32): bool =
   if not validPipeId(pipeId):
     return false
@@ -340,6 +390,7 @@ proc pipeWritable*(pipeId: I32): bool =
   pipe.readers > 0 and pipe.count < SysPipeBufSize
 
 
+## Clears file state.
 proc clearFileState*(p: ptr Process) =
   var i = U32(0)
   while i < SysFdMax:
@@ -349,6 +400,7 @@ proc clearFileState*(p: ptr Process) =
   p.files = FileState()
 
 
+## Sets fd path.
 proc setFdPath(entry: var FdEntry, path: cstring) =
   var i = U32(0)
   while i < SysFdPathMax - 1 and path != nil and path[i] != '\0':
@@ -360,6 +412,7 @@ proc setFdPath(entry: var FdEntry, path: cstring) =
     inc i
 
 
+## Initializes standard files.
 proc initStandardFiles*(p: ptr Process) =
   clearFileState(p)
 
@@ -379,6 +432,7 @@ proc initStandardFiles*(p: ptr Process) =
   setFdPath(p.files.entries[2], "/dev/stderr")
 
 
+## Copies file state.
 proc copyFileState(dst, src: ptr Process) =
   dst.files = src.files
   var i = U32(0)
@@ -387,6 +441,7 @@ proc copyFileState(dst, src: ptr Process) =
     inc i
 
 
+## Clears user state.
 proc clearUserState(p: ptr Process) =
   if p == nil:
     return
@@ -394,6 +449,7 @@ proc clearUserState(p: ptr Process) =
   p.user = UserState()
 
 
+## Clears wait.
 proc clearWait*(p: ptr Process) =
   if p == nil:
     return
@@ -401,6 +457,7 @@ proc clearWait*(p: ptr Process) =
   p.wait = WaitTarget()
 
 
+## Puts the current process to sleep for current for.
 proc sleepCurrentFor(kind: WaitKind, value: U64) =
   if currentProc == nil:
     return
@@ -412,6 +469,7 @@ proc sleepCurrentFor(kind: WaitKind, value: U64) =
   deliverCurrentSignals()
 
 
+## Wakes processes waiting for waiters.
 proc wakeWaiters(kind: WaitKind, value: U64, wakeAll: bool) =
   var i = 0
   while i < MaxProcs:
@@ -424,6 +482,7 @@ proc wakeWaiters(kind: WaitKind, value: U64, wakeAll: bool) =
     inc i
 
 
+## Finds unused proc.
 proc findUnusedProc(): ptr Process =
   var i = 0
   while i < MaxProcs:
@@ -433,20 +492,24 @@ proc findUnusedProc(): ptr Process =
   nil
 
 
+## Returns whether free process slot is present.
 proc hasFreeProcessSlot*(): bool =
   findUnusedProc() != nil
 
 
+## Implements the current is idle process kernel helper.
 proc currentIsIdleProcess*(): bool =
   currentProc != nil and currentProc == idleProc
 
 
+## Implements the count current process cpu tick kernel helper.
 proc countCurrentProcessCpuTick*() =
   if currentProc != nil:
     saturatingIncU64(currentProc.cpuTicks)
     saturatingIncU64(currentProc.cpuWindowTicks)
 
 
+## Implements the snapshot process cpu window kernel helper.
 proc snapshotProcessCpuWindow*(windowTicks: U64) =
   var i = 0
   while i < MaxProcs:
@@ -460,6 +523,7 @@ proc snapshotProcessCpuWindow*(windowTicks: U64) =
     inc i
 
 
+## Implements the idle task kernel helper.
 proc idleTask() {.cdecl.} =
   while true:
     maybeYieldOnResched()
@@ -467,6 +531,7 @@ proc idleTask() {.cdecl.} =
     arch.wfi()
 
 
+## Implements the assign pid kernel helper.
 proc assignPid(): I32 =
   var i = 0
   while i < MaxProcs:
@@ -481,6 +546,7 @@ proc assignPid(): I32 =
   nextPid
 
 
+## Creates kernel process internal.
 proc createKernelProcessInternal(entry: KernelTask, isIdle: bool, name: cstring): int32 =
   let p = findUnusedProc()
   if p == nil or entry == nil:
@@ -518,6 +584,7 @@ proc createKernelProcessInternal(entry: KernelTask, isIdle: bool, name: cstring)
   p.pid
 
 
+## Implements the process init kernel helper.
 proc processInit*() =
   var i = 0
   while i < MaxProcs:
@@ -555,14 +622,17 @@ proc processInit*() =
     panic("failed to create idle task")
 
 
+## Creates kernel process named.
 proc createKernelProcessNamed*(entry: KernelTask, name: cstring): int32 =
   createKernelProcessInternal(entry, false, name)
 
 
+## Creates kernel process.
 proc createKernelProcess*(entry: KernelTask): int32 =
   createKernelProcessNamed(entry, "kernel_task")
 
 
+## Implements the user process bootstrap kernel helper.
 proc userProcessBootstrap() {.cdecl, noreturn.} =
   if currentProc == nil or not currentProc.user.active:
     panic("invalid user process")
@@ -571,6 +641,7 @@ proc userProcessBootstrap() {.cdecl, noreturn.} =
   arch.enterUser(currentProc.user.pc, currentProc.user.sp, kernelSp, currentProc.user.arg0, currentProc.user.arg1)
 
 
+## Finds process by pid.
 proc findProcessByPid*(pid: int32): ptr Process =
   var i = 0
   while i < MaxProcs:
@@ -580,6 +651,7 @@ proc findProcessByPid*(pid: int32): ptr Process =
   nil
 
 
+## Implements the inherit process metadata kernel helper.
 proc inheritProcessMetadata*(child, parent: ptr Process) =
   clearFileState(child)
 
@@ -597,6 +669,7 @@ proc inheritProcessMetadata*(child, parent: ptr Process) =
   # Future per-process attributes such as rootfs should be copied here.
 
 
+## Allocates user process from parent.
 proc allocUserProcessFromParent*(parent: ptr Process, inheritMetadata: bool = true): ptr Process =
   let pid = createKernelProcessInternal(userProcessBootstrap, false, "user_proc")
   if pid < 0:
@@ -613,6 +686,7 @@ proc allocUserProcessFromParent*(parent: ptr Process, inheritMetadata: bool = tr
   p
 
 
+## Configures user process.
 proc configureUserProcess*(p: ptr Process, root: PageTable, path: cstring,
                            userBase, userPc, userStackTop, userSp: VAddr,
                            imagePages, stackPages: U64, arg0: U64 = 0,
@@ -637,6 +711,7 @@ proc configureUserProcess*(p: ptr Process, root: PageTable, path: cstring,
   p.state = procRunnable
 
 
+## Sets user rkx map.
 proc setUserRkxMap*(p: ptr Process, textVa, textMemSize, rodataVa, rodataMemSize,
                     dataVa, dataMemSize, bssVa, bssMemSize: U64) =
   if p == nil:
@@ -652,6 +727,7 @@ proc setUserRkxMap*(p: ptr Process, textVa, textMemSize, rodataVa, rodataMemSize
   p.user.bssMemSize = bssMemSize
 
 
+## Releases user address space.
 proc releaseUserAddressSpace(p: ptr Process) =
   if p.rootPageTable == nil or p.rootPageTable == kernelPageTable:
     return
@@ -668,6 +744,7 @@ proc releaseUserAddressSpace(p: ptr Process) =
   p.rootPageTable = nil
 
 
+## Implements the discard process kernel helper.
 proc discardProcess*(p: ptr Process) =
   if p == nil:
     return
@@ -700,6 +777,7 @@ proc discardProcess*(p: ptr Process) =
   clearFileState(p)
 
 
+## Creates user process.
 proc createUserProcess*(path: cstring, userBase, userPc, userStackTop, userSp: VAddr,
                         imagePages, stackPages: U64, arg0: U64 = 0, arg1: U64 = 0): int32 =
   let p = allocUserProcessFromParent(nil)
@@ -711,6 +789,7 @@ proc createUserProcess*(path: cstring, userBase, userPc, userStackTop, userSp: V
   p.pid
 
 
+## Returns whether runnable process is present.
 proc hasRunnableProcess*(): bool =
   var i = 0
   while i < MaxProcs:
@@ -720,10 +799,12 @@ proc hasRunnableProcess*(): bool =
   false
 
 
+## Implements the request resched kernel helper.
 proc requestResched*() =
   needResched = true
 
 
+## Prints process state.
 proc printProcessState*(state: ProcessState) =
   case state
   of procUnused:
@@ -738,42 +819,52 @@ proc printProcessState*(state: ProcessState) =
     print("zombie  ")
 
 
+## Puts the current process to sleep for current for input.
 proc sleepCurrentForInput*() =
   sleepCurrentFor(waitInput, 1)
 
 
+## Puts the current process to sleep for current for ipc.
 proc sleepCurrentForIpc*() =
   sleepCurrentFor(waitIpc, 1)
 
 
+## Puts the current process to sleep for current for fs req.
 proc sleepCurrentForFsReq*(reqId: U64) =
   sleepCurrentFor(waitFsReq, reqId)
 
 
+## Puts the current process to sleep for current for block req.
 proc sleepCurrentForBlockReq*(reqId: U64) =
   sleepCurrentFor(waitBlockReq, reqId)
 
 
+## Puts the current process to sleep for current for pid.
 proc sleepCurrentForPid*(pid: int32) =
   sleepCurrentFor(waitPid, U64(pid))
 
 
+## Puts the current process to sleep for current until tick.
 proc sleepCurrentUntilTick*(tick: U64) =
   sleepCurrentFor(waitTimer, tick)
 
 
+## Puts the current process to sleep for current for pipe read.
 proc sleepCurrentForPipeRead*(pipeId: I32) =
   sleepCurrentFor(waitPipeRead, U64(pipeId))
 
 
+## Puts the current process to sleep for current for pipe write.
 proc sleepCurrentForPipeWrite*(pipeId: I32) =
   sleepCurrentFor(waitPipeWrite, U64(pipeId))
 
 
+## Puts the current process to sleep for current for poll.
 proc sleepCurrentForPoll*(deadlineTick: U64) =
   sleepCurrentFor(waitPoll, deadlineTick)
 
 
+## Wakes processes waiting for poll waiters.
 proc wakePollWaiters*() =
   var i = 0
   while i < MaxProcs:
@@ -783,11 +874,13 @@ proc wakePollWaiters*() =
     inc i
 
 
+## Wakes processes waiting for input waiters.
 proc wakeInputWaiters*() =
   wakeWaiters(waitInput, 1, true)
   wakePollWaiters()
 
 
+## Wakes processes waiting for ipc waiter.
 proc wakeIpcWaiter*(pid: int32) =
   var i = 0
   while i < MaxProcs:
@@ -801,19 +894,23 @@ proc wakeIpcWaiter*(pid: int32) =
   wakePollWaiters()
 
 
+## Wakes processes waiting for fs waiter.
 proc wakeFsWaiter*(reqId: U64) =
   wakeWaiters(waitFsReq, reqId, false)
 
 
+## Wakes processes waiting for block waiter.
 proc wakeBlockWaiter*(reqId: U64) =
   wakeWaiters(waitBlockReq, reqId, false)
 
 
+## Wakes processes waiting for pid waiters.
 proc wakePidWaiters*(pid: int32) =
   wakeWaiters(waitPid, U64(pid), true)
   wakePollWaiters()
 
 
+## Wakes processes waiting for timer waiters.
 proc wakeTimerWaiters*(tick: U64) =
   var i = 0
   while i < MaxProcs:
@@ -825,16 +922,19 @@ proc wakeTimerWaiters*(tick: U64) =
     inc i
 
 
+## Wakes processes waiting for pipe readers.
 proc wakePipeReaders*(pipeId: I32) =
   wakeWaiters(waitPipeRead, U64(pipeId), true)
   wakePollWaiters()
 
 
+## Wakes processes waiting for pipe writers.
 proc wakePipeWriters*(pipeId: I32) =
   wakeWaiters(waitPipeWrite, U64(pipeId), true)
   wakePollWaiters()
 
 
+## Wakes processes waiting for process for signal.
 proc wakeProcessForSignal(p: ptr Process) =
   if p == nil:
     return
@@ -847,6 +947,7 @@ proc wakeProcessForSignal(p: ptr Process) =
   requestResched()
 
 
+## Sends process signal.
 proc sendProcessSignal*(pid: I32, signal: U32): int =
   let bit = signalBit(signal)
   if bit == U32(0):
@@ -861,6 +962,7 @@ proc sendProcessSignal*(pid: I32, signal: U32): int =
   0
 
 
+## Implements the take process signal kernel helper.
 proc takeProcessSignal*(p: ptr Process): U32 =
   if p == nil or p.pendingSignals == U32(0):
     return SysSignalNone
@@ -883,6 +985,7 @@ proc takeProcessSignal*(p: ptr Process): U32 =
   SysSignalNone
 
 
+## Implements the reap detached zombies kernel helper.
 proc reapDetachedZombies() =
   var i = 0
   while i < MaxProcs:
@@ -892,6 +995,7 @@ proc reapDetachedZombies() =
     inc i
 
 
+## Returns whether live parane is present.
 proc hasLiveParane*(p: ptr Process): bool =
   if p == nil or p.parentPid <= 0:
     return false
@@ -900,6 +1004,7 @@ proc hasLiveParane*(p: ptr Process): bool =
   parent != nil and parent.state != procUnused and parent.state != procZombie
 
 
+## Implements the detach children of kernel helper.
 proc detachChildrenOf*(parentPid: I32) =
   if parentPid <= 0:
     return
@@ -913,6 +1018,7 @@ proc detachChildrenOf*(parentPid: I32) =
     inc i
 
 
+## Marks process zombie.
 proc markProcessZombie*(p: ptr Process, status: U64) =
   if p == nil:
     return
@@ -936,6 +1042,7 @@ proc markProcessZombie*(p: ptr Process, status: U64) =
     discard sendProcessSignal(parentPid, SysSignalChildExited)
 
 
+## Implements the deliver current signals kernel helper.
 proc deliverCurrentSignals*() =
   if currentProc == nil or not currentProc.user.active or currentProc.state == procZombie:
     return
@@ -954,6 +1061,7 @@ proc deliverCurrentSignals*() =
     schedule()
 
 
+## Yields when the current process has a pending reschedule request.
 proc maybeYieldOnResched*() =
   if not needResched:
     return
@@ -962,12 +1070,14 @@ proc maybeYieldOnResched*() =
   yieldCpu()
 
 
+## Implements the kill current user process kernel helper.
 proc killCurrentUserProcess*(status: U64) =
   if currentProc != nil and currentProc.user.active:
     markProcessZombie(currentProc, status)
     schedule()
 
 
+## Runs the initial trampoline for a newly scheduled process.
 proc processBootstrap*() =
   if currentProc == nil or currentProc.entry == nil:
     panic("invalid current process")
@@ -978,6 +1088,7 @@ proc processBootstrap*() =
   panic("zombie process resumed")
 
 
+## Selects the next runnable process and switches to it.
 proc schedule*() =
   let prev = currentProc
   var start = 0
@@ -1036,6 +1147,7 @@ proc schedule*() =
     contextSwitch(addr prev.context, addr next.context)
 
 
+## Yields the current process to the scheduler.
 proc yieldCpu*() =
   if currentProc == nil and not hasRunnableProcess():
     return

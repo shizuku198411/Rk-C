@@ -1,3 +1,4 @@
+## Tracks timer ticks, idle ticks, and CPU accounting windows.
 import ../../arch/riscv64/arch
 import ../../lib/calc
 import ../../lib/types
@@ -17,25 +18,30 @@ var
   lastCpuUsagePercent* {.volatile.}: U32
 
 
+## Sets next timer.
 proc setNextTimer*() =
   let now = arch.rdtime()
   arch.writeStimecmp(now + TimerInterval)
 
 
+## Implements the count up timer tick kernel helper.
 proc countUpTimerTick*() =
   saturatingIncU64(timerTickCount)
   saturatingIncU64(cpuWindowTickCount)
 
 
+## Implements the count up idle tick kernel helper.
 proc countUpIdleTick*() =
   saturatingIncU64(idleTickCount)
   saturatingIncU64(idleWindowTickCount)
 
 
+## Implements the cpu window ready kernel helper.
 proc cpuWindowReady*(): bool =
   cpuWindowTickCount >= CpuUsageWindowTicks
 
 
+## Implements the snapshot cpu window kernel helper.
 proc snapshotCpuWindow*() =
   let total = cpuWindowTickCount
   let idle = idleWindowTickCount

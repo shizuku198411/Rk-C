@@ -1,3 +1,4 @@
+## Writes command-line arguments to stdout.
 import ../../lib/core/io
 import ../../lib/core/args
 import ../../lib/core/syscall
@@ -7,10 +8,12 @@ import ../../lib/core/strutils
 var parsedArgs: UserArgs
 
 
+## Prints echo usage information.
 proc printUsage() =
   write("usage: echo \"<str1 [str2...]>\"\n")
 
 
+## Prints parsed arguments separated by spaces.
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   if not parseUserArgs(arg, parsedArgs):
     printUsage()

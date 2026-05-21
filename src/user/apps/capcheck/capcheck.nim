@@ -1,3 +1,4 @@
+## Validates capability stripping and forged capability denial behavior.
 import ../../../lib/syscall_caps
 import ../../lib/core/args
 import ../../lib/core/io
@@ -22,10 +23,12 @@ var
   responsePacket: SysIpcPacket
 
 
+## Prints capcheck usage information.
 proc printUsage() =
   write("usage: capcheck\n")
 
 
+## Appends a C string to a status path buffer.
 proc appendCString(buf: var array[PathBufSize, char], pos: var U32, s: cstring) =
   var i = U32(0)
   while s[i] != '\0' and pos + U32(1) < U32(PathBufSize):
@@ -35,6 +38,7 @@ proc appendCString(buf: var array[PathBufSize, char], pos: var U32, s: cstring) 
   buf[pos] = '\0'
 
 
+## Appends a decimal U32 to a status path buffer.
 proc appendU32(buf: var array[PathBufSize, char], pos: var U32, value: U32) =
   var
     tmp: array[16, char]
@@ -60,6 +64,7 @@ proc appendU32(buf: var array[PathBufSize, char], pos: var U32, value: U32) =
     buf[pos] = '\0'
 
 
+## Builds /proc/<pid>/status for the current check target.
 proc buildStatusPath(pid: I32) =
   var i = U32(0)
   while i < U32(PathBufSize):
@@ -72,6 +77,7 @@ proc buildStatusPath(pid: I32) =
   appendCString(pathBuf, pos, cstring("/status"))
 
 
+## Prints a capcheck failure and exits.
 proc fail(msg: cstring) {.noreturn.} =
   write("capcheck: FAIL ")
   write(msg)
@@ -79,6 +85,7 @@ proc fail(msg: cstring) {.noreturn.} =
   sysExit(1)
 
 
+## Requires a syscall or request result to be denied.
 proc expectDenied(result: I32, name: cstring) =
   if result >= 0:
     fail(name)
@@ -87,6 +94,7 @@ proc expectDenied(result: I32, name: cstring) =
   write(" denied\n")
 
 
+## Verifies forged kill capabilities are rejected by procmgtd.
 proc expectForgedKillDenied(pid: I32) =
   let processManager = servicePidByKind(SysServiceKindProcess)
   if processManager <= 0:
@@ -111,6 +119,7 @@ proc expectForgedKillDenied(pid: I32) =
   write("capcheck: forged kill denied\n")
 
 
+## Runs all capability visibility and denial checks.
 proc runCheck() =
   let pid = sysGetPid()
   if pid <= 0:
@@ -142,6 +151,7 @@ proc runCheck() =
   sysExit(0)
 
 
+## Parses capcheck arguments and runs the check suite.
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   if not parseUserArgs(arg, parsedArgs):
     printUsage()

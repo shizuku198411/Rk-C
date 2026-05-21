@@ -1,12 +1,15 @@
+## Provides userland UDP send and receive helpers through netd.
 import ../ipc/ipc_request
 import ../ipc/service_client
 import ../core/syscall
 
 
+## Packs ports.
 proc packPorts(srcPort, dstPort: U16): U64 =
   (U64(srcPort) shl 16) or U64(dstPort)
 
 
+## Performs UDP send.
 proc udpSend*(dstIp: U32, srcPort, dstPort: U16, data: pointer, len: U32): I32 =
   if data == nil or len > SysIpcMessageMax:
     return -1
@@ -36,6 +39,7 @@ proc udpSend*(dstIp: U32, srcPort, dstPort: U16, data: pointer, len: U32): I32 =
   0
 
 
+## Performs UDP receive.
 proc udpReceive*(srcIp: U32, srcPort, dstPort: U16, data: pointer,
                  capacity: U32, outSrcIp: ptr U32, outSrcPort: ptr U16): I32 =
   if data == nil or capacity == 0:

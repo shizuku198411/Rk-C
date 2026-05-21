@@ -1,3 +1,4 @@
+## Defines syscall number constants shared by kernel and userland.
 import types
 
 const

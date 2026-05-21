@@ -1,3 +1,4 @@
+## Validates poll readiness for IPC, timers, pipes, and invalid fds.
 import ../../lib/core/args
 import ../../lib/core/io
 import ../../lib/core/strutils
@@ -11,10 +12,12 @@ var
   byteBuf: array[1, U8]
 
 
+## Prints pollcheck usage information.
 proc printUsage() =
   write("usage: pollcheck\n")
 
 
+## Prints a pollcheck failure and exits.
 proc fail(msg: cstring) {.noreturn.} =
   write("pollcheck: FAIL ")
   write(msg)
@@ -22,6 +25,7 @@ proc fail(msg: cstring) {.noreturn.} =
   sysExit(1)
 
 
+## Clears all reusable poll event slots.
 proc resetEvents() =
   var i = 0
   while i < len(events):
@@ -29,6 +33,7 @@ proc resetEvents() =
     inc i
 
 
+## Requires one event slot to include a readiness flag.
 proc expectEvent(index: U32, flag: U32, msg: cstring) =
   if (events[index].revents and flag) == 0:
     fail(msg)
@@ -37,6 +42,7 @@ proc expectEvent(index: U32, flag: U32, msg: cstring) =
   write(" ok\n")
 
 
+## Runs the poll behavior checks.
 proc runCheck() =
   resetEvents()
   events[0].events = SysPollIpcRead
@@ -92,6 +98,7 @@ proc runCheck() =
   sysExit(0)
 
 
+## Parses pollcheck arguments and runs the check suite.
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   if not parseUserArgs(arg, parsedArgs):
     printUsage()

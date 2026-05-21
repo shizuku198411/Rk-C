@@ -1,3 +1,4 @@
+## Parses command-line options from shared user argument arrays.
 import ../../../lib/types
 import ./args
 import ./strutils
@@ -17,6 +18,7 @@ type
     help*: bool
 
 
+## Clears parsed options.
 proc clearParsedOptions(parsed: var ParsedOptions) =
   var i = 0
   while i < OptionFlagCap:
@@ -32,6 +34,7 @@ proc clearParsedOptions(parsed: var ParsedOptions) =
   parsed.help = false
 
 
+## Finds short.
 proc findShort(specs: openArray[OptionSpec], ch: char): int =
   var i = 0
   while i < len(specs):
@@ -42,6 +45,7 @@ proc findShort(specs: openArray[OptionSpec], ch: char): int =
   -1
 
 
+## Finds long.
 proc findLong(specs: openArray[OptionSpec], name: cstring): int =
   var i = 0
   while i < len(specs):
@@ -52,6 +56,7 @@ proc findLong(specs: openArray[OptionSpec], name: cstring): int =
   -1
 
 
+## Sets flag.
 proc setFlag(parsed: var ParsedOptions, ch: char): bool =
   let idx = ord(ch)
   if idx < 0 or idx >= OptionFlagCap:
@@ -61,6 +66,7 @@ proc setFlag(parsed: var ParsedOptions, ch: char): bool =
   true
 
 
+## Adds positional.
 proc addPositional(parsed: var ParsedOptions, value: cstring): bool =
   if parsed.positionalCount >= U32(UserArgMax):
     return false
@@ -70,11 +76,13 @@ proc addPositional(parsed: var ParsedOptions, value: cstring): bool =
   true
 
 
+## Returns whether option is present.
 proc hasOption*(parsed: ParsedOptions, ch: char): bool =
   let idx = ord(ch)
   idx >= 0 and idx < OptionFlagCap and parsed.flags[idx]
 
 
+## Implements the positional at helper.
 proc positionalAt*(parsed: var ParsedOptions, index: U32): cstring =
   if index >= parsed.positionalCount:
     return nil
@@ -82,6 +90,7 @@ proc positionalAt*(parsed: var ParsedOptions, index: U32): cstring =
   parsed.positional[index]
 
 
+## Parses options.
 proc parseOptions*(args: var UserArgs, specs: openArray[OptionSpec],
                    parsed: var ParsedOptions): bool =
   clearParsedOptions(parsed)

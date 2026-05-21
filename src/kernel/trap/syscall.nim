@@ -1,3 +1,4 @@
+## Dispatches user ecall traps to syscall handlers.
 import ../../lib/syscall_ids
 import ../../lib/syscall_types
 import ../../lib/types
@@ -17,6 +18,7 @@ import ../trap/trap_types
 import ../trap/syscall_trace
 
 
+## Dispatches the syscall number stored in the trap frame.
 proc handleSyscall*(frame: ptr TrapFrame) =
   traceSyscallEnter(frame)
 

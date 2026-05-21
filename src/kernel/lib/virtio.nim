@@ -1,3 +1,4 @@
+## Defines shared VirtIO constants and descriptor structures.
 import ../../lib/mem
 import ../../lib/types
 import ../mm/memory
@@ -82,18 +83,22 @@ type
     lastUsedIdx*: U16
 
 
+## Implements the virtio mmio read kernel helper.
 proc virtioMmioRead*(base, off: U64): U32 =
   volatileLoad(cast[ptr U32](base + off))
 
 
+## Implements the virtio mmio write kernel helper.
 proc virtioMmioWrite*(base, off: U64, val: U32) =
   volatileStore(cast[ptr U32](base + off), val)
 
 
+## Implements the feature bit kernel helper.
 proc featureBit*(bit: U64): U32 =
   U32(1) shl U32(bit and 31'u64)
 
 
+## Scans for virtio mmio.
 proc scanVirtioMmio*(deviceId: U32, outBase: var U64): bool =
   var i = U64(0)
   while i < VirtioMmioMaxDevs:
@@ -109,6 +114,7 @@ proc scanVirtioMmio*(deviceId: U32, outBase: var U64): bool =
   false
 
 
+## Resets virt queue.
 proc resetVirtQueue*(q: var VirtQueue, vqNum, vqBytes, vqAlign: U64): bool =
   if vqNum > U64(VirtqRingMax):
     return false
@@ -127,6 +133,7 @@ proc resetVirtQueue*(q: var VirtQueue, vqNum, vqBytes, vqAlign: U64): bool =
   true
 
 
+## Sets setup virt queue.
 proc setupVirtQueue*(base: U64, index: U32, vqNum: U64, q: var VirtQueue): bool =
   if q.mem == NilPAddr or q.avail == nil or q.used == nil:
     return false

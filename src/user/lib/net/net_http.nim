@@ -1,3 +1,4 @@
+## Implements reusable HTTP request helpers over TCP or TLS.
 import ./net_tcp
 import ./net_tls
 import ../core/strutils
@@ -18,6 +19,7 @@ type
     tls*: bool
 
 
+## Clears url.
 proc clearUrl*(url: var HttpUrl) =
   var i = 0
   while i < HttpHostMax:
@@ -34,6 +36,7 @@ proc clearUrl*(url: var HttpUrl) =
   url.tls = false
 
 
+## Parses port.
 proc parsePort(s: cstring, pos: var int, port: var U16): bool =
   if s[pos] < '0' or s[pos] > '9':
     return false
@@ -52,6 +55,7 @@ proc parsePort(s: cstring, pos: var int, port: var U16): bool =
   true
 
 
+## Copies path from.
 proc copyPathFrom(url: var HttpUrl, s: cstring, pos: int): bool =
   var i = 0
   while s[pos + i] != '\0' and i < HttpPathMax - 1:
@@ -65,6 +69,7 @@ proc copyPathFrom(url: var HttpUrl, s: cstring, pos: int): bool =
   true
 
 
+## Parses http url.
 proc parseHttpUrl*(arg: cstring, url: var HttpUrl): bool =
   if arg == nil or arg[0] == '\0':
     return false
@@ -107,6 +112,7 @@ proc parseHttpUrl*(arg: cstring, url: var HttpUrl): bool =
   copyPathFrom(url, arg, pos)
 
 
+## Appends char.
 proc appendChar(buf: pointer, capacity: U32, pos: var U32, ch: char): bool =
   if pos >= capacity:
     return false
@@ -116,6 +122,7 @@ proc appendChar(buf: pointer, capacity: U32, pos: var U32, ch: char): bool =
   true
 
 
+## Appends cstring.
 proc appendCString(buf: pointer, capacity: U32, pos: var U32, s: cstring): bool =
   var i = 0
   while s[i] != '\0':
@@ -126,6 +133,7 @@ proc appendCString(buf: pointer, capacity: U32, pos: var U32, s: cstring): bool 
   true
 
 
+## Appends u16 decimal.
 proc appendU16Decimal(buf: pointer, capacity: U32, pos: var U32, value: U16): bool =
   var
     digits: array[5, char]
@@ -147,6 +155,7 @@ proc appendU16Decimal(buf: pointer, capacity: U32, pos: var U32, value: U16): bo
   true
 
 
+## Builds http get request with port.
 proc buildHttpGetRequestWithPort*(host, path: cstring, port: U16, includePort: bool,
                                   outBuf: pointer, capacity: U32): I32 =
   if host == nil or path == nil or outBuf == nil or capacity == 0:
@@ -172,10 +181,12 @@ proc buildHttpGetRequestWithPort*(host, path: cstring, port: U16, includePort: b
   I32(pos)
 
 
+## Builds http get request.
 proc buildHttpGetRequest*(host, path: cstring, outBuf: pointer, capacity: U32): I32 =
   buildHttpGetRequestWithPort(host, path, HttpDefaultPort, false, outBuf, capacity)
 
 
+## Performs HTTP tcp get start.
 proc httpTcpGetStart*(ip: U32, port: U16, host, path: cstring,
                       includePortInHost: bool = false): I32 =
   var reqBuf: array[HttpRequestMax, U8]
@@ -195,6 +206,7 @@ proc httpTcpGetStart*(ip: U32, port: U16, host, path: cstring,
   handle
 
 
+## Performs HTTP tls get start.
 proc httpTlsGetStart*(ip: U32, port: U16, host, path: cstring,
                       includePortInHost: bool = false): I32 =
   var reqBuf: array[HttpRequestMax, U8]
@@ -214,6 +226,7 @@ proc httpTlsGetStart*(ip: U32, port: U16, host, path: cstring,
   handle
 
 
+## Performs HTTP get start.
 proc httpGetStart*(ip: U32, port: U16, host, path: cstring, tls: bool,
                    includePortInHost: bool = false): I32 =
   if tls:
@@ -222,6 +235,7 @@ proc httpGetStart*(ip: U32, port: U16, host, path: cstring, tls: bool,
   httpTcpGetStart(ip, port, host, path, includePortInHost)
 
 
+## Performs HTTP read.
 proc httpRead*(handle: I32, buf: pointer, capacity: U32): I32 =
   if isTlsHandle(handle):
     return tlsReceiveHandle(handle, buf, capacity)
@@ -229,6 +243,7 @@ proc httpRead*(handle: I32, buf: pointer, capacity: U32): I32 =
   tcpReceive(handle, buf, capacity)
 
 
+## Performs HTTP close.
 proc httpClose*(handle: I32): I32 =
   if isTlsHandle(handle):
     return tlsCloseHandle(handle)
@@ -236,6 +251,7 @@ proc httpClose*(handle: I32): I32 =
   tcpClose(handle)
 
 
+## Performs HTTP tls version name.
 proc httpTlsVersionName*(handle: I32): cstring =
   if isTlsHandle(handle):
     return tlsVersionNameHandle(handle)
@@ -243,6 +259,7 @@ proc httpTlsVersionName*(handle: I32): cstring =
   cstring("none")
 
 
+## Performs HTTP tls cipher name.
 proc httpTlsCipherName*(handle: I32): cstring =
   if isTlsHandle(handle):
     return tlsCipherNameHandle(handle)
@@ -250,5 +267,6 @@ proc httpTlsCipherName*(handle: I32): cstring =
   cstring("none")
 
 
+## Performs HTTP tls last error name.
 proc httpTlsLastErrorName*(): cstring =
   tlsLastErrorName()

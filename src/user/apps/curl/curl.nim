@@ -1,3 +1,4 @@
+## Fetches HTTP or HTTPS URLs through the reusable network libraries.
 import ../../lib/core/io
 import ../../lib/net/net_dns
 import ../../lib/net/net_http
@@ -24,12 +25,14 @@ var
   parsedOptions: ParsedOptions
 
 
+## Prints curl usage information.
 proc printUsage() =
   write("usage: curl [-v|--tls-info] [-i|--include] <http-url|https-url|host|ip>[/path]\n")
   write("  -v, --tls-info    show negotiated TLS version and cipher\n")
   write("  -i, --include     include HTTP response headers\n")
 
 
+## Copies a positional URL argument into a fixed-size target buffer.
 proc copyArg(dst: var array[ArgCap, char], src: cstring): bool =
   var i = 0
   while src[i] != '\0' and i < ArgCap - 1:
@@ -43,6 +46,7 @@ proc copyArg(dst: var array[ArgCap, char], src: cstring): bool =
   true
 
 
+## Returns the expected byte for the HTTP header/body separator.
 proc headerSepByte(pos: U32): U8 =
   case pos
   of 0: U8('\r')
@@ -51,6 +55,7 @@ proc headerSepByte(pos: U32): U8 =
   else: U8('\n')
 
 
+## Parses curl options and extracts the single URL argument.
 proc parseCurlArgs(arg: cstring, verbose: var bool, includeHeaders: var bool,
                    outTarget: var array[ArgCap, char]): bool =
   if not parseUserArgs(arg, parsedArgs):
@@ -67,6 +72,7 @@ proc parseCurlArgs(arg: cstring, verbose: var bool, includeHeaders: var bool,
   copyArg(outTarget, positionalAt(parsedOptions, 0))
 
 
+## Prints negotiated TLS version and cipher for an HTTP handle.
 proc printTlsInfo(handle: I32) =
   write("TLS: ")
   write(httpTlsVersionName(handle))
@@ -76,6 +82,7 @@ proc printTlsInfo(handle: I32) =
   write("\n")
 
 
+## Writes an HTTP response chunk, optionally skipping response headers.
 proc writeHttpChunk(buf: pointer, len: U32, includeHeaders: bool,
                     headerDone: var bool, matchLen: var U32) =
   if includeHeaders or headerDone:
@@ -104,6 +111,7 @@ proc writeHttpChunk(buf: pointer, len: U32, includeHeaders: bool,
     inc i
 
 
+## Resolves the URL, performs the request, and streams the response.
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   var verbose = false
   var includeHeaders = false

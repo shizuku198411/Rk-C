@@ -1,8 +1,10 @@
+## Checks child-exit signal delivery after waiting for a child process.
 import ../../../lib/syscall_types
 import ../../lib/core/io
 import ../../lib/core/syscall
 
 
+## Prints a signalcheck failure and exits.
 proc fail(msg: cstring) {.noreturn.} =
   write("signalcheck: ")
   write(msg)
@@ -10,6 +12,7 @@ proc fail(msg: cstring) {.noreturn.} =
   sysExit(1)
 
 
+## Starts a child app, waits for it, and validates the signal queue.
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   discard arg
 

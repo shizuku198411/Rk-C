@@ -1,3 +1,4 @@
+## Implements the ChaCha20 stream cipher.
 import ./crypto_types
 import ../../core/syscall
 
@@ -6,10 +7,12 @@ const ChachaConst: array[4, U32] = [
 ]
 
 
+## Rotates a 32-bit word left.
 proc rotl(x: U32, n: int): U32 =
   (x shl n) or (x shr (32 - n))
 
 
+## Runs one ChaCha20 quarter round.
 proc quarterRound(a, b, c, d: var U32) =
   a = a + b
   d = rotl(d xor a, 16)
@@ -21,6 +24,7 @@ proc quarterRound(a, b, c, d: var U32) =
   b = rotl(b xor c, 7)
 
 
+## Performs ChaCha20 chacha20 block.
 proc chacha20Block*(key: pointer, counter: U32, nonce: pointer, outBlock: pointer) =
   var state: array[16, U32]
   var working: array[16, U32]
@@ -63,6 +67,7 @@ proc chacha20Block*(key: pointer, counter: U32, nonce: pointer, outBlock: pointe
     inc i
 
 
+## Performs ChaCha20 chacha20 xor.
 proc chacha20Xor*(key: pointer, counter: U32, nonce: pointer,
                   input: pointer, output: pointer, len: U32) =
   var streamBlock: array[64, U8]

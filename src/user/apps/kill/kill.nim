@@ -1,3 +1,4 @@
+## Requests procmgtd to terminate a process by pid.
 import ../../lib/core/io
 import ../../lib/ipc/ipc_request
 import ../../lib/ipc/service_client
@@ -11,6 +12,7 @@ var
   parsedArgs: UserArgs
 
 
+## Parses a positive decimal pid argument.
 proc parsePid(arg: cstring): I32 =
   if isEmpty(arg):
     return -1
@@ -27,10 +29,12 @@ proc parsePid(arg: cstring): I32 =
   pid
 
 
+## Returns the current process manager service pid.
 proc processManagerPid(): I32 =
   servicePidByKind(SysServiceKindProcess)
 
 
+## Sends a kill request to the process manager service.
 proc requestKill(targetPid: I32): I32 =
   let pid = processManagerPid()
   if pid <= 0:
@@ -45,10 +49,12 @@ proc requestKill(targetPid: I32): I32 =
   I32(responsePacket.arg0)
 
 
+## Prints kill usage information.
 proc printUsage() =
   write("usage: kill <pid>\n")
 
 
+## Parses a pid argument and requests process termination.
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   if not parseUserArgs(arg, parsedArgs):
     printUsage()

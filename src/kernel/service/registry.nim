@@ -1,3 +1,4 @@
+## Tracks registered services, readiness, and service pid ownership.
 import ../../lib/service_catalog
 import ../../lib/syscall_types
 import ../../lib/types
@@ -22,30 +23,36 @@ type
 var services: array[serviceMax, ServiceEntry]
 
 
+## Implements the register service kernel helper.
 proc registerService*(kind: ServiceKind, pid: int32, ready: bool = false) =
   services[kind].registered = true
   services[kind].ready = ready
   services[kind].pid = pid
 
 
+## Implements the unregister service kernel helper.
 proc unregisterService*(kind: ServiceKind) =
   services[kind].registered = false
   services[kind].ready = false
   services[kind].pid = 0
 
 
+## Implements the service registered kernel helper.
 proc serviceRegistered*(kind: ServiceKind): bool =
   services[kind].registered
 
 
+## Implements the service pid kernel helper.
 proc servicePid*(kind: ServiceKind): int32 =
   services[kind].pid
 
 
+## Implements the service ready kernel helper.
 proc serviceReady*(kind: ServiceKind): bool =
   services[kind].ready
 
 
+## Marks service ready.
 proc markServiceReady*(kind: ServiceKind, pid: int32): bool =
   if not services[kind].registered or services[kind].pid != pid:
     return false
@@ -58,10 +65,12 @@ proc markServiceReady*(kind: ServiceKind, pid: int32): bool =
   true
 
 
+## Implements the current is service kernel helper.
 proc currentIsService*(kind: ServiceKind): bool =
   currentProc != nil and services[kind].registered and currentProc.pid == services[kind].pid
 
 
+## Implements the service available kernel helper.
 proc serviceAvailable*(kind: ServiceKind): bool =
   if not services[kind].registered or not services[kind].ready:
     return false
@@ -70,6 +79,7 @@ proc serviceAvailable*(kind: ServiceKind): bool =
   p != nil and p.state != procZombie and p.state != procUnused
 
 
+## Returns whether service pid is true.
 proc isServicePid*(pid: int32): bool =
   var kind = low(ServiceKind)
 
@@ -81,6 +91,7 @@ proc isServicePid*(pid: int32): bool =
   false
 
 
+## Implements the sys service kind value kernel helper.
 proc sysServiceKindValue(kind: ServiceKind): U32 =
   case kind
   of serviceManager:
@@ -101,10 +112,12 @@ proc sysServiceKindValue(kind: ServiceKind): U32 =
     U32(0xffffffff'u32)
 
 
+## Implements the service required kernel helper.
 proc serviceRequired*(kind: ServiceKind): bool =
   serviceRequiredByKind(sysServiceKindValue(kind))
 
 
+## Implements the required services ready kernel helper.
 proc requiredServicesReady*(): bool =
   var kind = low(ServiceKind)
 
@@ -116,6 +129,7 @@ proc requiredServicesReady*(): bool =
   true
 
 
+## Implements the all services ready kernel helper.
 proc allServicesReady*(): bool =
   var kind = low(ServiceKind)
 

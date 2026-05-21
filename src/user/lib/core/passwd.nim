@@ -1,3 +1,4 @@
+## Parses and writes passwd records and reads login-style input lines.
 import ../../../lib/types
 import ./io
 import ./strutils
@@ -19,6 +20,7 @@ type
     home*: array[PasswdHomeMax, char]
 
 
+## Resets a passwd entry to empty strings and zero ids.
 proc clearEntry*(entry: var PasswdEntry) =
   var i = U32(0)
   while i < PasswdNameMax:
@@ -34,6 +36,7 @@ proc clearEntry*(entry: var PasswdEntry) =
   entry.gid = U32(0)
 
 
+## Copies one delimited passwd field into a fixed-size destination buffer.
 proc copyField(dst: var openArray[char], src: cstring, startPos, endPos: U32): bool =
   if dst.len == 0:
     return false
@@ -54,6 +57,7 @@ proc copyField(dst: var openArray[char], src: cstring, startPos, endPos: U32): b
   true
 
 
+## Parses a delimited passwd field as an unsigned 32-bit integer.
 proc parseFieldU32(line: cstring, startPos, endPos: U32, value: var U32): bool =
   var buf: array[16, char]
   if not copyField(buf, line, startPos, endPos):
@@ -62,6 +66,7 @@ proc parseFieldU32(line: cstring, startPos, endPos: U32, value: var U32): bool =
   parseU32(cast[cstring](addr buf[0]), value)
 
 
+## Trims CR/LF bytes from the end of a passwd line field.
 proc trimLineEnd(line: cstring, startPos, pos: U32): U32 =
   var endPos = pos
   while endPos > startPos and
@@ -71,6 +76,7 @@ proc trimLineEnd(line: cstring, startPos, pos: U32): U32 =
   endPos
 
 
+## Parses one passwd database line into a PasswdEntry.
 proc parsePasswdLine*(line: cstring, entry: var PasswdEntry): bool =
   clearEntry(entry)
 
@@ -122,6 +128,7 @@ proc parsePasswdLine*(line: cstring, entry: var PasswdEntry): bool =
   true
 
 
+## Writes one PasswdEntry as a passwd database line.
 proc writePasswdLine*(dst: pointer, capacity: U32, entry: PasswdEntry): U32 =
   let outBuf = cast[ptr UncheckedArray[char]](dst)
   var pos = U32(0)
@@ -164,10 +171,12 @@ proc writePasswdLine*(dst: pointer, capacity: U32, entry: PasswdEntry): U32 =
   pos
 
 
+## Writes the public passwd representation returned to clients.
 proc writePasswdPublicLine*(dst: pointer, capacity: U32, entry: PasswdEntry): U32 =
   writePasswdLine(dst, capacity, entry)
 
 
+## Clears a login input buffer.
 proc clearBuf(buf: var array[LoginLineMax, char]) =
   var i = 0
   while i < LoginLineMax:
@@ -175,6 +184,7 @@ proc clearBuf(buf: var array[LoginLineMax, char]) =
     inc i
 
 
+## Reads a login or password line with optional terminal echo.
 proc readLoginLine*(buf: var array[LoginLineMax, char], echo: bool): cstring =
   clearBuf(buf)
 

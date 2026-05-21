@@ -1,3 +1,4 @@
+## Implements the physical page allocator and bitmap accounting.
 import ../../lib/mem
 import ../../lib/types
 import ../dev/console
@@ -23,16 +24,20 @@ var
   bitmapPageCount: U64
   memoryInitialized: bool
 
+## Calculates total page.
 func calcTotalPage(start, last: PAddr): U64 =
   (last - start) div PageSize
 
+## Calculates bitmap bytes.
 func calcBitmapBytes(pageCount: U64): U64 =
   (pageCount + 7'u64) div 8'u64
 
+## Calculates bitmap page count.
 func calcBitmapPageCount(pageCount: U64): U64 =
   alignUp(calcBitmapBytes(pageCount), PageSize) div PageSize
 
 
+## Initializes memory allocator.
 proc initMemoryAllocator*(start, last: PAddr): MemoryInfo =
   let freeStart = alignUp(start, PageSize)
   let freeEnd = alignDown(last, PageSize)
@@ -74,6 +79,7 @@ proc initMemoryAllocator*(start, last: PAddr): MemoryInfo =
   )
 
 
+## Implements the memory init kernel helper.
 proc memoryInit*(): MemoryInfo =
   initMemoryAllocator(
     cast[PAddr](addr freeRamStartSym),
@@ -81,18 +87,22 @@ proc memoryInit*(): MemoryInfo =
   )
 
 
+## Implements the bitmap check kernel helper.
 proc bitmapCheck(idx: U64): bool =
   ((bitmap[idx div 8] shr (idx mod 8)) and 1'u8) != 0
 
 
+## Implements the bitmap set kernel helper.
 proc bitmapSet(idx: U64) =
   bitmap[idx div 8] = bitmap[idx div 8] or U8(1'u8 shl (idx mod 8))
 
 
+## Implements the bitmap clear kernel helper.
 proc bitmapClear(idx: U64) =
   bitmap[idx div 8] = bitmap[idx div 8] and not U8(1'u8 shl (idx mod 8))
 
 
+## Implements the palloc kernel helper.
 proc palloc*(n: U64): PAddr =
   if not memoryInitialized:
     panic("memory allocator is not initialized")
@@ -124,6 +134,7 @@ proc palloc*(n: U64): PAddr =
   NilPAddr
 
 
+## Implements the pfree kernel helper.
 proc pfree*(paddr: PAddr, n: U64): int =
   if not memoryInitialized:
     panic("memory allocator is not initialized")
@@ -154,6 +165,7 @@ proc pfree*(paddr: PAddr, n: U64): int =
   0
 
 
+## Implements the bitmap info kernel helper.
 proc bitmapInfo*(): BitmapInfo =
   if not memoryInitialized:
     panic("memory allocator is not initialized")

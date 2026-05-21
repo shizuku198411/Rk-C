@@ -1,3 +1,4 @@
+## Enables syscall tracing globally, for a pid, or around one command.
 import ../../lib/core/io
 import ../../lib/core/args
 import ../../lib/core/strutils
@@ -16,11 +17,13 @@ var
   parsedArgs: UserArgs
 
 
+## Advances a parser cursor over whitespace.
 proc skipSpaces(arg: cstring, pos: var U32) =
   while isSpace(arg[pos]):
     inc pos
 
 
+## Splits a command string into executable name and raw child arguments.
 proc parseCommand(arg: cstring): bool =
   var pos = U32(0)
   skipSpaces(arg, pos)
@@ -53,6 +56,7 @@ proc parseCommand(arg: cstring): bool =
   true
 
 
+## Builds a /bin/<command> path for traced command execution.
 proc buildBinPath(): cstring =
   pathBuf[0] = '/'
   pathBuf[1] = 'b'
@@ -72,6 +76,7 @@ proc buildBinPath(): cstring =
   cast[cstring](addr pathBuf[0])
 
 
+## Starts one child command with tracing enabled until it exits.
 proc traceCommand(arg: cstring, verbose: bool) =
   if not parseCommand(arg):
     write("invalid command\n")
@@ -119,6 +124,7 @@ proc traceCommand(arg: cstring, verbose: bool) =
   sysExit(status)
 
 
+## Prints stracectl usage information.
 proc printUsage() =
   write("usage:\n")
   write("  stracectl on\n")
@@ -130,6 +136,7 @@ proc printUsage() =
   write("  -v    include verbose syscall details\n")
 
 
+## Dispatches trace on, off, pid, or command mode.
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   if not parseUserArgs(arg, parsedArgs) or parsedArgs.argc == 0:
     printUsage()

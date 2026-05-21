@@ -1,3 +1,4 @@
+## Implements the interactive shell command loop and built-in dispatch.
 import ../../lib/core/io
 import ../../lib/core/strutils
 import ../../lib/core/syscall
@@ -10,6 +11,7 @@ import ./prompt
 import ./state
 
 
+## Starts the shell loop, reads commands, and dispatches built-ins or apps.
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   discard arg
 

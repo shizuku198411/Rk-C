@@ -1,3 +1,4 @@
+## Provides client helpers for resolving users, groups, and authentication.
 import ../../../lib/syscall_types
 import ../ipc/ipc_request
 import ../ipc/service_client
@@ -13,10 +14,12 @@ var
   userLine: array[GroupLineMax, char]
 
 
+## Resets an IPC packet before building a userd request.
 proc clearPacket(packet: var SysIpcPacket) =
   packet = SysIpcPacket()
 
 
+## Copies one C string argument into a userd request packet.
 proc copyCStringToPacket(packet: var SysIpcPacket, value: cstring): bool =
   var i = U32(0)
   while value[i] != '\0':
@@ -31,6 +34,7 @@ proc copyCStringToPacket(packet: var SysIpcPacket, value: cstring): bool =
   true
 
 
+## Copies username and password strings into one authentication packet.
 proc copyAuthToPacket(packet: var SysIpcPacket, name, password: cstring): bool =
   var pos = U32(0)
 
@@ -63,6 +67,7 @@ proc copyAuthToPacket(packet: var SysIpcPacket, name, password: cstring): bool =
   true
 
 
+## Copies the current userd reply payload into a reusable line buffer.
 proc copyReplyLine(): cstring =
   var i = U32(0)
   while i + U32(1) < GroupLineMax and i < userReply.len:
@@ -73,6 +78,7 @@ proc copyReplyLine(): cstring =
   cast[cstring](addr userLine[0])
 
 
+## Sends a user resolve request and parses the returned passwd entry.
 proc requestUser(op: U32, name: cstring, uid: U32, entry: var PasswdEntry): bool =
   let pid = servicePidByKind(SysServiceKindUser)
   if pid <= 0:
@@ -93,6 +99,7 @@ proc requestUser(op: U32, name: cstring, uid: U32, entry: var PasswdEntry): bool
   parsePasswdLine(copyReplyLine(), entry)
 
 
+## Resolves a username into a passwd entry through userd.
 proc resolveUser*(name: cstring, entry: var PasswdEntry): bool =
   if isEmpty(name):
     return false
@@ -100,10 +107,12 @@ proc resolveUser*(name: cstring, entry: var PasswdEntry): bool =
   requestUser(SysIpcOpUserResolveNameRequest, name, U32(0), entry)
 
 
+## Resolves a uid into a passwd entry through userd.
 proc resolveUid*(uid: U32, entry: var PasswdEntry): bool =
   requestUser(SysIpcOpUserResolveUidRequest, nil, uid, entry)
 
 
+## Authenticates a username and password through userd.
 proc authenticateUser*(name, password: cstring, entry: var PasswdEntry): bool =
   if isEmpty(name) or password == nil:
     return false
@@ -126,6 +135,7 @@ proc authenticateUser*(name, password: cstring, entry: var PasswdEntry): bool =
   parsePasswdLine(copyReplyLine(), entry)
 
 
+## Requests a password update for the target uid through userd.
 proc setUserPassword*(uid: U32, password: cstring): bool =
   if password == nil:
     return false
@@ -146,6 +156,7 @@ proc setUserPassword*(uid: U32, password: cstring): bool =
   userReply.arg0 == U64(0)
 
 
+## Sends a group resolve request and parses the returned group entry.
 proc requestGroup(op: U32, name: cstring, gid: U32, entry: var GroupEntry): bool =
   let pid = servicePidByKind(SysServiceKindUser)
   if pid <= 0:
@@ -166,6 +177,7 @@ proc requestGroup(op: U32, name: cstring, gid: U32, entry: var GroupEntry): bool
   parseGroupLine(copyReplyLine(), entry)
 
 
+## Resolves a group name into a group entry through userd.
 proc resolveGroup*(name: cstring, entry: var GroupEntry): bool =
   if isEmpty(name):
     return false
@@ -173,5 +185,6 @@ proc resolveGroup*(name: cstring, entry: var GroupEntry): bool =
   requestGroup(SysIpcOpGroupResolveNameRequest, name, U32(0), entry)
 
 
+## Resolves a gid into a group entry through userd.
 proc resolveGid*(gid: U32, entry: var GroupEntry): bool =
   requestGroup(SysIpcOpGroupResolveGidRequest, nil, gid, entry)

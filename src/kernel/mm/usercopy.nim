@@ -1,3 +1,4 @@
+## Validates user address ranges and copies data across user/kernel memory.
 import ../../arch/riscv64/arch
 import ../../lib/mem
 import ../../lib/types
@@ -11,10 +12,12 @@ const
   Sv39UserTop = U64(1) shl 38 # 0x0000004000000000
 
 
+## Returns whether user canocnical va is true.
 proc isUserCanocnicalVa(va: U64): bool =
   va < Sv39UserTop
 
 
+## Checks or computes the within range.
 proc rangeWithin(start, size, base, limit: U64): bool =
   if size == U64(0):
     return true
@@ -28,6 +31,7 @@ proc rangeWithin(start, size, base, limit: U64): bool =
   endExclusive <= limit
 
 
+## Returns whether current user va range is true.
 proc isCurrentUserVaRange(userAddr, size: U64): bool =
   if currentProc == nil or not currentProc.user.active:
     return false
@@ -48,20 +52,24 @@ proc isCurrentUserVaRange(userAddr, size: U64): bool =
   false
 
 
+## Implements the page remaining kernel helper.
 proc pageRemaining(va: U64): U64 = 
   PageSize - (va and (PageSize - U64(1)))
 
 
+## Implements the user access enable kernel helper.
 proc userAccessEnable(): U64 =
   let old = arch.readSstatus()
   arch.writeSstatus(old or SstatusSum)
   old
 
 
+## Implements the user access restore kernel helper.
 proc userAccessRestore(old: U64) =
   arch.writeSstatus(old)
 
 
+## Returns whether validate user range is valid.
 proc validateUserRange*(userAddr, size: U64, writable: bool): bool =
   if size == 0:
     return true
@@ -99,6 +107,7 @@ proc validateUserRange*(userAddr, size: U64, writable: bool): bool =
   true
 
 
+## Copies from user.
 proc copyFromUser*(dst: pointer, src: U64, size: U64): int =
   if dst == nil and size > 0:
     return -1
@@ -111,6 +120,7 @@ proc copyFromUser*(dst: pointer, src: U64, size: U64): int =
   0
 
 
+## Copies to user.
 proc copyToUser*(dst: U64, src: pointer, size: U64): int =
   if src == nil and size > 0:
     return -1
@@ -123,6 +133,7 @@ proc copyToUser*(dst: U64, src: pointer, size: U64): int =
   0
 
 
+## Copies cstring chunk.
 proc copyCStringChunk(
   dst: ptr UncheckedArray[char],
   src: U64,
@@ -148,6 +159,7 @@ proc copyCStringChunk(
   false
 
 
+## Copies user cstring.
 proc copyUserCString*(dst: pointer, src: U64, capacity: U64): int =
   if dst == nil or src == 0.U64 or capacity == 0.U64:
     return -1

@@ -1,3 +1,4 @@
+## Exercises fault paths for bad user pointers, text writes, and stack exec.
 import ../../lib/core/args
 import ../../lib/core/io
 import ../../lib/core/strutils
@@ -20,13 +21,16 @@ void faultcheck_write_user_text(void) {
 """.}
 
 
+## Imports a helper that intentionally writes to the user text segment.
 proc writeUserText() {.importc: "faultcheck_write_user_text", cdecl.}
 
 
+## Prints faultcheck usage information.
 proc printUsage() =
   write("usage: faultcheck <bad-cstring|write-text|exec-stack>\n")
 
 
+## Attempts to pass an invalid C string pointer to a syscall.
 proc badCString() =
   let bad = cast[cstring](U64(0x0000004000000000'u64))
   let fd = sysOpen(bad, SysOpenRead)
@@ -39,6 +43,7 @@ proc badCString() =
   sysExit(1)
 
 
+## Attempts to write into the process text segment.
 proc writeText() =
   write("write-text: touching text\n")
   writeUserText()
@@ -46,6 +51,7 @@ proc writeText() =
   sysExit(1)
 
 
+## Attempts to execute code placed on the stack.
 proc execStack() =
   var code: array[8, U8]
 
@@ -60,6 +66,7 @@ proc execStack() =
   sysExit(1)
 
 
+## Dispatches the requested fault scenario.
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   if not parseUserArgs(arg, parsedArgs):
     printUsage()

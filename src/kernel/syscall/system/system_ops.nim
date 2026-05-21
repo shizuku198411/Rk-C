@@ -1,3 +1,4 @@
+## Implements system-level syscall handlers such as time, entropy, and shutdown.
 import ../../../arch/riscv64/arch
 import ../../../lib/calc
 import ../../../lib/syscall_types
@@ -18,9 +19,11 @@ var
   kmsgReadBuf: array[SysKmsgMax, char]
 
 
+## Implements the sbi shutdown kernel helper.
 proc sbiShutdown() {.importc: "sbi_shutdown", cdecl.}
 
 
+## Implements the entropy mix kernel helper.
 proc entropyMix(value: U64): U64 =
   var z = value
   z = (z xor (z shr 30)) * U64(0xbf58476d1ce4e5b9'u64)
@@ -28,6 +31,7 @@ proc entropyMix(value: U64): U64 =
   z xor (z shr 31)
 
 
+## Implements the next entropy64 kernel helper.
 proc nextEntropy64(): U64 =
   var pidPart = U64(0)
   if currentProc != nil:
@@ -39,10 +43,12 @@ proc nextEntropy64(): U64 =
   entropyMix(entropyState)
 
 
+## Handles the ticks syscall operation.
 proc syscallTicks*(): U64 =
   timerTickCount
 
 
+## Handles the cpu info syscall operation.
 proc syscallCpuInfo*(outInfo: U64): U64 =
   if outInfo == 0:
     return U64(-1'i64)
@@ -86,6 +92,7 @@ proc syscallCpuInfo*(outInfo: U64): U64 =
   0
 
 
+## Handles the kmsg syscall operation.
 proc syscallKmsg*(outBuf, capacity: U64): U64 =
   if outBuf == U64(0) or capacity == U64(0) or capacity > U64(SysKmsgMax):
     return U64(-1'i64)
@@ -100,6 +107,7 @@ proc syscallKmsg*(outBuf, capacity: U64): U64 =
   size
 
 
+## Handles the shutdown syscall operation.
 proc syscallShutdown*(): U64 =
   if not canSyscallShutdown():
     return U64(-1'i64)
@@ -108,11 +116,13 @@ proc syscallShutdown*(): U64 =
   0
 
 
+## Handles the yield syscall operation.
 proc syscallYield*(): U64 =
   yieldCpu()
   0
 
 
+## Handles the sleep syscall operation.
 proc syscallSleep*(ticks: U64): U64 =
   if ticks == 0:
     return 0
@@ -121,6 +131,7 @@ proc syscallSleep*(ticks: U64): U64 =
   0
 
 
+## Handles the get date time syscall operation.
 proc syscallGetDateTime*(outDateTime: U64): U64 =
   if outDateTime == 0:
     return U64(-1'i64)
@@ -132,6 +143,7 @@ proc syscallGetDateTime*(outDateTime: U64): U64 =
   0
 
 
+## Handles the entropy syscall operation.
 proc syscallEntropy*(outBuf: U64, size: U64): U64 =
   if size == 0:
     return 0

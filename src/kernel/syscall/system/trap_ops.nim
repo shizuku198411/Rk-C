@@ -1,3 +1,4 @@
+## Implements trap diagnostic syscall handlers.
 import ../../../lib/syscall_types
 import ../../../lib/types
 import ../../mm/usercopy
@@ -15,6 +16,7 @@ const
 var trapCount* {.volatile.}: SysTrapCount
 
 
+## Handles the trap count syscall operation.
 proc syscallTrapCount*(outEntries: U64): U64 =
   if outEntries == 0:
     return U64(-1'i64)
@@ -25,6 +27,7 @@ proc syscallTrapCount*(outEntries: U64): U64 =
   0
 
 
+## Handles the trace ctl syscall operation.
 proc syscallTraceCtl*(cmd: U64, value: U64): U64 =
   if not canSyscallTraceCtl():
     return U64(-1'i64)

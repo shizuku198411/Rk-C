@@ -1,16 +1,20 @@
+## Provides editable shell input with cursor movement and history browsing.
 import ../../lib/core/io
 import ./history
 import ./state
 
 
+## Moves the terminal cursor one cell to the left.
 proc moveCursorLeft() =
   write("\x1b[D")
 
 
+## Moves the terminal cursor one cell to the right.
 proc moveCursorRight() =
   write("\x1b[C")
 
 
+## Clears the current editable line from the terminal and state buffers.
 proc clearCurrentLine(len: var int, cursor: var int) =
   while cursor > 0:
     write("\x1b[D")
@@ -29,6 +33,7 @@ proc clearCurrentLine(len: var int, cursor: var int) =
   cursor = 0
 
 
+## Replaces the editable line with a selected history entry.
 proc loadHistoryLine(
   index: int,
   len: var int,
@@ -47,6 +52,7 @@ proc loadHistoryLine(
     inc i
 
 
+## Reads one editable command line with arrows, backspace, and history keys.
 proc readLine*(): cstring =
   var
     len = 0

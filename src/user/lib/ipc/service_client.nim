@@ -1,3 +1,4 @@
+## Provides userland service lookup helpers.
 import ../core/syscall
 
 const
@@ -6,6 +7,7 @@ const
 var serviceInfos: array[ServiceClientCap, SysServiceInfo]
 
 
+## Handles service catalog data for pid by kind.
 proc servicePidByKind*(kind: U32): I32 =
   let count = sysServiceList(addr serviceInfos[0], U64(ServiceClientCap))
   if count < 0:
@@ -20,6 +22,7 @@ proc servicePidByKind*(kind: U32): I32 =
   -1
 
 
+## Looks up registered service pid by kind.
 proc registeredServicePidByKind*(kind: U32): I32 =
   let count = sysServiceList(addr serviceInfos[0], U64(ServiceClientCap))
   if count < 0:

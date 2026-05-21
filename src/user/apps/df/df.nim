@@ -1,3 +1,4 @@
+## Prints filesystem capacity and usage information from procfs.
 import ../../lib/core/args
 import ../../lib/core/io
 import ../../lib/core/strutils
@@ -11,11 +12,13 @@ var
   buffer: array[DfBufferSize, char]
 
 
+## Prints df usage information.
 proc printUsage() =
   write("usage: df\n")
   write("       df --help\n")
 
 
+## Reads /proc/fsinfo and writes the result to stdout.
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   if not parseUserArgs(arg, parsedArgs):
     printUsage()

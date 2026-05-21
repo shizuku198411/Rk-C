@@ -1,3 +1,4 @@
+## Creates one or more directories from command-line paths.
 import ../../lib/core/io
 import ../../lib/core/args
 import ../../lib/core/pathutils
@@ -7,10 +8,12 @@ import ../../lib/core/syscall
 var parsedArgs: UserArgs
 
 
+## Prints mkdir usage information.
 proc printUsage() =
   write("usage: mkdir <path> [path...]\n")
 
 
+## Parses arguments and creates each requested directory.
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   if not parseUserArgs(arg, parsedArgs):
     printUsage()

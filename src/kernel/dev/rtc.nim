@@ -1,3 +1,4 @@
+## Reads RTC time and formats kernel date/time strings.
 import ../../lib/types
 import ../../lib/syscall_types
 
@@ -9,12 +10,14 @@ const
   NsecPerSec = U64(1_000_000_000)
 
 
+## Implements the rtc read32 kernel helper.
 proc rtcRead32(off: U32): U32 =
   let mmioAddr = GoldfishRtcBase + U64(off)
   var value {.volatile.}: U32 = cast[ptr U32](mmioAddr)[]
   value
 
 
+## Implements the rtc now ns kernel helper.
 proc rtcNowNS(): U64 =
   var
     hi1: U32
@@ -32,10 +35,12 @@ proc rtcNowNS(): U64 =
   (U64(hi2) shl 32) or U64(lo)
 
 
+## Returns whether leap year is true.
 proc isLeapYear(year: U32): bool =
   (year mod 4 == 0 and year mod 100 != 0) or (year mod 400 == 0)
 
 
+## Implements the days in year kernel helper.
 proc daysInYear(year: U32): U32 =
   if isLeapYear(year):
     366
@@ -43,6 +48,7 @@ proc daysInYear(year: U32): U32 =
     365
 
 
+## Implements the days in month kernel helper.
 proc daysInMonth(year: U32, month: U32): U32 =
   case month
   of 1: 31
@@ -64,6 +70,7 @@ proc daysInMonth(year: U32, month: U32): U32 =
   else: 0
 
 
+## Implements the unix seconds to date time kernel helper.
 proc unixSecondsToDateTime(secInput: U64): SysDateTime =
   var sec = secInput
 
@@ -91,10 +98,12 @@ proc unixSecondsToDateTime(secInput: U64): SysDateTime =
   result.day = U32(days) + 1
 
 
+## Implements the now date time kernel helper.
 proc nowDateTime*(): SysDateTime =
   unixSecondsToDateTime(rtcNowNS() div NsecPerSec)
 
 
+## Implements the put2 kernel helper.
 proc put2(buf: var array[32, char], pos: var U32, value: U32) =
   buf[pos] = char(ord('0') + ((value div 10) mod 10))
   inc pos
@@ -102,6 +111,7 @@ proc put2(buf: var array[32, char], pos: var U32, value: U32) =
   inc pos
 
 
+## Implements the put4 kernel helper.
 proc put4(buf: var array[32, char], pos: var U32, value: U32) =
   buf[pos] = char(ord('0') + ((value div 1000) mod 10))
   inc pos
@@ -113,6 +123,7 @@ proc put4(buf: var array[32, char], pos: var U32, value: U32) =
   inc pos
 
 
+## Implements the rtc ns to cstring kernel helper.
 proc rtcNsToCString*(ns: U64): cstring =
   var buf {.global.}: array[32, char]
   var pos: U32 = 0
@@ -147,6 +158,7 @@ proc rtcNsToCString*(ns: U64): cstring =
   cast[cstring](addr buf[0])
 
 
+## Implements the now cstring kernel helper.
 proc nowCString*(): cstring =
   let ns = rtcNowNS()
   rtcNsToCString(ns)

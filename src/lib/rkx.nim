@@ -1,3 +1,4 @@
+## Defines the RKX executable file format structures and constants.
 import ./types
 
 const

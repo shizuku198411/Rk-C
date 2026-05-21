@@ -1,17 +1,21 @@
+## Provides helpers for process file descriptor lookup and validation.
 import ../../lib/fixed_string
 import ../../lib/syscall_types
 import ../../lib/types
 import ../task/process
 
 
+## Copies fd path.
 proc copyFdPath*(entry: var FdEntry, path: cstring) =
   discard copyCString(entry.path, path)
 
 
+## Implements the fd path kernel helper.
 proc fdPath*(entry: var FdEntry): cstring =
   cast[cstring](addr entry.path[0])
 
 
+## Implements the device kind for path kernel helper.
 proc deviceKindForPath*(path: cstring): U32 =
   if cstringEq(path, "/dev/stdin"):
     return SysFdKindStdin
@@ -25,11 +29,13 @@ proc deviceKindForPath*(path: cstring): U32 =
   SysFdKindFile
 
 
+## Returns whether fd is valid.
 proc validFd*(fd: I32): bool =
   fd >= 0 and fd < I32(SysFdMax) and currentProc != nil and
     currentProc.files.entries[U32(fd)].used
 
 
+## Allocates fd.
 proc allocFd*(first: U32 = 3): I32 =
   if currentProc == nil:
     return -1
@@ -43,6 +49,7 @@ proc allocFd*(first: U32 = 3): I32 =
   -1
 
 
+## Finds free fd.
 proc findFreeFd*(exclude: I32 = -1, first: U32 = 3): I32 =
   if currentProc == nil:
     return -1

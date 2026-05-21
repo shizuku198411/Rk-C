@@ -1,3 +1,4 @@
+## Controls and inspects supervised services through svcmgtd.
 import ../../lib/core/io
 import ../../lib/core/cli
 import ../../lib/ipc/ipc_request
@@ -17,6 +18,7 @@ var
   parsedArgs: UserArgs
 
 
+## Prints svc usage information.
 proc printUsage() =
   write("usage:\n")
   write("  svc list\n")
@@ -28,6 +30,7 @@ proc printUsage() =
   write("  svc restart <service>\n")
 
 
+## Lists registered services directly from the kernel service registry.
 proc listServices() =
   let count = sysServiceList(addr services[0], U64(ServiceCap))
   if count < 0:
@@ -49,10 +52,12 @@ proc listServices() =
     inc i
 
 
+## Returns the service manager pid.
 proc managerPid(): I32 =
   servicePidByKind(SysServiceKindManager)
 
 
+## Copies a service name argument into the request packet payload.
 proc copyNameToPacket(name: cstring) =
   var i = U32(0)
   while i + 1 < U32(SysIpcMessageMax) and name != nil and name[i] != '\0':
@@ -63,6 +68,7 @@ proc copyNameToPacket(name: cstring) =
   requestPacket.len = i
 
 
+## Sends a command request to svcmgtd and prints any textual response.
 proc requestManager(op, expectedOp: U32, name: cstring = nil, arg0: U64 = U64(0)) =
   let pid = managerPid()
   if pid <= 0:
@@ -85,6 +91,7 @@ proc requestManager(op, expectedOp: U32, name: cstring = nil, arg0: U64 = U64(0)
     sysExit(1)
 
 
+## Requests a service restart.
 proc restartService() =
   if parsedArgs.argc != 2:
     printUsage()
@@ -93,6 +100,7 @@ proc restartService() =
   requestManager(SysIpcOpSvcRestart, SysIpcOpSvcCommandResponse, argAt(parsedArgs, 1))
 
 
+## Requests a service start.
 proc startService() =
   if parsedArgs.argc != 2:
     printUsage()
@@ -101,6 +109,7 @@ proc startService() =
   requestManager(SysIpcOpSvcStart, SysIpcOpSvcCommandResponse, argAt(parsedArgs, 1))
 
 
+## Requests a service stop.
 proc stopService() =
   if parsedArgs.argc != 2:
     printUsage()
@@ -109,6 +118,7 @@ proc stopService() =
   requestManager(SysIpcOpSvcStop, SysIpcOpSvcCommandResponse, argAt(parsedArgs, 1))
 
 
+## Requests service status, optionally for one service.
 proc statusServices() =
   if parsedArgs.argc > 2:
     printUsage()
@@ -123,6 +133,7 @@ proc statusServices() =
   requestManager(SysIpcOpSvcStatusRequest, SysIpcOpSvcStatusResponse, name)
 
 
+## Requests only degraded service status from svcmgtd.
 proc degradedServices() =
   if parsedArgs.argc != 1:
     printUsage()
@@ -131,6 +142,7 @@ proc degradedServices() =
   requestManager(SysIpcOpSvcStatusRequest, SysIpcOpSvcStatusResponse, nil, U64(1))
 
 
+## Requests service manager log output.
 proc serviceLogs() =
   if parsedArgs.argc != 1:
     printUsage()
@@ -139,6 +151,7 @@ proc serviceLogs() =
   requestManager(SysIpcOpSvcLogsRequest, SysIpcOpSvcLogsResponse)
 
 
+## Dispatches svc subcommands.
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   if not parseUserArgs(arg, parsedArgs):
     printUsage()

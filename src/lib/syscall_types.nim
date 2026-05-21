@@ -1,3 +1,4 @@
+## Defines shared syscall-facing structures and constants.
 import types
 
 const

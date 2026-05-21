@@ -1,3 +1,4 @@
+## Implements low-level VirtIO block device access.
 import ../../arch/riscv64/arch
 import ../../lib/types
 import ../dev/console
@@ -31,27 +32,33 @@ var
   initialized: bool
 
 
+## Implements the mmio read kernel helper.
 proc mmioRead(off: U64): U32 =
   virtioMmioRead(mmioBase, off)
 
 
+## Implements the mmio write kernel helper.
 proc mmioWrite(off: U64, val: U32) =
   virtioMmioWrite(mmioBase, off, val)
 
 
+## Finds blk.
 proc findBlk(): bool =
   scanVirtioMmio(VirtioDevBlock, mmioBase)
 
 
+## Sets setup vq layout.
 proc setupVqLayout() =
   if not resetVirtQueue(vq, VqNum, VqBytes, VqAlign):
     panic("virtio vq alloc failed")
 
 
+## Sets setup queue.
 proc setupQueue(): bool =
   setupVirtQueue(mmioBase, 0, VqNum, vq)
 
 
+## Configures device.
 proc configureDevice(): bool =
   mmioWrite(RegStatus, 0)
   mmioWrite(RegStatus, StatusAcknowledge)
@@ -90,6 +97,7 @@ proc configureDevice(): bool =
   true
 
 
+## Reads capacity.
 proc readCapacity(): bool =
   let lo = U64(mmioRead(RegConfig + 0))
   let hi = U64(mmioRead(RegConfig + 4))
@@ -97,6 +105,7 @@ proc readCapacity(): bool =
   capacityBlocks != 0
 
 
+## Implements the recover device kernel helper.
 proc recoverDevice(): bool =
   initialized = false
   setupVqLayout()
@@ -110,6 +119,7 @@ proc recoverDevice(): bool =
   true
 
 
+## Implements the do io once kernel helper.
 proc doIoOnce(typ: U32, blockIndex: U64, buf: pointer): int =
   reqHdr.typ = typ
   reqHdr.reserved = 0
@@ -173,6 +183,7 @@ proc doIoOnce(typ: U32, blockIndex: U64, buf: pointer): int =
   0
 
 
+## Implements the do io kernel helper.
 proc doIo(typ: U32, blockIndex: U64, buf: pointer): int =
   var attempt = 0
   while attempt <= IoRetryMax:
@@ -191,6 +202,7 @@ proc doIo(typ: U32, blockIndex: U64, buf: pointer): int =
   -1
 
 
+## Implements the blockdev init kernel helper.
 proc blockdevInit*() =
   if not findBlk():
     panic("virtio-blk not found")
@@ -209,6 +221,7 @@ proc blockdevInit*() =
   putChar('\n')
 
 
+## Implements the block read kernel helper.
 proc blockRead*(blockIndex: U64, outBlock: pointer): int =
   if not initialized or outBlock == nil:
     return -1
@@ -217,6 +230,7 @@ proc blockRead*(blockIndex: U64, outBlock: pointer): int =
   doIo(VirtioBlkIn, blockIndex, outBlock)
 
 
+## Implements the block write kernel helper.
 proc blockWrite*(blockIndex: U64, inBlock: pointer): int =
   if not initialized or inBlock == nil:
     return -1

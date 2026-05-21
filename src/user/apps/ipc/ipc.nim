@@ -1,3 +1,4 @@
+## Sends or receives simple process-local IPC messages.
 import ../../lib/core/io
 import ../../lib/core/args
 import ../../lib/core/strutils
@@ -12,6 +13,7 @@ var
   messageBuf: array[ArgMax, char]
 
 
+## Parses a decimal pid argument for IPC send.
 proc parsePid(s: cstring, pid: var I32): bool =
   if s[0] < '0' or s[0] > '9':
     return false
@@ -29,12 +31,14 @@ proc parsePid(s: cstring, pid: var I32): bool =
   true
 
 
+## Prints ipc usage information.
 proc printUsage() =
   write("usage:\n")
   write("  ipc send <pid> <message>\n")
   write("  ipc receive\n")
 
 
+## Sends the requested message to the target pid.
 proc sendMessage() =
   var pid = I32(0)
   if parsedArgs.argc < 3 or not parsePid(argAt(parsedArgs, 1), pid):
@@ -50,6 +54,7 @@ proc sendMessage() =
     sysExit(1)
 
 
+## Receives one IPC message and prints sender and body.
 proc receiveMessage() =
   if sysIpcReceive(addr msg) != 0:
     write("ipc: receive failed\n")
@@ -62,6 +67,7 @@ proc receiveMessage() =
   write("\n")
 
 
+## Dispatches ipc send or receive mode.
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   discard ArgMax
 

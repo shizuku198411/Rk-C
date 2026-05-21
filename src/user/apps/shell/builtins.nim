@@ -1,3 +1,4 @@
+## Implements shell built-in commands for directory, identity, and diagnostics.
 import ./history
 import ../../lib/core/io
 import ../../lib/core/pathutils
@@ -7,6 +8,7 @@ import ../../lib/core/syscall
 import ../../lib/core/userdb
 
 
+## Changes the current working directory after resolving the requested path.
 proc changeDirectory*(path: cstring) =
   if isEmpty(path):
     write("usage: cd <path>\n")
@@ -21,6 +23,7 @@ proc changeDirectory*(path: cstring) =
     write("cd: failed\n")
 
 
+## Authenticates and switches the interactive shell to another user account.
 proc switchUser*(name: cstring) =
   if isEmpty(name):
     write("usage: su <user>\n")
@@ -45,6 +48,7 @@ proc switchUser*(name: cstring) =
     loadHistory()
 
 
+## Prints kernel trap counters for quick runtime diagnostics.
 proc printTrapCount*() =
   var trapCount: SysTrapCount
   if sysTraps(addr trapCount) != 0:
@@ -96,6 +100,7 @@ proc printTrapCount*() =
   write("\n")
 
 
+## Prints physical page bitmap totals from the kernel memory manager.
 proc printBitmapInfo*() =
   var info: SysBitmapInfo
   if sysGetBitMap(addr info) != 0:

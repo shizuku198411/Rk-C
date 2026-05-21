@@ -1,3 +1,4 @@
+## Holds shared shell buffers, limits, prompt colors, and buffer helpers.
 import ../../lib/core/syscall
 
 const
@@ -22,5 +23,6 @@ var
   historySaveBuf*: array[HistorySaveBufMax, char]
 
 
+## Returns a C string view over a shell line-sized character buffer.
 proc cstr*(buf: var array[LineMax, char]): cstring =
   cast[cstring](addr buf[0])

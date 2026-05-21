@@ -1,3 +1,4 @@
+## Provides fixed-size path manipulation helpers for kernel code.
 proc readPathComponent*(path: cstring, pos: var int, name: var openArray[char]): bool =
   if path == nil or name.len == 0:
     return false

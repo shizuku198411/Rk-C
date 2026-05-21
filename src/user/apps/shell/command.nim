@@ -1,3 +1,4 @@
+## Parses shell command lines and runs apps with pipes, redirection, or bg mode.
 import ../../lib/core/io
 import ../../lib/core/pathutils
 import ../../lib/core/syscall
@@ -17,6 +18,7 @@ var
   rightPathBuf: array[LineMax, char]
 
 
+## Clears a line-sized shell buffer.
 proc clearBuffer(buf: var array[LineMax, char]) =
   var i = 0
   while i < LineMax:
@@ -24,6 +26,7 @@ proc clearBuffer(buf: var array[LineMax, char]) =
     inc i
 
 
+## Clears the shared parsed command, argument, and path buffers.
 proc clearArg() =
   var i = 0
   while i < LineMax:
@@ -33,11 +36,13 @@ proc clearArg() =
     inc i
 
 
+## Advances a parser cursor over ASCII spaces.
 proc skipSpaces(s: cstring, pos: var int) =
   while s[pos] == ' ':
     inc pos
 
 
+## Splits a command line into command and raw argument buffers.
 proc parseCommandInto(line: cstring, cmd: var array[LineMax, char],
                       arg: var array[LineMax, char]): bool =
   clearBuffer(cmd)
@@ -65,11 +70,13 @@ proc parseCommandInto(line: cstring, cmd: var array[LineMax, char],
   true
 
 
+## Parses the active shell line into the shared command and argument buffers.
 proc parseCommand*(line: cstring): bool =
   clearArg()
   parseCommandInto(line, cmdBuf, argBuf)
 
 
+## Builds a /bin/<command> executable path into the requested buffer.
 proc buildBinPathInto(cmd: cstring, dst: var array[LineMax, char]): cstring =
   clearBuffer(dst)
   dst[0] = '/'
@@ -85,10 +92,12 @@ proc buildBinPathInto(cmd: cstring, dst: var array[LineMax, char]): cstring =
   cstr(dst)
 
 
+## Builds a /bin/<command> executable path into the shared path buffer.
 proc buildBinPath*(cmd: cstring): cstring =
   buildBinPathInto(cmd, pathBuf)
 
 
+## Removes a trailing background marker from an argument buffer.
 proc stripBackgroundMarkerFrom(buf: var array[LineMax, char]): bool =
   var len = 0
   while len < LineMax and buf[len] != '\0':
@@ -110,6 +119,7 @@ proc stripBackgroundMarkerFrom(buf: var array[LineMax, char]): bool =
   true
 
 
+## Copies a command line into the pipeline scratch buffer.
 proc copyPipelineLine(line: cstring) =
   clearBuffer(pipelineLineBuf)
   var i = 0
@@ -119,6 +129,7 @@ proc copyPipelineLine(line: cstring) =
   pipelineLineBuf[i] = '\0'
 
 
+## Splits a single-pipe command line into left and right command lines.
 proc splitPipeline(line: cstring): bool =
   clearBuffer(leftLineBuf)
   clearBuffer(rightLineBuf)
@@ -152,6 +163,7 @@ proc splitPipeline(line: cstring): bool =
   true
 
 
+## Copies a command line into the redirection scratch buffer.
 proc copyRedirectLine(line: cstring) =
   clearBuffer(redirectLineBuf)
   var i = 0
@@ -161,6 +173,7 @@ proc copyRedirectLine(line: cstring) =
   redirectLineBuf[i] = '\0'
 
 
+## Returns whether a command line contains a specific character.
 proc containsChar(line: cstring, ch: char): bool =
   var i = 0
   while line[i] != '\0':
@@ -171,6 +184,7 @@ proc containsChar(line: cstring, ch: char): bool =
   false
 
 
+## Copies and trims a substring from one command line into a buffer.
 proc copyTrimmedRange(src: cstring, startPos, endPos: int,
                       dst: var array[LineMax, char]) =
   clearBuffer(dst)
@@ -191,6 +205,7 @@ proc copyTrimmedRange(src: cstring, startPos, endPos: int,
   dst[i] = '\0'
 
 
+## Splits a stdout redirection command line into command and target path.
 proc splitRedirection(line: cstring): bool =
   clearBuffer(leftLineBuf)
   clearBuffer(redirectTargetBuf)
@@ -213,18 +228,21 @@ proc splitRedirection(line: cstring): bool =
   true
 
 
+## Restores a saved file descriptor onto a target descriptor and closes it.
 proc restoreFd(savedFd, targetFd: I32) =
   if savedFd >= 0:
     discard sysDup2(savedFd, targetFd)
     discard sysClose(savedFd)
 
 
+## Reports a generic command lookup failure.
 proc reportExecFailure(path: cstring) =
   write("command not found: ")
   write(path)
   write("\n")
 
 
+## Reports an exec failure using kernel-specific exec return codes.
 proc reportExecFailure(path: cstring, rc: I32) =
   if rc == SysExecNoProcess:
     write("exec: process table full\n")
@@ -241,6 +259,7 @@ proc reportExecFailure(path: cstring, rc: I32) =
   reportExecFailure(path)
 
 
+## Runs a command with stdout redirected to a file.
 proc runRedirection*(line: cstring): bool =
   copyRedirectLine(line)
   let background = stripBackgroundMarkerFrom(redirectLineBuf)
@@ -299,6 +318,7 @@ proc runRedirection*(line: cstring): bool =
   true
 
 
+## Runs a two-command pipeline by wiring stdout of the left app to stdin.
 proc runPipeline*(line: cstring): bool =
   copyPipelineLine(line)
   let background = stripBackgroundMarkerFrom(pipelineLineBuf)
@@ -375,6 +395,7 @@ proc runPipeline*(line: cstring): bool =
   true
 
 
+## Starts an app and optionally waits for it to finish.
 proc runApp*(path: cstring, arg: cstring, background: bool) =
   let pid = sysExec(path, arg, background)
   if pid < 0:
@@ -390,5 +411,6 @@ proc runApp*(path: cstring, arg: cstring, background: bool) =
   discard sysWait(pid)
 
 
+## Removes a trailing background marker from the shared argument buffer.
 proc stripBackgroundMarker*(): bool =
   stripBackgroundMarkerFrom(argBuf)

@@ -1,3 +1,4 @@
+## Changes a file or directory mode from an octal mode argument.
 import ../../lib/core/args
 import ../../lib/core/io
 import ../../lib/core/pathutils
@@ -8,11 +9,13 @@ import ../../lib/core/syscall
 var parsedArgs: UserArgs
 
 
+## Prints chmod usage information.
 proc printUsage() =
   write("usage: chmod <octal-mode> <path>\n")
   write("       chmod --help\n")
 
 
+## Parses an octal permission mode with a conservative maximum.
 proc parseOctalMode(s: cstring, mode: var U32): bool =
   if s == nil or s[0] == '\0':
     return false
@@ -31,6 +34,7 @@ proc parseOctalMode(s: cstring, mode: var U32): bool =
   true
 
 
+## Parses arguments, resolves the path, and applies the requested mode.
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   if not parseUserArgs(arg, parsedArgs):
     printUsage()

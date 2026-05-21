@@ -1,3 +1,4 @@
+## Defines syscall capability bits and display names.
 import ./types
 
 

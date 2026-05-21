@@ -1,3 +1,4 @@
+## Implements the Poly1305 message authentication code.
 import ./crypto_types
 import ../../core/syscall
 
@@ -13,10 +14,12 @@ type
 const Mask26 = U64(0x3ffffff)
 
 
+## Loads key word.
 proc loadKeyWord(key: pointer, off: U64): U32 =
   load32Le(cast[pointer](cast[U64](key) + off))
 
 
+## Implements the blocks helper.
 proc blocks(ctx: var Poly1305Ctx, data: pointer, len: U32, hibit: U64) =
   let input = cast[ptr UncheckedArray[U8]](data)
   var off = U32(0)
@@ -73,6 +76,7 @@ proc blocks(ctx: var Poly1305Ctx, data: pointer, len: U32, hibit: U64) =
   discard input
 
 
+## Performs Poly1305 poly1305 init.
 proc poly1305Init*(ctx: var Poly1305Ctx, key: pointer) =
   let t0 = U64(loadKeyWord(key, 0))
   let t1 = U64(loadKeyWord(key, 4))
@@ -99,6 +103,7 @@ proc poly1305Init*(ctx: var Poly1305Ctx, key: pointer) =
   ctx.finished = false
 
 
+## Performs Poly1305 poly1305 update.
 proc poly1305Update*(ctx: var Poly1305Ctx, data: pointer, len: U32) =
   if data == nil or len == 0 or ctx.finished:
     return
@@ -134,6 +139,7 @@ proc poly1305Update*(ctx: var Poly1305Ctx, data: pointer, len: U32) =
     inc off
 
 
+## Performs Poly1305 poly1305 final.
 proc poly1305Final*(ctx: var Poly1305Ctx, outTag: pointer) =
   if outTag == nil or ctx.finished:
     return
@@ -210,6 +216,7 @@ proc poly1305Final*(ctx: var Poly1305Ctx, outTag: pointer) =
   ctx.finished = true
 
 
+## Performs Poly1305 poly1305 mac.
 proc poly1305Mac*(key: pointer, data: pointer, len: U32, outTag: pointer) =
   var ctx = Poly1305Ctx()
   poly1305Init(ctx, key)

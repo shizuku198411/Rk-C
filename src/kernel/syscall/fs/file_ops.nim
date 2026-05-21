@@ -1,3 +1,4 @@
+## Implements file, directory, descriptor, and pipe syscall handlers.
 import ../../../lib/types
 import ../../../lib/syscall_types
 import ../../../lib/calc
@@ -26,6 +27,7 @@ var
   renamePathBuf: array[SysPathMax, char]
 
 
+## Reads path.
 proc readPath(pathVal: U64, defaultRoot: bool = false): cstring =
   if pathVal == 0:
     if defaultRoot:
@@ -38,26 +40,32 @@ proc readPath(pathVal: U64, defaultRoot: bool = false): cstring =
   cast[cstring](addr pathBuf[0])
 
 
+## Checks whether read path is allowed.
 proc canReadPath(path: cstring): bool =
   currentProc != nil and fsCanReadPath(currentProc.identity.uid, currentProc.identity.gid, path)
 
 
+## Checks whether write path is allowed.
 proc canWritePath(path: cstring): bool =
   currentProc != nil and fsCanWritePath(currentProc.identity.uid, currentProc.identity.gid, path)
 
 
+## Checks whether search dir path is allowed.
 proc canSearchDirPath(path: cstring): bool =
   currentProc != nil and fsCanSearchDirPath(currentProc.identity.uid, currentProc.identity.gid, path)
 
 
+## Checks whether modify parent path is allowed.
 proc canModifyParentPath(path: cstring): bool =
   currentProc != nil and fsCanModifyParentPath(currentProc.identity.uid, currentProc.identity.gid, path)
 
 
+## Checks whether list path is allowed.
 proc canListPath(path: cstring): bool =
   canReadPath(path) and canSearchDirPath(path)
 
 
+## Checks whether create or write path is allowed.
 proc canCreateOrWritePath(path: cstring, flags: U32): bool =
   let existingSize = serviceFileSizeToKernel(path)
   if existingSize >= 0:
@@ -66,6 +74,7 @@ proc canCreateOrWritePath(path: cstring, flags: U32): bool =
   (flags and SysFsWriteCreate) != U32(0) and canModifyParentPath(path)
 
 
+## Checks whether open file path is allowed.
 proc canOpenFilePath(path: cstring, flags: U32): bool =
   let existingSize = serviceFileSizeToKernel(path)
   let willCreate = existingSize < 0 and (flags and SysOpenCreate) != U32(0)
@@ -83,6 +92,7 @@ proc canOpenFilePath(path: cstring, flags: U32): bool =
   true
 
 
+## Checks whether open device path is allowed.
 proc canOpenDevicePath(path: cstring, flags: U32): bool =
   if (flags and SysOpenRead) != 0 and not canReadPath(path):
     return false
@@ -92,6 +102,7 @@ proc canOpenDevicePath(path: cstring, flags: U32): bool =
   true
 
 
+## Handles the ls syscall operation.
 proc syscallLs*(pathVal, entriesVal, maxEntries: U64): U64 =
   if entriesVal == 0 or maxEntries == 0:
     return U64(-1'i64)
@@ -115,6 +126,7 @@ proc syscallLs*(pathVal, entriesVal, maxEntries: U64): U64 =
   serviceLs(path, entriesVal, countMax, requestedOffset)
 
 
+## Handles the mkdir syscall operation.
 proc syscallMkdir*(path: U64): U64 =
   let copiedPath = readPath(path)
   if copiedPath == nil:
@@ -125,6 +137,7 @@ proc syscallMkdir*(path: U64): U64 =
   serviceMkdir(copiedPath)
 
 
+## Handles the unlink syscall operation.
 proc syscallUnlink*(path: U64): U64 =
   let copiedPath = readPath(path)
   if copiedPath == nil:
@@ -135,6 +148,7 @@ proc syscallUnlink*(path: U64): U64 =
   serviceUnlink(copiedPath)
 
 
+## Handles the rmdir syscall operation.
 proc syscallRmdir*(path: U64): U64 =
   let copiedPath = readPath(path)
   if copiedPath == nil:
@@ -145,6 +159,7 @@ proc syscallRmdir*(path: U64): U64 =
   serviceRmdir(copiedPath)
 
 
+## Handles the read file syscall operation.
 proc syscallReadFile*(path, buf, capacity: U64): U64 =
   if buf == 0 or capacity > SysFileIoMax:
     return U64(-1'i64)
@@ -158,6 +173,7 @@ proc syscallReadFile*(path, buf, capacity: U64): U64 =
   serviceReadFile(copiedPath, buf, capacity)
 
 
+## Implements the unpack write size flags kernel helper.
 proc unpackWriteSizeFlags(value: U64, size: var U64, flags: var U32) =
   size = value and U64(0xffffffff'u64)
   flags = U32(value shr U64(32))
@@ -165,6 +181,7 @@ proc unpackWriteSizeFlags(value: U64, size: var U64, flags: var U32) =
     flags = SysFsWriteDefault
 
 
+## Handles the write file syscall operation.
 proc syscallWriteFile*(path, buf, sizeFlags: U64): U64 =
   var size: U64
   var flags: U32
@@ -184,6 +201,7 @@ proc syscallWriteFile*(path, buf, sizeFlags: U64): U64 =
   serviceWriteFile(copiedPath, addr fileBuf[0], size, flags)
 
 
+## Handles the rename syscall operation.
 proc syscallRename*(oldPathVal, newPathVal: U64): U64 =
   let oldPath = readPath(oldPathVal)
   if oldPath == nil:
@@ -197,6 +215,7 @@ proc syscallRename*(oldPathVal, newPathVal: U64): U64 =
   serviceRename(oldPath, cast[cstring](addr renamePathBuf[0]))
 
 
+## Handles the chmod syscall operation.
 proc syscallChmod*(pathVal, modeVal: U64): U64 =
   let path = readPath(pathVal)
   if path == nil:
@@ -211,11 +230,13 @@ proc syscallChmod*(pathVal, modeVal: U64): U64 =
   serviceChmod(path, mode)
 
 
+## Implements the unpack uid gid kernel helper.
 proc unpackUidGid(value: U64, uid, gid: var U32) =
   uid = U32(value and U64(0xffffffff'u64))
   gid = U32(value shr U64(32))
 
 
+## Handles the chown syscall operation.
 proc syscallChown*(pathVal, uidGidVal: U64): U64 =
   if currentProc == nil:
     setLastError(SysErrInval)
@@ -243,6 +264,7 @@ proc syscallChown*(pathVal, uidGidVal: U64): U64 =
   U64(0)
 
 
+## Implements the refresh fd size kernel helper.
 proc refreshFdSize(entry: var FdEntry): bool =
   let size = serviceFileSizeToKernel(fdPath(entry))
   if size < 0:
@@ -252,6 +274,7 @@ proc refreshFdSize(entry: var FdEntry): bool =
   true
 
 
+## Handles the open syscall operation.
 proc syscallOpen*(pathVal, flagsVal: U64): U64 =
   let path = readPath(pathVal)
   if path == nil or currentProc == nil:
@@ -300,6 +323,7 @@ proc syscallOpen*(pathVal, flagsVal: U64): U64 =
   U64(fd)
 
 
+## Handles the read fd syscall operation.
 proc syscallReadFd*(fdVal, bufVal, len: U64): U64 =
   if bufVal == 0 or len > SysFileIoMax or not validFd(I32(fdVal)):
     return U64(-1'i64)
@@ -351,6 +375,7 @@ proc syscallReadFd*(fdVal, bufVal, len: U64): U64 =
   U64(actualLen)
 
 
+## Handles the write fd syscall operation.
 proc syscallWriteFd*(fdVal, bufVal, len: U64): U64 =
   if len > SysFileIoMax or not validFd(I32(fdVal)):
     return U64(-1'i64)
@@ -409,6 +434,7 @@ proc syscallWriteFd*(fdVal, bufVal, len: U64): U64 =
   len
 
 
+## Handles the close syscall operation.
 proc syscallClose*(fdVal: U64): U64 =
   if not validFd(I32(fdVal)):
     return U64(-1'i64)
@@ -418,6 +444,7 @@ proc syscallClose*(fdVal: U64): U64 =
   0
 
 
+## Handles the pipe syscall operation.
 proc syscallPipe*(fdsVal: U64): U64 =
   if currentProc == nil or fdsVal == 0:
     return U64(-1'i64)
@@ -460,6 +487,7 @@ proc syscallPipe*(fdsVal: U64): U64 =
   0
 
 
+## Handles the dup2 syscall operation.
 proc syscallDup2*(oldFdVal, newFdVal: U64): U64 =
   let oldFd = I32(oldFdVal)
   let newFd = I32(newFdVal)
@@ -477,6 +505,7 @@ proc syscallDup2*(oldFdVal, newFdVal: U64): U64 =
   U64(newFd)
 
 
+## Handles the lseek syscall operation.
 proc syscallLseek*(fdVal, offsetVal, whence: U64): U64 =
   if not validFd(I32(fdVal)):
     return U64(-1'i64)
@@ -507,6 +536,7 @@ proc syscallLseek*(fdVal, offsetVal, whence: U64): U64 =
   entry.offset
 
 
+## Implements the fd read ready kernel helper.
 proc fdReadReady(fd: I32): bool =
   if not validFd(fd):
     return false
@@ -523,6 +553,7 @@ proc fdReadReady(fd: I32): bool =
   false
 
 
+## Implements the fd write ready kernel helper.
 proc fdWriteReady(fd: I32): bool =
   if not validFd(fd):
     return false
@@ -540,6 +571,7 @@ proc fdWriteReady(fd: I32): bool =
   false
 
 
+## Implements the evaluate poll events kernel helper.
 proc evaluatePollEvents(count: U64, timedOut: bool): I32 =
   var ready = I32(0)
   var i = U32(0)
@@ -585,11 +617,13 @@ proc evaluatePollEvents(count: U64, timedOut: bool): I32 =
   ready
 
 
+## Copies poll events to user.
 proc copyPollEventsToUser(eventsVal, count: U64): bool =
   let bytes = count * U64(sizeof(SysPollEvent))
   copyToUser(eventsVal, addr pollEvents[0], bytes) == 0
 
 
+## Handles the poll syscall operation.
 proc syscallPoll*(eventsVal, count, timeoutTicks: U64): U64 =
   if currentProc == nil or eventsVal == 0 or count == 0 or count > U64(SysPollMaxEvents):
     return U64(-1'i64)

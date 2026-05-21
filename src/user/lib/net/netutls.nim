@@ -1,7 +1,9 @@
+## Provides low-level network string parsing helpers.
 import ../core/syscall
 import ../core/strutils
 
 
+## Parses decimal u32.
 proc parseDecimalU32(s: cstring, pos: var U32, value: var U32): bool =
   var v: U32 = 0
   var found = false
@@ -18,6 +20,7 @@ proc parseDecimalU32(s: cstring, pos: var U32, value: var U32): bool =
   true
 
 
+## Parses ipv4.
 proc parseIpv4*(s: cstring, pos: var U32, outIp: var U32): bool =
   var a, b, c, d: U32
 

@@ -1,3 +1,4 @@
+## Opens a TCP connection for manual network stack checks.
 import ../../lib/core/io
 import ../../lib/core/cli
 import ../../lib/net/net_tcp
@@ -23,10 +24,12 @@ var
   ]
 
 
+## Prints tcpcheck usage information.
 proc printUsage() =
   write("usage: tcpcheck <ip> <port>\n")
 
 
+## Connects to an IP and port, optionally sends a small HTTP request on port 80.
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   if not parseUserArgs(arg, parsedArgs):
     printUsage()

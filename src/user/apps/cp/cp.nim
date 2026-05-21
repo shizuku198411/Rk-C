@@ -1,3 +1,4 @@
+## Copies one file to another path.
 import ../../lib/core/io
 import ../../lib/core/args
 import ../../lib/core/syscall
@@ -13,10 +14,12 @@ var
   dstPathBuf: array[PathMax, char]
 
 
+## Prints cp usage information.
 proc printUsage() =
   write("usage: cp <srcpath> <dstpath>\n")
 
 
+## Parses source and destination paths, then copies file contents.
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   if not parseUserArgs(arg, parsedArgs):
     printUsage()

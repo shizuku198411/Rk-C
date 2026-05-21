@@ -1,3 +1,4 @@
+## Prints process information through the process manager service.
 import ../../lib/core/io
 import ../../lib/ipc/packet_data
 import ../../lib/ipc/ipc_request
@@ -26,6 +27,7 @@ var
   parsedOptions: ParsedOptions
 
 
+## Converts a process state code to a fixed-width display label.
 proc stateName(state: U32): cstring =
   if state == SysProcessRunnable:
     "runnable"
@@ -39,6 +41,7 @@ proc stateName(state: U32): cstring =
     "unused  "
 
 
+## Converts the user/kernel process flag to a display label.
 proc modeName(isUser: U32): cstring =
   if isUser != 0:
     "user"
@@ -46,6 +49,7 @@ proc modeName(isUser: U32): cstring =
     "kernel"
 
 
+## Prints a signed pid value.
 proc printPid(pid: I32) =
   if pid < 0:
     write("-")
@@ -54,16 +58,19 @@ proc printPid(pid: I32) =
     writeUnsigned(U64(pid))
 
 
+## Prints a CPU usage percentage.
 proc printCpuPercent(value: U32) =
   writeUnsigned(U64(value))
   write("%")
 
 
+## Prints a memory usage value in pages.
 proc printMemoryPages(value: U64) =
   writeUnsigned(value)
   write("p")
 
 
+## Prints one process row using the selected ps format.
 proc printProcess(entry: ptr SysProcessInfo, full, longFormat: bool) =
   var
     userEntry: PasswdEntry
@@ -102,6 +109,7 @@ proc printProcess(entry: ptr SysProcessInfo, full, longFormat: bool) =
   write("\n")
 
 
+## Sorts process entries by pid in ascending order.
 proc sortProcessByPid(entries: var array[PsMaxEntries, SysProcessInfo], count: I32) =
   var i = 1
 
@@ -117,6 +125,7 @@ proc sortProcessByPid(entries: var array[PsMaxEntries, SysProcessInfo], count: I
     inc i
 
 
+## Finds the index of a process entry by pid.
 proc findEntryIndex(pid: I32, count: I32): I32 =
   var i = I32(0)
   while i < count:
@@ -127,6 +136,7 @@ proc findEntryIndex(pid: I32, count: I32): I32 =
   -1
 
 
+## Returns whether a pid belongs to the subtree rooted at rootPid.
 proc isDescendantOf(pid, rootPid: I32, count: I32): bool =
   var cur = pid
   var depth = I32(0)
@@ -145,6 +155,7 @@ proc isDescendantOf(pid, rootPid: I32, count: I32): bool =
   false
 
 
+## Decides whether a process should be visible in the selected view.
 proc shouldPrintProcess(entry: ptr SysProcessInfo, count: I32, fullList: bool): bool =
   if entry.state == SysProcessUnused:
     return false
@@ -167,6 +178,7 @@ proc shouldPrintProcess(entry: ptr SysProcessInfo, count: I32, fullList: bool): 
   entry.pid == rootPid or isDescendantOf(entry.pid, rootPid, count)
 
 
+## Prints the ps header for the selected format.
 proc printHeader(full, longFormat: bool) =
   if full or longFormat:
     write("pid\tppid\tuid\tgid\tstate\t\tmode")
@@ -177,6 +189,7 @@ proc printHeader(full, longFormat: bool) =
     write("pid\texe\n")
 
 
+## Sorts and prints all selected process entries.
 proc printProcesses(count: I32, full, every, longFormat: bool) =
   sortProcessByPid(entries, count)
 
@@ -188,14 +201,17 @@ proc printProcesses(count: I32, full, every, longFormat: bool) =
     inc i
 
 
+## Returns the process manager service pid.
 proc processManagerPid(): I32 =
   servicePidByKind(SysServiceKindProcess)
 
 
+## Copies packed process info from an IPC packet into a process entry.
 proc copyPacketToProcess(entry: ptr SysProcessInfo, packet: ptr SysIpcPacket) =
   discard copyFromPacketData(entry, packet, U32(sizeof(SysProcessInfo)))
 
 
+## Requests a process list from procmgtd.
 proc requestProcessList(maxEntries: I32, flags: U64): I32 =
   let pid = processManagerPid()
   if pid <= 0:
@@ -225,6 +241,7 @@ proc requestProcessList(maxEntries: I32, flags: U64): I32 =
   count
 
 
+## Prints ps usage information.
 proc printUsage() =
   write("usage: ps [-f] [-e] [-l]\n")
   write("  -f    show pid, ppid, uid, gid, state, mode, and exe\n")
@@ -232,6 +249,7 @@ proc printUsage() =
   write("  -l    show cpu and memory usage\n")
 
 
+## Parses ps options, requests process data, and prints the table.
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   if not parseUserArgs(arg, parsedArgs):
     printUsage()

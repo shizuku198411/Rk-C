@@ -1,3 +1,4 @@
+## Implements the in-memory tmpfs filesystem backend.
 import ../../lib/fixed_string
 import ../../lib/fs_permissions
 import ../../lib/syscall_types
@@ -32,11 +33,15 @@ var
   ready: bool
 
 
+## Implements the tmpfs write text kernel helper.
 proc tmpfsWriteText*(path: cstring, data: cstring): int
+## Implements the tmpfs write bytes kernel helper.
 proc tmpfsWriteBytes*(path: cstring, data: pointer, size: U64): int
+## Implements the tmpfs write bytes with flags kernel helper.
 proc tmpfsWriteBytesWithFlags*(path: cstring, data: pointer, size: U64, flags: U32): int
 
 
+## Implements the default node mode kernel helper.
 proc defaultNodeMode(typ: U32): U32 =
   if typ == TmpfsTypeFile:
     return FsModeFileDefault
@@ -44,6 +49,7 @@ proc defaultNodeMode(typ: U32): U32 =
   FsModePublicDir
 
 
+## Initializes node metadata.
 proc initNodeMetadata(node: ptr TmpfsNode, typ: U32) =
   if node == nil:
     return
@@ -53,34 +59,41 @@ proc initNodeMetadata(node: ptr TmpfsNode, typ: U32) =
   node.mode = defaultNodeMode(typ)
 
 
+## Checks whether read node is allowed.
 proc canReadNode(uid, gid: U32, idx: int): bool =
   idx >= 0 and idx < TmpfsMaxNodes and nodes[idx].used != U32(0) and
     fsModeAllowsRead(nodes[idx].uid, nodes[idx].gid, nodes[idx].mode, uid, gid)
 
 
+## Checks whether write node is allowed.
 proc canWriteNode(uid, gid: U32, idx: int): bool =
   idx >= 0 and idx < TmpfsMaxNodes and nodes[idx].used != U32(0) and
     fsModeAllowsWrite(nodes[idx].uid, nodes[idx].gid, nodes[idx].mode, uid, gid)
 
 
+## Checks whether execute node is allowed.
 proc canExecuteNode(uid, gid: U32, idx: int): bool =
   idx >= 0 and idx < TmpfsMaxNodes and nodes[idx].used != U32(0) and
     fsModeAllowsExecute(nodes[idx].uid, nodes[idx].gid, nodes[idx].mode, uid, gid)
 
 
+## Checks whether search node is allowed.
 proc canSearchNode(uid, gid: U32, idx: int): bool =
   idx >= 0 and idx < TmpfsMaxNodes and nodes[idx].used != U32(0) and
     nodes[idx].typ == TmpfsTypeDir and canExecuteNode(uid, gid, idx)
 
 
+## Implements the tmpfs max nodes kernel helper.
 proc tmpfsMaxNodes*(): U64 =
   U64(TmpfsMaxNodes)
 
 
+## Implements the tmpfs max file bytes kernel helper.
 proc tmpfsMaxFileBytes*(): U64 =
   U64(TmpfsFileMax)
 
 
+## Implements the tmpfs used nodes kernel helper.
 proc tmpfsUsedNodes*(): U64 =
   var count = U64(0)
   var i = 0
@@ -91,6 +104,7 @@ proc tmpfsUsedNodes*(): U64 =
   count
 
 
+## Implements the tmpfs used blocks kernel helper.
 proc tmpfsUsedBlocks*(blockSize: U64): U64 =
   var blocks = U64(0)
   var i = 0
@@ -101,6 +115,7 @@ proc tmpfsUsedBlocks*(blockSize: U64): U64 =
   blocks
 
 
+## Returns whether children is present.
 proc hasChildren(idx: int): bool =
   var i = 0
   while i < TmpfsMaxNodes:
@@ -110,6 +125,7 @@ proc hasChildren(idx: int): bool =
   false
 
 
+## Finds child.
 proc findChild(parent: int, name: cstring): int =
   var i = 0
   while i < TmpfsMaxNodes:
@@ -120,6 +136,7 @@ proc findChild(parent: int, name: cstring): int =
   -1
 
 
+## Allocates node.
 proc allocNode(parent: int, name: cstring, typ: U32): int =
   let existing = findChild(parent, name)
   if existing >= 0:
@@ -139,6 +156,7 @@ proc allocNode(parent: int, name: cstring, typ: U32): int =
   -1
 
 
+## Resolves path.
 proc resolvePath(path: cstring): int =
   if path == nil or path[0] == '\0':
     return -1
@@ -156,6 +174,7 @@ proc resolvePath(path: cstring): int =
   current
 
 
+## Resolves path with search.
 proc resolvePathWithSearch(uid, gid: U32, path: cstring): int =
   if path == nil or path[0] == '\0':
     return -1
@@ -176,6 +195,7 @@ proc resolvePathWithSearch(uid, gid: U32, path: cstring): int =
   current
 
 
+## Resolves parent.
 proc resolveParent(path: cstring, leaf: var array[TmpfsNameMax, char]): int =
   if path == nil or path[0] == '\0':
     return -1
@@ -194,6 +214,7 @@ proc resolveParent(path: cstring, leaf: var array[TmpfsNameMax, char]): int =
   -1
 
 
+## Resolves parent with search.
 proc resolveParentWithSearch(uid, gid: U32, path: cstring, leaf: var array[TmpfsNameMax, char]): int =
   if path == nil or path[0] == '\0':
     return -1
@@ -215,6 +236,7 @@ proc resolveParentWithSearch(uid, gid: U32, path: cstring, leaf: var array[Tmpfs
   -1
 
 
+## Implements the tmpfs init kernel helper.
 proc tmpfsInit*() =
   nodes = default(array[TmpfsMaxNodes, TmpfsNode])
   nodes[0].used = 1
@@ -226,6 +248,7 @@ proc tmpfsInit*() =
   ready = true
 
 
+## Fills dir entry.
 proc fillDirEntry(idx: int, outEntry: ptr FsDirEntry) =
   outEntry.typ = nodes[idx].typ
   outEntry.size = nodes[idx].size
@@ -239,6 +262,7 @@ proc fillDirEntry(idx: int, outEntry: ptr FsDirEntry) =
     inc i
 
 
+## Fills virtual dir entry.
 proc fillVirtualDirEntry(name: cstring, outEntry: ptr FsDirEntry) =
   outEntry.typ = FsDirEntryTypeDir
   outEntry.size = 0
@@ -258,6 +282,7 @@ proc fillVirtualDirEntry(name: cstring, outEntry: ptr FsDirEntry) =
     inc i
 
 
+## Implements the tmpfs read dir entry kernel helper.
 proc tmpfsReadDirEntry*(path: cstring, entryIndex: U64, outEntry: ptr FsDirEntry): int =
   if not ready or outEntry == nil:
     return -1
@@ -293,6 +318,7 @@ proc tmpfsReadDirEntry*(path: cstring, entryIndex: U64, outEntry: ptr FsDirEntry
   0
 
 
+## Implements the tmpfs is dir kernel helper.
 proc tmpfsIsDir*(path: cstring): bool =
   if not ready:
     return false
@@ -300,6 +326,7 @@ proc tmpfsIsDir*(path: cstring): bool =
   idx >= 0 and nodes[idx].typ == TmpfsTypeDir
 
 
+## Implements the tmpfs file size kernel helper.
 proc tmpfsFileSize*(path: cstring): int =
   if not ready:
     return -1
@@ -310,37 +337,44 @@ proc tmpfsFileSize*(path: cstring): int =
   int(nodes[idx].size)
 
 
+## Implements the tmpfs can read kernel helper.
 proc tmpfsCanRead*(uid, gid: U32, path: cstring): bool =
   let idx = resolvePathWithSearch(uid, gid, path)
   canReadNode(uid, gid, idx)
 
 
+## Implements the tmpfs can write kernel helper.
 proc tmpfsCanWrite*(uid, gid: U32, path: cstring): bool =
   let idx = resolvePathWithSearch(uid, gid, path)
   canWriteNode(uid, gid, idx)
 
 
+## Implements the tmpfs can execute kernel helper.
 proc tmpfsCanExecute*(uid, gid: U32, path: cstring): bool =
   let idx = resolvePathWithSearch(uid, gid, path)
   canExecuteNode(uid, gid, idx)
 
 
+## Implements the tmpfs can search dir kernel helper.
 proc tmpfsCanSearchDir*(uid, gid: U32, path: cstring): bool =
   let idx = resolvePathWithSearch(uid, gid, path)
   canSearchNode(uid, gid, idx)
 
 
+## Implements the tmpfs can modify dir kernel helper.
 proc tmpfsCanModifyDir*(uid, gid: U32, path: cstring): bool =
   let idx = resolvePathWithSearch(uid, gid, path)
   canSearchNode(uid, gid, idx) and canWriteNode(uid, gid, idx)
 
 
+## Implements the tmpfs can modify parent kernel helper.
 proc tmpfsCanModifyParent*(uid, gid: U32, path: cstring): bool =
   var leaf: array[TmpfsNameMax, char]
   let parent = resolveParentWithSearch(uid, gid, path, leaf)
   canSearchNode(uid, gid, parent) and canWriteNode(uid, gid, parent)
 
 
+## Implements the sticky allows remove kernel helper.
 proc stickyAllowsRemove(uid: U32, parent, target: int): bool =
   if parent < 0 or target < 0:
     return false
@@ -350,6 +384,7 @@ proc stickyAllowsRemove(uid: U32, parent, target: int): bool =
   uid == RootUid or uid == nodes[parent].uid or uid == nodes[target].uid
 
 
+## Implements the tmpfs can remove kernel helper.
 proc tmpfsCanRemove*(uid, gid: U32, path: cstring): bool =
   var leaf: array[TmpfsNameMax, char]
   let parent = resolveParentWithSearch(uid, gid, path, leaf)
@@ -360,11 +395,13 @@ proc tmpfsCanRemove*(uid, gid: U32, path: cstring): bool =
   target > 0 and stickyAllowsRemove(uid, parent, target)
 
 
+## Implements the tmpfs can chmod kernel helper.
 proc tmpfsCanChmod*(uid, gid: U32, path: cstring): bool =
   let idx = resolvePathWithSearch(uid, gid, path)
   idx >= 0 and (uid == RootUid or uid == nodes[idx].uid)
 
 
+## Implements the tmpfs chmod kernel helper.
 proc tmpfsChmod*(path: cstring, mode: U32): int =
   let idx = resolvePath(path)
   if idx < 0:
@@ -374,6 +411,7 @@ proc tmpfsChmod*(path: cstring, mode: U32): int =
   0
 
 
+## Implements the tmpfs chown kernel helper.
 proc tmpfsChown*(path: cstring, uid, gid: U32): int =
   let idx = resolvePath(path)
   if idx < 0:
@@ -384,6 +422,7 @@ proc tmpfsChown*(path: cstring, uid, gid: U32): int =
   0
 
 
+## Implements the tmpfs read range kernel helper.
 proc tmpfsReadRange*(path: cstring, dst: pointer, offset, capacity: U64): int =
   if not ready or dst == nil:
     return -1
@@ -408,6 +447,7 @@ proc tmpfsReadRange*(path: cstring, dst: pointer, offset, capacity: U64): int =
   int(readLen)
 
 
+## Implements the tmpfs read file kernel helper.
 proc tmpfsReadFile*(path: cstring, dst: pointer, capacity: U64): int =
   if not ready or dst == nil:
     return -1
@@ -422,6 +462,7 @@ proc tmpfsReadFile*(path: cstring, dst: pointer, capacity: U64): int =
   tmpfsReadRange(path, dst, U64(0), capacity)
 
 
+## Implements the tmpfs mkdir kernel helper.
 proc tmpfsMkdir*(path: cstring): int =
   if not ready:
     return -1
@@ -436,6 +477,7 @@ proc tmpfsMkdir*(path: cstring): int =
   0
 
 
+## Implements the tmpfs unlink kernel helper.
 proc tmpfsUnlink*(path: cstring): int =
   if not ready:
     return -1
@@ -447,6 +489,7 @@ proc tmpfsUnlink*(path: cstring): int =
   0
 
 
+## Implements the tmpfs rmdir kernel helper.
 proc tmpfsRmdir*(path: cstring): int =
   if not ready:
     return -1
@@ -458,6 +501,7 @@ proc tmpfsRmdir*(path: cstring): int =
   0
 
 
+## Returns whether descendant is true.
 proc isDescendant(idx, maybeParent: int): bool =
   var current = idx
   while current > 0:
@@ -467,6 +511,7 @@ proc isDescendant(idx, maybeParent: int): bool =
   false
 
 
+## Implements the tmpfs rename kernel helper.
 proc tmpfsRename*(oldPath, newPath: cstring): int =
   if not ready:
     return -1
@@ -489,6 +534,7 @@ proc tmpfsRename*(oldPath, newPath: cstring): int =
   0
 
 
+## Implements the tmpfs write text kernel helper.
 proc tmpfsWriteText*(path: cstring, data: cstring): int =
   var size = U64(0)
   while data[size] != '\0' and size < U64(TmpfsFileMax):
@@ -496,10 +542,12 @@ proc tmpfsWriteText*(path: cstring, data: cstring): int =
   tmpfsWriteBytes(path, cast[pointer](data), size)
 
 
+## Implements the tmpfs write bytes kernel helper.
 proc tmpfsWriteBytes*(path: cstring, data: pointer, size: U64): int =
   tmpfsWriteBytesWithFlags(path, data, size, SysFsWriteDefault)
 
 
+## Implements the tmpfs write bytes with flags kernel helper.
 proc tmpfsWriteBytesWithFlags*(path: cstring, data: pointer, size: U64, flags: U32): int =
   if data == nil and size > 0:
     return -1

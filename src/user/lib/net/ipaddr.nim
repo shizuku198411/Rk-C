@@ -1,8 +1,10 @@
+## Parses and prints IPv4 addresses.
 import ../core/io
 import ../core/syscall
 import ./netutls
 
 
+## Parses ipv4 addr.
 proc parseIpv4Addr*(arg: cstring, ip: var U32): bool =
   if arg == nil:
     return false
@@ -14,6 +16,7 @@ proc parseIpv4Addr*(arg: cstring, ip: var U32): bool =
   arg[pos] == '\0'
 
 
+## Writes ipv4 addr.
 proc writeIpv4Addr*(value: U32) =
   writeUnsigned(U64((value shr 24) and 0xff'u32))
   writeChar('.')

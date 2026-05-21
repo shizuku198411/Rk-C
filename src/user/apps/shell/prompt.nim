@@ -1,3 +1,4 @@
+## Renders the colored shell prompt from the current user and cwd.
 import ../../lib/core/io
 import ../../lib/core/passwd
 import ../../lib/core/syscall
@@ -5,6 +6,7 @@ import ../../lib/core/userdb
 import ./state
 
 
+## Prints the prompt as user@Rk-C:<cwd>$ with highlighted fields.
 proc printPrompt*() =
   if sysGetCwd(addr cwdBuf[0], U64(SysProcessCwdMax)) < 0:
     cwdBuf[0] = '/'

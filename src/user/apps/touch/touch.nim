@@ -1,3 +1,4 @@
+## Creates files or updates their presence using write-file semantics.
 import ../../lib/core/io
 import ../../lib/core/args
 import ../../lib/core/syscall
@@ -8,10 +9,12 @@ import ../../lib/core/strutils
 var parsedArgs: UserArgs
 
 
+## Prints touch usage information.
 proc printUsage() =
   write("usage: touch <path>\n")
 
 
+## Parses arguments and ensures each requested file exists.
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   if not parseUserArgs(arg, parsedArgs):
     printUsage()

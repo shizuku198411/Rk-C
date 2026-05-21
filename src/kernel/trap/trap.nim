@@ -1,3 +1,4 @@
+## Handles traps, faults, timer interrupts, and user panic logging.
 import ../../arch/riscv64/arch
 import ../../lib/types
 import ../../lib/syscall_types
@@ -30,10 +31,12 @@ const
   ScauseSupervisorTimer                 = ScauseInterruptFlag or U64(0x05)
 
 
+## Implements the trap from user kernel helper.
 proc trapFromUser(frame: ptr TrapFrame): bool =
   (frame.sstatus and SstatusSpp) == U64(0)
 
 
+## Implements the panic msg kernel helper.
 proc panicMsg(scauseType: cstring, scause: U64, stval: U64, userPc: U64) =
   print("PANIC: ")
   print(scauseType)
@@ -48,6 +51,7 @@ proc panicMsg(scauseType: cstring, scause: U64, stval: U64, userPc: U64) =
     arch.wfi()
 
 
+## Appends log char.
 proc appendLogChar(dst: var array[UserPanicLogMax, char], pos: var U64, ch: char) =
   if pos + U64(1) >= U64(UserPanicLogMax):
     return
@@ -57,6 +61,7 @@ proc appendLogChar(dst: var array[UserPanicLogMax, char], pos: var U64, ch: char
   dst[pos] = '\0'
 
 
+## Appends log cstring.
 proc appendLogCString(dst: var array[UserPanicLogMax, char], pos: var U64, src: cstring) =
   if src == nil:
     appendLogCString(dst, pos, cstring"(nil)")
@@ -70,6 +75,7 @@ proc appendLogCString(dst: var array[UserPanicLogMax, char], pos: var U64, src: 
   dst[pos] = '\0'
 
 
+## Appends log unsigned.
 proc appendLogUnsigned(dst: var array[UserPanicLogMax, char], pos: var U64, value: U64) =
   var digits: array[20, char]
   var n = value
@@ -89,6 +95,7 @@ proc appendLogUnsigned(dst: var array[UserPanicLogMax, char], pos: var U64, valu
     appendLogChar(dst, pos, digits[count])
 
 
+## Implements the log hex digit kernel helper.
 proc logHexDigit(value: U64): char =
   let digit = int(value and U64(0xf))
   if digit < 10:
@@ -97,6 +104,7 @@ proc logHexDigit(value: U64): char =
     char(ord('a') + digit - 10)
 
 
+## Appends log hex.
 proc appendLogHex(dst: var array[UserPanicLogMax, char], pos: var U64, value: U64) =
   appendLogCString(dst, pos, cstring"0x")
 
@@ -110,6 +118,7 @@ proc appendLogHex(dst: var array[UserPanicLogMax, char], pos: var U64, value: U6
     shift -= 4
 
 
+## Appends log field.
 proc appendLogField(dst: var array[UserPanicLogMax, char], pos: var U64, name: cstring) =
   if pos > U64(0):
     appendLogChar(dst, pos, ' ')
@@ -117,6 +126,7 @@ proc appendLogField(dst: var array[UserPanicLogMax, char], pos: var U64, name: c
   appendLogChar(dst, pos, '=')
 
 
+## Writes user panic log.
 proc writeUserPanicLog(scause: U64, stval: U64, userPc: U64, frame: ptr TrapFrame) =
   if currentProc == nil or frame == nil:
     return
@@ -154,6 +164,7 @@ proc writeUserPanicLog(scause: U64, stval: U64, userPc: U64, frame: ptr TrapFram
   )
 
 
+## Implements the fault or panic kernel helper.
 proc faultOrPanic(scauseType: cstring, scause: U64, stval: U64, userPc: U64, fromUser: bool, frame: ptr TrapFrame) =
   if fromUser and currentProc != nil:
     print("PAGE FAULT DETECTED: ")
@@ -171,6 +182,7 @@ proc faultOrPanic(scauseType: cstring, scause: U64, stval: U64, userPc: U64, fro
     panicMsg(scauseType, scause, stval, userPc)
 
 
+## Handles one trap or interrupt from machine state.
 proc trapHandler*(frame: ptr TrapFrame) {.exportc: "trap_handler", cdecl.} =
   discard frame
 
