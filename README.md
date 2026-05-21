@@ -210,6 +210,13 @@ make build-test-bins
 make run
 ```
 
+initial user account:
+
+```text
+[1] username: root, password: root
+[2] username: user, password: user
+```
+
 Run without a VirtIO network device to test degraded optional-service boot:
 
 ```bash
