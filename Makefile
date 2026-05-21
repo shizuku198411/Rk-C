@@ -53,6 +53,7 @@ USER_PACK_NAMES := $(filter-out tcpcheck curl,$(USER_APP_NAMES)) $(USER_SERVER_N
 USER_APP_RKXS := $(foreach app,$(USER_APP_NAMES),$(BIN_DIR)/$(app).rkx)
 USER_SERVER_RKXS := $(foreach server,$(USER_SERVER_NAMES),$(BIN_DIR)/$(server).rkx)
 TEST_APP_RKXS := $(foreach app,$(TEST_APP_NAMES),$(BIN_DIR)/$(app).rkx)
+TEST_APPS_ARGS ?= --boot-timeout 60 --command-recover-timeout 30
 
 USER_APP_ELFS := $(foreach app,$(USER_APP_NAMES),$(BIN_DIR)/$(app).elf)
 USER_SERVER_ELFS := $(foreach server,$(USER_SERVER_NAMES),$(BIN_DIR)/$(server).elf)
@@ -251,7 +252,7 @@ qemu-debug: build
 	$(QEMU) $(QEMU_DEBUG_ARGS)
 
 test-apps:
-	python3 scripts/test_apps.py --boot-timeout 60 --command-recover-timeout 30
+	python3 scripts/test_apps.py $(TEST_APPS_ARGS)
 
 net-host-help:
 	@echo "Default TAP network:"

@@ -664,6 +664,12 @@ def main() -> int:
         default=20.0,
         help="extra seconds to wait for the prompt after a command timeout",
     )
+    parser.add_argument(
+        "--allowed-failures",
+        type=int,
+        default=0,
+        help="allow up to this many failed test cases before returning a failing status",
+    )
     args = parser.parse_args()
 
     test_disk = Path(args.test_disk)
@@ -751,6 +757,9 @@ def main() -> int:
         print("failed test cases:")
         for case in failed_cases:
             print(f"  #{case.number:03d} {case.command}")
+        if failures <= args.allowed_failures:
+            print(f"allowing {failures} failure(s); threshold is {args.allowed_failures}")
+            return 0
         return 1
 
     print("all app smoke tests passed")
