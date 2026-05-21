@@ -1,3 +1,4 @@
+import ./history
 import ../../lib/core/io
 import ../../lib/core/pathutils
 import ../../lib/core/passwd
@@ -30,6 +31,8 @@ proc switchUser*(name: cstring) =
     write("su: unknown user\n")
     return
 
+  saveHistory()
+
   let rc = sysSetUser(entry.uid, entry.gid)
   if rc == SysSetUserRootOnly:
     write("su: root switch denied\n")
@@ -37,6 +40,8 @@ proc switchUser*(name: cstring) =
     write("su: failed\n")
   else:
     discard sysSetCwd(cast[cstring](addr entry.home[0]))
+    clearHistory()
+    loadHistory()
 
 
 proc printTrapCount*() =

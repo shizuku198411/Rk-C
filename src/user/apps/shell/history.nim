@@ -1,6 +1,74 @@
 import ../../lib/core/io
 import ../../lib/core/syscall
+import ../../lib/core/userdb
+import ../../lib/core/passwd
+import ../../../lib/fixed_string
+import ../../../lib/user_ids
 import ./state
+
+
+const
+  HistoryFileName = ".history"
+  UserHistoryPath = "/home/.history"
+  HistoryPathMax = U32(PasswdHomeMax) + 16
+
+
+var historyPathBuf: array[HistoryPathMax, char]
+
+
+proc clearHistoryPathBuf() =
+  var i = U32(0)
+  while i < HistoryPathMax:
+    historyPathBuf[i] = '\0'
+    inc i
+
+
+proc appendPathChar(pos: var U32, c: char): bool =
+  if pos + 1 >= HistoryPathMax:
+    return false
+
+  historyPathBuf[pos] = c
+  inc pos
+  historyPathBuf[pos] = '\0'
+  true
+
+
+proc appendPathCString(pos: var U32, s: cstring): bool =
+  var i = U32(0)
+  while s[i] != '\0':
+    if not appendPathChar(pos, s[i]):
+      return false
+    inc i
+  true
+
+
+proc buildCurrentUserHistoryPath(): cstring =
+  clearHistoryPathBuf()
+
+  let uid = sysGetUid()
+  if uid == RootUid:
+    discard copyCString(historyPathBuf, cstring(HistoryPath))
+    return cast[cstring](addr historyPathBuf[0])
+
+  var entry: PasswdEntry
+
+  if not resolveUid(U32(uid), entry):
+    discard copyCString(historyPathBuf, cstring(UserHistoryPath))
+    return cast[cstring](addr historyPathBuf[0])
+
+  let home = cast[cstring](addr entry.home[0])
+
+  var pos = U32(0)
+  if not appendPathCString(pos, home):
+    discard copyCString(historyPathBuf, cstring(UserHistoryPath))
+    return cast[cstring](addr historyPathBuf[0])
+
+  if pos > 0 and historyPathBuf[pos - 1] != '/':
+    discard appendPathChar(pos, '/')
+
+  discard appendPathCString(pos, cstring(HistoryFileName))
+
+  cast[cstring](addr historyPathBuf[0])
 
 
 proc lineLen*(buf: var array[LineMax, char]): int =
@@ -38,7 +106,7 @@ proc buildHistorySaveBuf(): U64 =
   outPos
 
 
-proc clearHistory() =
+proc clearHistory*() =
   var h = 0
   while h < HistoryMax:
     var i = 0
@@ -80,14 +148,17 @@ proc restoreHistoryFromBuf(size: I32) =
 
 
 proc saveHistory*() =
-  let size = buildHistorySaveBuf()
+  let
+    size = buildHistorySaveBuf()
+    path = buildCurrentUserHistoryPath()
 
-  if sysWriteFileMode(cstring(HistoryPath), addr historySaveBuf[0], size, SysFsWriteCreate or SysFsWriteOverwrite) != 0:
+  if sysWriteFileMode(path, addr historySaveBuf[0], size, SysFsWriteCreate or SysFsWriteOverwrite) != 0:
     write("failed to write .history\n")
 
 
 proc loadHistory*() =
-  let size = sysReadFile(cstring(HistoryPath), addr historySaveBuf[0], U64(HistorySaveBufMax))
+  let path = buildCurrentUserHistoryPath()
+  let size = sysReadFile(path, addr historySaveBuf[0], U64(HistorySaveBufMax))
   if size > 0:
     restoreHistoryFromBuf(size)
 
