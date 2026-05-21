@@ -9,7 +9,7 @@ const
   ShadowSaltHexLen* = U32(ShadowSaltLen * U32(2))
   ShadowHashHexLen* = U32(ShadowHashLen * U32(2))
   ShadowLineMax* = U32(160)
-  ShadowDefaultIterations* = U32(2048)
+  ShadowDefaultIterations* = U32(128)
 
 
 type

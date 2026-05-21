@@ -17,8 +17,8 @@ const
   GroupMax = 8
   DbBufSize = 512
   ShadowFileMode = U32(0o600)
-  DefaultRootShadowLine = cstring"root:pbkdf2-sha256:2048:00112233445566778899aabbccddeeff:8e287c6757a2eef2e1e50a382837f965afbf37dadd3419d03f394c542adaa1b4"
-  DefaultUserShadowLine = cstring"user:pbkdf2-sha256:2048:102132435465768798a9babbdcddfe0f:57698aaedaa8408646f698c581c72063b7206f5dc1ed04c2b34af7b1316beed3"
+  DefaultRootShadowLine = cstring"root:pbkdf2-sha256:128:00112233445566778899aabbccddeeff:91b8f0d85f22d2563566e26377fc97f805e2302333e5c844414685a7ff2f3e0c"
+  DefaultUserShadowLine = cstring"user:pbkdf2-sha256:128:102132435465768798a9babbdcddfe0f:2709f7572a8bf67f32948a07b3698578f13cd63ecf3162d2038855de5733fad8"
 
 
 var
