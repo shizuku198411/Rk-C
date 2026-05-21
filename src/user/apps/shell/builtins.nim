@@ -27,16 +27,17 @@ proc switchUser*(name: cstring) =
     return
 
   var entry: PasswdEntry
-  if not resolveUser(name, entry):
-    write("su: unknown user\n")
+  var passwordBuf: array[LoginLineMax, char]
+  write("password: ")
+  let password = readLoginLine(passwordBuf, false)
+  if not authenticateUser(name, password, entry):
+    write("su: incorrect username or password\n")
     return
 
   saveHistory()
 
   let rc = sysSetUser(entry.uid, entry.gid)
-  if rc == SysSetUserRootOnly:
-    write("su: root switch denied\n")
-  elif rc != 0:
+  if rc != 0:
     write("su: failed\n")
   else:
     discard sysSetCwd(cast[cstring](addr entry.home[0]))

@@ -320,7 +320,7 @@ proc syscallSetUser*(uidVal, gidVal: U64): U64 =
 
   let uid = U32(uidVal)
   let gid = U32(gidVal)
-  if currentProc.identity.uid != RootUid and (uid != currentProc.identity.uid or gid != currentProc.identity.gid):
+  if currentProc.identity.uid != RootUid and not cstringEq(currentProc.exePath, cstring"/bin/shell"):
     setLastError(SysErrPerm)
     return U64(-2'i64)
 
