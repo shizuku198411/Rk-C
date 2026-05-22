@@ -7,15 +7,4 @@ virt.*
 docs/review
 docs/roadmap
 __pycache__/
-
-
-opensbi/*
-!opensbi/build/
-opensbi/build/*
-!opensbi/build/platform/
-opensbi/build/platform/*
-!opensbi/build/platform/generic/
-opensbi/build/platform/generic/*
-!opensbi/build/platform/generic/firmware/
-opensbi/build/platform/generic/firmware/*
-!opensbi/build/platform/generic/firmware/fw_jump.bin
+opensbi/
