@@ -57,6 +57,22 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   if reset2 < 0 or U64(reset2) != initialBreak:
     fail(cstring"reset mismatch")
 
+  let p3 = userAlloc(8192)
+  if p3 == nil:
+    fail(cstring"multi-page alloc failed")
+
+  let buf3 = cast[ptr UncheckedArray[char]](p3)
+  buf3[0] = 'A'
+  buf3[4096] = 'B'
+  buf3[8191] = 'C'
+
+  if buf3[0] != 'A' or buf3[4096] != 'B' or buf3[8191] != 'C':
+    fail(cstring"multi-page verify failed")
+
+  let wrapAlloc = userAlloc(high(U64) - U64(3))
+  if wrapAlloc != nil:
+    fail(cstring"wrap alloc succeeded")
+
   let overflowAlloc = userAlloc(U64(1) shl U64(63))
   if overflowAlloc != nil:
     fail(cstring"overflow alloc succeeded")

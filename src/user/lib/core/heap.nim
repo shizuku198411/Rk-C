@@ -24,11 +24,14 @@ proc userAlloc*(size: types.U64): pointer =
   if size == 0:
     return nil
 
+  if size > types.U64(high(types.I64)) - types.U64(7):
+    return nil
+
   if not ensureHeapBase():
     return nil
 
   let aligned = alignUp(size, types.U64(8))
-  if aligned > types.U64(high(types.I64)):
+  if aligned == 0 or aligned > types.U64(high(types.I64)):
     return nil
 
   let old = sysSbrk(types.I64(aligned))

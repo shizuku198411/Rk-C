@@ -712,15 +712,24 @@ proc configureUserProcess*(p: ptr Process, root: PageTable, path: cstring,
   p.user.sp = userSp
   p.user.imagePages = imagePages
   p.user.stackPages = stackPages
+
   p.user.heapStart = userBase + imagePages * PageSize
   p.user.heapEnd = p.user.heapStart
+
+  const
+    UserHeapStackGuardPages = U64(1)
+
+  let stackBottom = userStackTop - stackPages * PageSize
+  let guardSize = UserHeapStackGuardPages * PageSize
+
   p.user.heapLimit =
-    if stackPages == U64(0):
+    if stackBottom <= p.user.heapStart + guardSize:
       p.user.heapStart
     else:
-      userStackTop - stackPages * PageSize
+      stackBottom - guardSize
   if p.user.heapStart > p.user.heapLimit:
     panic("user heap overlaps stack")
+
   p.user.requestedCapabilityMask = requestedCapabilityMask
   p.user.capabilityMask = capabilityMask
   p.user.arg0 = arg0

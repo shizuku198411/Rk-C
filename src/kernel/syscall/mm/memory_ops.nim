@@ -87,8 +87,11 @@ proc syscallSbrk*(delta: I64): U64 =
       return U64(-1'i64)
     newEnd = current + add
   else:
+    if delta == low(I64):
+      return U64(-1'i64)
+
     let sub = U64(-delta)
-    if current < sub:
+    if sub > current:
       return U64(-1'i64)
     newEnd = current - sub
 
