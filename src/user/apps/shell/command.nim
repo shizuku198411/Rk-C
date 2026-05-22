@@ -1,7 +1,9 @@
 ## Parses shell command lines and runs apps with pipes, redirection, or bg mode.
 import ../../lib/core/io
+import ../../lib/core/strutils
 import ../../lib/core/pathutils
 import ../../lib/core/syscall
+import ../../../lib/service_catalog
 import ./state
 
 var
@@ -242,6 +244,24 @@ proc reportExecFailure(path: cstring) =
   write("\n")
 
 
+## check if the app execution is alloed or not
+proc isAllowedPath(path: cstring): bool =
+  # deny login app
+  if cstringEq(path, "/bin/login"):
+    return false
+
+  # deny services run from shell
+  if cstringEq(path, "/bin/svcmgtd"):
+    return false
+  var i = 0
+  while i < managedServices.len:
+    if cstringEq(path, managedServices[i].path):
+      return false
+    inc i
+  
+  true
+
+
 ## Reports an exec failure using kernel-specific exec return codes.
 proc reportExecFailure(path: cstring, rc: I32) =
   if rc == SysExecNoProcess:
@@ -302,7 +322,15 @@ proc runRedirection*(line: cstring): bool =
 
   discard sysClose(outFd)
 
-  let pid = sysExec(buildBinPathInto(cstr(leftCmdBuf), leftPathBuf), cstr(leftArgBuf), background)
+  let execPath = buildBinPathInto(cstr(leftCmdBuf), leftPathBuf)
+  if not isAllowedPath(execPath):
+    restoreFd(savedStdout, 1)
+    write("cannnot execute ")
+    write(execPath)
+    write(" directly from shell.\n")
+    return true
+
+  let pid = sysExec(execPath, cstr(leftArgBuf), background)
   restoreFd(savedStdout, 1)
   if pid < 0:
     reportExecFailure(cstr(leftPathBuf), pid)
@@ -352,7 +380,15 @@ proc runPipeline*(line: cstring): bool =
 
   discard sysClose(fds[1])
 
-  let leftPid = sysExec(buildBinPathInto(cstr(leftCmdBuf), leftPathBuf), cstr(leftArgBuf), background)
+  let execPath = buildBinPathInto(cstr(leftCmdBuf), leftPathBuf)
+  if not isAllowedPath(execPath):
+    restoreFd(savedStdout, 1)
+    write("cannnot execute ")
+    write(execPath)
+    write(" directly from shell.\n")
+    return true
+
+  let leftPid = sysExec(execPath, cstr(leftArgBuf), background)
   restoreFd(savedStdout, 1)
   if leftPid < 0:
     discard sysClose(fds[0])
@@ -397,6 +433,12 @@ proc runPipeline*(line: cstring): bool =
 
 ## Starts an app and optionally waits for it to finish.
 proc runApp*(path: cstring, arg: cstring, background: bool) =
+  if not isAllowedPath(path):
+    write("cannnot execute ")
+    write(path)
+    write(" directly from shell.\n")
+    return
+
   let pid = sysExec(path, arg, background)
   if pid < 0:
     reportExecFailure(path, pid)
