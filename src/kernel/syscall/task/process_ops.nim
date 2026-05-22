@@ -40,9 +40,14 @@ proc fillProcessInfo(entry: var SysProcessInfo, p: ptr Process) =
   entry.gid = p.identity.gid
   entry.state = processStateValue(p.state)
   entry.cpuTicks = p.cpuTicks
+  let heapPages =
+    if p.user.active:
+      heapPageCount(p.user)
+    else:
+      U64(0)
   entry.memoryPages =
     if p.user.active:
-      p.user.imagePages + p.user.stackPages + KernelStackPages
+      p.user.imagePages + p.user.stackPages + heapPages + KernelStackPages
     elif p.kernelStack != NilPAddr:
       KernelStackPages
     else:
@@ -58,6 +63,8 @@ proc fillProcessInfo(entry: var SysProcessInfo, p: ptr Process) =
   entry.bssMemSize = p.user.bssMemSize
   entry.stackTop = p.user.stackTop
   entry.stackPages = p.user.stackPages
+  entry.heapStart = p.user.heapStart
+  entry.heapPages = heapPages
   entry.requestedCapabilityMask = p.user.requestedCapabilityMask
   entry.capabilityMask = p.user.capabilityMask
   entry.pendingSignals = p.pendingSignals

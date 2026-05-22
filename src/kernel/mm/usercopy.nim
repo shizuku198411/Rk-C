@@ -43,10 +43,14 @@ proc isCurrentUserVaRange(userAddr, size: U64): bool =
     imageEnd = u.base + u.imagePages * PageSize
     stackStart = u.stackTop - u.stackPages * PageSize
     stackEnd = u.stackTop
+    heapStart = u.heapStart
+    heapEnd = u.heapEnd
   
   if rangeWithin(userAddr, size, imageStart, imageEnd):
     return true
   if rangeWithin(userAddr, size, stackStart, stackEnd):
+    return true
+  if rangeWithin(userAddr, size, heapStart, heapEnd):
     return true
 
   false

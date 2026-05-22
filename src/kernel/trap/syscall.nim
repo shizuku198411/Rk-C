@@ -137,6 +137,12 @@ proc handleSyscall*(frame: ptr TrapFrame) =
   of SysGetBitMap:
     frame.a0 = syscallGetBitMap(frame.a0)
 
+  of SysBrk:
+    frame.a0 = syscallBrk(frame.a0)
+
+  of SysSbrk:
+    frame.a0 = syscallSbrk(I64(frame.a0))
+
   of SysIpcSend:
     frame.a0 = syscallIpcSend(frame.a0, frame.a1)
 
