@@ -18,6 +18,7 @@ var
   pathBuf: array[UserCStringMax, char]
   argBuf: array[UserCStringMax, char]
   cwdCheckEntries: array[2, FsDirEntry]
+  fdInfoEntries: array[SysFdMax, SysFdInfo]
 
 
 ## Implements the process state value kernel helper.
@@ -373,3 +374,50 @@ proc syscallSignalPoll*(outSignal: U64): U64 =
     return U64(1)
 
   0
+
+
+proc fillFdInfo(entry: var SysFdInfo, fd: I32, src: FdEntry) =
+  entry = SysFdInfo()
+  entry.fd = fd
+
+  if not src.used:
+    entry.used = 0
+    return
+
+  entry.used = 1
+  entry.kind = src.kind
+  entry.flags  = src.flags
+  entry.offset = src.offset
+  entry.size = src.size
+  entry.pipeId = src.pipeId
+  discard copyCString(entry.path, cast[cstring](addr src.path[0]))
+
+
+## Handles the fd list syscall operation.
+proc syscallFdList*(pidVal, outEntries, maxEntries: U64): U64 =
+  if not canSyscallProcessList():
+    return U64(-1'i64)
+  if outEntries == 0 or maxEntries == 0:
+    return U64(-1'i64)
+
+  let
+    pid = I32(pidVal)
+    target = findProcByPid(pid)
+  if target == nil:
+    return U64(-1'i64)
+
+  var
+    count = U32(0)
+    fd = U32(0)
+  
+  while fd < SysFdMax and count < maxEntries:
+    if target.files.entries[fd].used:
+      fillFdInfo(fdInfoEntries[count], I32(fd), target.files.entries[fd])
+      inc count
+    inc fd
+  
+  let bytes = count * U64(sizeof(SysFdInfo))
+  if not copyOutBuffer(outEntries, addr fdInfoEntries[0], bytes):
+    return U64(-1'i64)
+  
+  count

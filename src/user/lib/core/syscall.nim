@@ -492,3 +492,8 @@ proc sysEntropy*(buf: pointer, size: U64): I32 =
 ## Invokes the get cap syscall wrapper.
 proc sysGetCap*(buf: pointer, size: U64): I32 =
   I32(rawSyscall3(SysGetCap, cast[U64](buf), size, 0))
+
+
+## Invokes the fd list syscall wrapper.
+proc sysFdList*(pid: I32, entries: ptr SysFdInfo, maxEntries: U64): I32 =
+  I32(rawSyscall3(SysFdList, U64(pid), cast[U64](entries), maxEntries))
