@@ -8,7 +8,7 @@ It owns user, group, and password lookup requests for tools such as `login`,
 
 - Initialize and load `/etc/passwd`
 - Initialize and load `/etc/group`
-- Initialize, load, and migrate `/etc/shadow`
+- Initialize and load `/etc/shadow`
 - Resolve users by name or UID
 - Resolve groups by name or GID
 - Verify login passwords
@@ -39,17 +39,16 @@ The current format is PBKDF2-HMAC-SHA256:
 Default accounts are created when the database files do not exist:
 
 - `root`, UID 0, GID 0, home `/`
-- `user`, UID 1000, GID 1000, home `/home`
+- `rkc`, UID 1000, GID 1000, home `/home/rkc`
 
 ## Startup Flow
 
 1. Wait for `svcmgtd` to register the user service slot
 2. Ensure `/etc/passwd` exists, then load users
 3. Ensure `/etc/shadow` exists, then load password hashes
-4. Migrate missing or invalid default shadow entries
-5. Ensure `/etc/group` exists, then load groups
-6. Send `notifyServiceReady(SysServiceKindUser)`
-7. Wait for IPC packets in a receive loop
+4. Ensure `/etc/group` exists, then load groups
+5. Send `notifyServiceReady(SysServiceKindUser)`
+6. Wait for IPC packets in a receive loop
 
 ## IPC Requests
 

@@ -6,13 +6,13 @@
 
 ```text
 chown <uid>:<gid> <path>
-chown <root|user> <path>
+chown <root|rkc> <path>
 ```
 
 Examples:
 
 ```text
-chown user /tmp/note.txt
+chown rkc /tmp/note.txt
 chown 0:0 /tmp/root-owned.txt
 ```
 

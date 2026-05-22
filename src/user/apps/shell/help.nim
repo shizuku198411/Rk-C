@@ -23,6 +23,7 @@ proc printHelp*() =
   write("  id\n")
   write("  chmod\n")
   write("  chown\n")
+  write("  passwd\n")
   write("  edit\n")
   write("  ps\n")
   write("  date\n")

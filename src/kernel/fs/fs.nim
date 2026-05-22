@@ -13,7 +13,7 @@ import ../syscall/blk/block_service_ops
 
 const
   FsMagic = U32(0x4e465332) # NFS2
-  FsMaxNodes* = 32
+  FsMaxNodes* = 40
   FsNameMax* = 16
   FsMetaBlocks = U64(4)
   FsMetaBytes = 2048
@@ -112,6 +112,8 @@ proc fsRename*(oldPath, newPath: cstring): int
 proc fsChmod*(path: cstring, mode: U32): int
 ## Implements the fs chown kernel helper.
 proc fsChown*(path: cstring, uid, gid: U32): int
+## Ensures a child node exists below an existing directory.
+proc ensureDir(parentIdx: int, name: cstring, typ: U32): bool
 
 
 ## Implements the default node mode kernel helper.
@@ -695,6 +697,26 @@ proc ensureRootDirOwned(name: cstring, typ, uid, gid, mode: U32): bool =
   changed
 
 
+## Ensures a child directory exists with the requested owner and mode.
+proc ensureChildDirOwned(parentIdx: int, name: cstring, uid, gid, mode: U32): bool =
+  var changed = ensureDir(parentIdx, name, FsTypeDir)
+  let idx = findChild(parentIdx, name)
+  if idx < 0:
+    return changed
+
+  if superBlock.nodes[idx].uid != uid:
+    superBlock.nodes[idx].uid = uid
+    changed = true
+  if superBlock.nodes[idx].gid != gid:
+    superBlock.nodes[idx].gid = gid
+    changed = true
+  if superBlock.nodes[idx].mode != mode:
+    superBlock.nodes[idx].mode = mode
+    changed = true
+
+  changed
+
+
 ## Implements the ensure dir kernel helper.
 proc ensureDir(parentIdx: int, name: cstring, typ: U32): bool =
   if parentIdx < 0 or superBlock.nodes[parentIdx].typ != FsTypeDir:
@@ -779,6 +801,15 @@ proc fsInit*() =
   fsChanged = ensureRootDirOwned(
     "home",
     FsTypeDir,
+    RootUid,
+    RootGid,
+    FsModeDirDefault,
+  ) or fsChanged
+
+  let homeIdx = resolvePath("/home")
+  fsChanged = ensureChildDirOwned(
+    homeIdx,
+    "rkc",
     UserUid,
     UserGid,
     FsModeDirDefault,
