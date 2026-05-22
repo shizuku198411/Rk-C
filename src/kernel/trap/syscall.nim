@@ -274,6 +274,9 @@ proc handleSyscall*(frame: ptr TrapFrame) =
 
   of SysSignalPoll:
     frame.a0 = syscallSignalPoll(frame.a0)
+  
+  of SysFdList:
+    frame.a0 = syscallFdList(frame.a0, frame.a1, frame.a2)
 
   else:
     setLastError(SysErrInval)

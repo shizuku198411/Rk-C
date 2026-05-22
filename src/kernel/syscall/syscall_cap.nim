@@ -176,7 +176,7 @@ proc canSyscallShutdown*(): bool =
 ## Checks whether syscall by number is allowed.
 proc canSyscallByNumber*(num: U64): bool =
   case num
-  of SysPs:
+  of SysPs, SysFdList:
     canSyscallProcessList()
   of SysKill:
     canSyscallKillProcess()

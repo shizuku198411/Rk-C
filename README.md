@@ -214,7 +214,7 @@ initial user account:
 
 ```text
 [1] username: root, password: root
-[2] username: user, password: user
+[2] username: rkc, password: rkc
 ```
 
 Run without a VirtIO network device to test degraded optional-service boot:

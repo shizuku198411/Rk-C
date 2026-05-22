@@ -10,7 +10,7 @@ import ./state
 
 const
   HistoryFileName = ".history"
-  UserHistoryPath = "/home/.history"
+  UserHistoryPath = "/home/rkc/.history"
   HistoryPathMax = U32(PasswdHomeMax) + 16
 
 
@@ -46,7 +46,7 @@ proc appendPathCString(pos: var U32, s: cstring): bool =
   true
 
 
-## Builds the history path for the current uid, falling back to /home.
+## Builds the history path for the current uid, falling back to /home/rkc.
 proc buildCurrentUserHistoryPath(): cstring =
   clearHistoryPathBuf()
 

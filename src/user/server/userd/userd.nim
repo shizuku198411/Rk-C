@@ -19,7 +19,7 @@ const
   DbBufSize = 512
   ShadowFileMode = U32(0o600)
   DefaultRootShadowLine = cstring"root:pbkdf2-sha256:128:00112233445566778899aabbccddeeff:91b8f0d85f22d2563566e26377fc97f805e2302333e5c844414685a7ff2f3e0c"
-  DefaultUserShadowLine = cstring"user:pbkdf2-sha256:128:102132435465768798a9babbdcddfe0f:2709f7572a8bf67f32948a07b3698578f13cd63ecf3162d2038855de5733fad8"
+  DefaultRkcShadowLine = cstring"rkc:pbkdf2-sha256:128:102132435465768798a9babbdcddfe0f:e68bd965923c84d6305f4fbdd65017367e4f7ae6e589a60cfc5b3edc1391bcfa"
 
 
 var
@@ -79,7 +79,7 @@ proc copyDefaultPasswdToDb(): U32 =
 
   appendStr(cstring"root:0:0:/")
   appendChar(char(10))
-  appendStr(cstring"user:1000:1000:/home")
+  appendStr(cstring"rkc:1000:1000:/home/rkc")
   appendChar(char(10))
   pos
 
@@ -104,7 +104,7 @@ proc copyDefaultGroupToDb(): U32 =
 
   appendStr(cstring"root:0:root")
   appendChar(char(10))
-  appendStr(cstring"user:1000:user")
+  appendStr(cstring"rkc:1000:rkc")
   appendChar(char(10))
   pos
 
@@ -193,35 +193,6 @@ proc resetGroupFile(): bool =
   true
 
 
-## Persists the in-memory passwd entries to /etc/passwd.
-proc saveUsers(): bool =
-  clearDbBuf()
-
-  var pos = U32(0)
-  var i = U32(0)
-  while i < userCount and i < U32(UserMax):
-    let written = writePasswdLine(addr dbBuf[pos], U32(DbBufSize) - pos, users[i])
-    if written == U32(0) or pos + written >= U32(DbBufSize):
-      return false
-
-    pos += written
-    inc i
-
-  let rc = sysWriteFileMode(
-    PasswdPath,
-    addr dbBuf[0],
-    U64(pos),
-    SysFsWriteCreate or SysFsWriteOverwrite,
-  )
-  if rc != 0:
-    write("[userd] failed to save /etc/passwd rc=")
-    writeI32(rc)
-    write("\n")
-    return false
-
-  true
-
-
 ## Persists the in-memory shadow entries to /etc/shadow with restricted mode.
 proc saveShadowUsers(): bool =
   clearDbBuf()
@@ -266,12 +237,12 @@ proc addShadowDefault(line: cstring): bool =
   true
 
 
-## Rebuilds /etc/shadow from built-in default root and user hashes.
+## Rebuilds /etc/shadow from built-in default root and rkc hashes.
 proc resetShadowFile(): bool =
   shadowCount = U32(0)
   if not addShadowDefault(DefaultRootShadowLine):
     return false
-  if not addShadowDefault(DefaultUserShadowLine):
+  if not addShadowDefault(DefaultRkcShadowLine):
     return false
 
   saveShadowUsers()
@@ -413,60 +384,6 @@ proc findShadowByName(name: cstring): ptr ShadowEntry =
     inc i
 
   nil
-
-
-## Adds a built-in default shadow entry when it is missing.
-proc ensureDefaultShadow(name, line: cstring): bool =
-  if findShadowByName(name) != nil:
-    return false
-  if addShadowDefault(line):
-    return true
-
-  false
-
-
-## Replaces an existing shadow entry with a built-in default line.
-proc replaceShadowDefault(name, line: cstring): bool =
-  let shadow = findShadowByName(name)
-  if shadow == nil:
-    return false
-
-  var entry: ShadowEntry
-  if not parseShadowLine(line, entry):
-    return false
-
-  shadow[] = entry
-  true
-
-
-## Migrates default accounts when older or invalid shadow entries are found.
-proc migrateMissingShadowUsers(): bool =
-  var changed = false
-
-  if ensureDefaultShadow(cstring"root", DefaultRootShadowLine):
-    changed = true
-
-  if ensureDefaultShadow(cstring"user", DefaultUserShadowLine):
-    changed = true
-
-  let rootShadow = findShadowByName(cstring"root")
-  if rootShadow != nil and not verifyPassword(rootShadow[], cstring"root"):
-    if not replaceShadowDefault(cstring"root", DefaultRootShadowLine):
-      return false
-
-    changed = true
-
-  let userShadow = findShadowByName(cstring"user")
-  if userShadow != nil and not verifyPassword(userShadow[], cstring"user"):
-    if not replaceShadowDefault(cstring"user", DefaultUserShadowLine):
-      return false
-
-    changed = true
-
-  if changed:
-    return saveShadowUsers()
-
-  true
 
 
 ## Finds an in-memory group entry by group name.
@@ -647,14 +564,8 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
     write("[userd] failed to load /etc/passwd\n")
     sysExit(1)
 
-  discard saveUsers()
-
   if not ensureShadowFile() or (not loadShadowUsers() and (not resetShadowFile() or not loadShadowUsers())):
     write("[userd] failed to load /etc/shadow\n")
-    sysExit(1)
-
-  if not migrateMissingShadowUsers():
-    write("[userd] failed to migrate /etc/shadow\n")
     sysExit(1)
 
   if not ensureGroupFile() or (not loadGroups() and (not resetGroupFile() or not loadGroups())):

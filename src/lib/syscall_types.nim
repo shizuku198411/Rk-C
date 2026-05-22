@@ -278,3 +278,13 @@ type
     registered*: U32
     available*: U32
     name*: array[SysServiceNameMax, char]
+  
+  SysFdInfo* {.packed.} = object
+    fd*: I32
+    used*: U32
+    kind*: U32
+    flags*: U32
+    offset*: U64
+    size*: U64
+    pipeId*: I32
+    path*: array[SysFdPathMax, char]

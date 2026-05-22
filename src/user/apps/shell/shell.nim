@@ -63,7 +63,7 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
 
     elif cstringEq(cstr(cmdBuf), "exit"):
       saveHistory()
-      sysExit(0)      
+      sysExit(0)
 
     elif cstringEq(cstr(cmdBuf), "shutdown"):
       kernelShutdown()

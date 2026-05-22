@@ -36,6 +36,7 @@ var
   bitmap: SysBitmapInfo
   cpuInfo: SysCpuInfo
   fsInfos: array[SysFsInfoMaxEntries, SysFsInfoEntry]
+  fdInfos: array[SysFdMax, SysFdInfo]
 
 
 proc clearOut() =
@@ -453,6 +454,77 @@ proc parseRkxMapPath(path: cstring, pid: var I32): bool =
   parseProcChildPath(path, cstring"rkx_map", pid)
 
 
+proc parseFdDirPath(path: cstring, pid: var I32): bool =
+  parseProcChildPath(path, cstring"fd", pid)
+
+
+proc parseFdEntryPath(path: cstring, pid: var I32, fd: var I32): bool =
+  if not (path[0] == '/' and path[1] == 'p' and path[2] == 'r' and
+      path[3] == 'o' and path[4] == 'c' and path[5] == '/'):
+    return false
+  
+  var
+    i = 6
+    pidValue = I32(0)
+  if path[i] < '0' or path[i] > '9':
+    return false
+
+  while path[i] >= '0' and path[i] <= '9':
+    pidValue = pidValue * I32(10) + I32(ord(path[i]) - ord('0'))
+    inc i
+  
+  if path[i] != '/':
+    return false
+  inc i
+
+  if path[i] != 'f' or path[i + 1] != 'd' or path[i + 2] != '/':
+    return false
+  i += 3
+
+  var fdValue = I32(0)
+  if path[i] < '0' or path[i] > '9':
+    return false
+
+  while path[i] >= '0' and path[i] <= '9':
+    fdValue = fdValue * I32(10) + I32(ord(path[i]) - ord('0'))
+    inc i
+  
+  if path[i] != '\0':
+    return false
+
+  pid = pidValue
+  fd = fdValue
+  true
+
+
+proc writeFdDirEntry(entry: ptr DirEntry, fd: I32) =
+  entry.typ = DirEntryTypeFile
+  entry.size = 0
+
+  var
+    tmp: array[16, char]
+    n = fd
+    i = 0
+
+  if n == 0:
+    entry.name[0] = '0'
+    entry.name[1] = '\0'
+    return
+
+  while n > 0 and i < 16:
+    tmp[i] = char(ord('0') + (n mod I32(10)))
+    n = n div I32(10)
+    inc i
+  
+  var pos = 0
+  while i > 0 and pos + 1 < DirEntryNameMax:
+    dec i
+    entry.name[pos] = tmp[i]
+    inc pos
+  
+  entry.name[pos] = '\0'
+
+
 proc parseProcPidPath(path: cstring, pid: var I32): bool =
   if not (path[0] == '/' and path[1] == 'p' and path[2] == 'r' and
       path[3] == 'o' and path[4] == 'c' and path[5] == '/'):
@@ -713,6 +785,47 @@ proc procLsOffset(): U32 =
   U32(packet.arg1)
 
 
+proc renderLsProcFd(pid: I32): I32 =
+  clearResponseData()
+
+  let fdCount = sysFdList(pid, addr fdInfos[0], U64(SysFdMax))
+  if fdCount < 0:
+    return -1
+
+  let
+    maxEntries = procLsEntryLimit()
+    offset = procLsOffset()
+    entries = cast[ptr UncheckedArray[DirEntry]](addr response.data[0])
+  
+  var
+    count = U32(0)
+    seen = U32(0)
+  
+  template addFd(fd: I32) =
+    if seen >= offset and count < maxEntries:
+      writeFdDirEntry(addr entries[count], fd)
+      inc count
+    inc seen
+  
+  if seen >= offset and count < maxEntries:
+    writeDirEntry(addr entries[count], cstring".", DirEntryTypeDir)
+    inc count
+  inc seen
+
+  if seen >= offset and count < maxEntries:
+    writeDirEntry(addr entries[count], cstring"..", DirEntryTypeDir)
+    inc count
+  inc seen
+
+  var i = U32(0)
+  while i < U32(fdCount):
+    addFd(fdInfos[i].fd)
+    inc i
+
+  response.len = count * U32(sizeof(DirEntry))
+  I32(count)
+
+
 proc renderLsProcRoot(): I32 =
   clearResponseData()
 
@@ -778,6 +891,7 @@ proc renderLsProcPid(pid: I32): I32 =
   add(cstring"..", DirEntryTypeDir)
   add(cstring"status", DirEntryTypeFile)
   add(cstring"rkx_map", DirEntryTypeFile)
+  add(cstring"fd", DirEntryTypeDir)
 
   response.len = count * U32(sizeof(DirEntry))
   I32(count)
@@ -791,11 +905,108 @@ proc renderLsProc(path: cstring): I32 =
   if parseProcPidPath(path, pid):
     return renderLsProcPid(pid)
 
+  if parseFdDirPath(path, pid):
+    return renderLsProcFd(pid)
+
   -1
+
+
+proc fdKindName(kind: U32): cstring =
+  if kind == SysFdKindFile:
+    cstring"file"
+  elif kind == SysFdKindStdin:
+    cstring"stdin"
+  elif kind == SysFdKindStdout:
+    cstring"stdout"
+  elif kind == SysFdKindStderr:
+    cstring"stderr"
+  elif kind == SysFdKindConsole:
+    cstring"console"
+  elif kind == SysFdKindPipe:
+    cstring"pipe"
+  else:
+    cstring"unknown"
+
+
+proc appendFdFlags(pos: var U32, flags: U32) =
+  var first = true
+
+  if (flags and SysOpenRead) != 0:
+    appendStr(pos, cstring"read")
+    first = false
+
+  if (flags and SysOpenWrite) != 0:
+    if not first:
+      appendChar(pos, ',')
+    appendStr(pos, cstring"write")
+    first = false
+
+  if (flags and SysOpenAppend) != 0:
+    if not first:
+      appendChar(pos, ',')
+    appendStr(pos, cstring"append")
+    first = false
+
+  if first:
+    appendStr(pos, cstring"none")
+
+
+proc renderFdInfo(pid, fd: I32): U32 =
+  clearOut()
+  var pos = U32(0)
+
+  let fdCount = sysFdList(pid, addr fdInfos[0], U64(SysFdMax))
+  if fdCount < 0:
+    appendStr(pos, cstring"not found\n")
+    return pos
+
+  var i = U32(0)
+  while i < U32(fdCount):
+    if fdInfos[i].fd == fd:
+      appendStr(pos, cstring"fd: ")
+      appendI32(pos, fdInfos[i].fd)
+      appendChar(pos, '\n')
+
+      appendStr(pos, cstring"kind: ")
+      appendStr(pos, fdKindName(fdInfos[i].kind))
+      appendChar(pos, '\n')
+
+      appendStr(pos, cstring"flags: ")
+      appendFdFlags(pos, fdInfos[i].flags)
+      appendChar(pos, '\n')
+
+      appendStr(pos, cstring"offset: ")
+      appendU64(pos, fdInfos[i].offset)
+      appendChar(pos, '\n')
+
+      appendStr(pos, cstring"size: ")
+      appendU64(pos, fdInfos[i].size)
+      appendChar(pos, '\n')
+
+      if fdInfos[i].kind == SysFdKindPipe:
+        appendStr(pos, cstring"pipe_id: ")
+        appendI32(pos, fdInfos[i].pipeId)
+        appendChar(pos, '\n')
+
+      appendStr(pos, cstring"path: ")
+      appendStr(pos, cast[cstring](addr fdInfos[i].path[0]))
+      appendChar(pos, '\n')
+
+      return pos
+
+    inc i
+
+  appendStr(pos, cstring"not found\n")
+  pos
 
 
 proc renderRead(path: cstring): U32 =
   var pid = I32(0)
+  var fd = I32(0)
+
+  if parseFdEntryPath(path, pid, fd):
+    return renderFdInfo(pid, fd)
+
   if parseStatusPath(path, pid):
     return renderStatus(pid)
 
