@@ -336,8 +336,12 @@ def normal_tests() -> list[TestCase]:
 
 
 def abnormal_tests() -> list[TestCase]:
+    overlong_command = "a" * 75
+
     return [
         TestCase("missing command", "definitely_missing_command", ["command not found: /bin/definitely_missing_command"]),
+        TestCase("deny truncated command path", overlong_command, ["command path too long"]),
+        TestCase("deny server binary in pipeline", "echo ok | userd", ["cannnot execute /bin/userd directly from shell."]),
         TestCase("kill invalid pid", "kill 999", ["kill: failed"]),
         TestCase("svc stop required service", "svc stop fsd", ["cannot stop required service"]),
         TestCase("ipc invalid send", "ipc send 999 hello", ["ipc: send failed"]),

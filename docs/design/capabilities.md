@@ -99,7 +99,7 @@ The trusted policy is currently path-based:
 | `/bin/netd` | `sys_raw_net` |
 | `/bin/stracectl` | `sys_trace_ctl` |
 | `/bin/kill` | `sys_process_kill` |
-| `/bin/shell` | `sys_shutdown` |
+| `/bin/shutdown` | `sys_shutdown` |
 | `/bin/svc` | `sys_service_manager` |
 | all other paths | none |
 

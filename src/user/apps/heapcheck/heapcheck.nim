@@ -12,6 +12,11 @@ proc fail(msg: cstring) {.noreturn.} =
   sysExit(1)
 
 
+## Resets this test application's bump heap to its initial break.
+proc resetHeap(initialBreak: U64): bool =
+  sysBrk(initialBreak) == 0
+
+
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   if cstringEq(arg, cstring"--help"):
     write("usage: heapcheck\n")
@@ -22,7 +27,11 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
     fail(cstring"sbrk(0) failed")
 
   let initialBreak = U64(initial)
-  if not userResetHeap():
+  let queriedInitial = sysBrk(U64(0))
+  if queriedInitial < 0 or U64(queriedInitial) != initialBreak:
+    fail(cstring"brk query mismatch")
+
+  if not resetHeap(initialBreak):
     fail(cstring"reset failed")
 
   let afterReset = sysSbrk(0)
@@ -50,7 +59,12 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   if buf2[0] != 'Z' or buf2[4095] != 'Y':
     fail(cstring"page-crossing verify failed")
 
-  if not userResetHeap():
+  let afterAlloc = sysSbrk(0)
+  let queriedAfterAlloc = sysBrk(U64(0))
+  if afterAlloc < 0 or queriedAfterAlloc < 0 or queriedAfterAlloc != afterAlloc:
+    fail(cstring"brk grown query mismatch")
+
+  if not resetHeap(initialBreak):
     fail(cstring"reset failed")
 
   let reset2 = sysSbrk(0)

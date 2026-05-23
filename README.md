@@ -2,6 +2,8 @@
   <img src="./assets/Rk-C_logo.png" alt="Rk-C Logo" width="250">
 </p>
 
+[Official Documentations is here!](https://shizuku198411.github.io/Rk-C-Doc/)
+
 Rk-C is an experimental RISC-V 64-bit microkernel-style operating system written
 mainly in Nim.
 

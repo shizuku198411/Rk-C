@@ -11,10 +11,7 @@ import ./prompt
 import ./state
 
 
-## Starts the shell loop, reads commands, and dispatches built-ins or apps.
-proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
-  discard arg
-
+proc allocateBuffers() =
   if not initLineBuffer():
     write("shell: failed to allocate line buffer\n")
     sysExit(1)
@@ -31,6 +28,10 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
     write("shell: failed to allocate path buffer\n")
     sysExit(1)
 
+  if not initCommandScratchBuffers():
+    write("shell: failed to allocate command scratch buffers\n")
+    sysExit(1)
+
   if not initHistorySaveBuffer():
     write("shell: failed to allocate history buffer\n")
     sysExit(1)
@@ -38,6 +39,13 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   if not initHistoryPathBuffer():
     write("shell: failed to allocate history path buffer\n")
     sysExit(1)
+
+
+## Starts the shell loop, reads commands, and dispatches built-ins or apps.
+proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
+  discard arg
+
+  allocateBuffers()
 
   loadHistory()
 
@@ -93,8 +101,12 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
       saveHistory()
       sysExit(0)
 
-    elif cstringEq(cmdCString(), "shutdown"):
-      kernelShutdown()
-
     else:
-      runApp(buildBinPath(cmdCString()), copyArgToExecArgBuffer(), background)
+      if cstringEq(cmdCString(), "sudo"):
+        saveHistory()
+
+      let path = buildBinPath(cmdCString())
+      if path == nil:
+        write("command path too long\n")
+      else:
+        runApp(path, copyArgToExecArgBuffer(), background)

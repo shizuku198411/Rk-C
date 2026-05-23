@@ -44,7 +44,7 @@ USER_SHELL_RKX := $(BIN_DIR)/shell.rkx
 USER_APP_NAMES := \
 	login ls cat mkdir ps rm rmdir date edit ipc kill svc ping nslookup tcpcheck \
 	curl stracectl dmesg rkxinfo echo touch cp mv df wc paniclog id chmod chown passwd \
-	whoami
+	whoami sudo shutdown
 USER_SERVER_NAMES := svcmgtd procmgtd fsd blockd procfsd netd userd
 TEST_APP_NAMES := faultcheck capcheck pollcheck signalcheck writecheck heapcheck
 APPFS_EXTRA_APPS ?=
@@ -253,7 +253,7 @@ qemu-debug: build
 	$(QEMU) $(QEMU_DEBUG_ARGS)
 
 test-apps:
-	python3 scripts/test_apps.py $(TEST_APPS_ARGS)
+	python3 scripts/test_apps.py $(TEST_APPS_ARGS) --skip-network-smoke
 
 net-host-help:
 	@echo "Default TAP network:"

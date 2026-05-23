@@ -127,14 +127,3 @@ proc printBitmapInfo*() =
   write("  free : ")
   writeUnsigned(info.free)
   write(" pages\n")
-
-
-## shutdown kernel
-proc kernelShutdown*() =
-  let uid = sysGetUid()
-  if uid != 0:
-    write("permission denied.\n")
-    return
-  saveHistory()
-  if sysShutdown() != 0:
-    write("failed to shutdown\n")

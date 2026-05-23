@@ -6,26 +6,10 @@ import ../../lib/core/syscall
 import ../../../lib/service_catalog
 import ./state
 
-var
-  pipelineLineBuf: array[LineMax, char]
-  redirectLineBuf: array[LineMax, char]
-  leftLineBuf: array[LineMax, char]
-  rightLineBuf: array[LineMax, char]
-  redirectTargetBuf: array[LineMax, char]
-  leftCmdBuf: array[LineMax, char]
-  leftArgBuf: array[LineMax, char]
-  leftPathBuf: array[LineMax, char]
-  rightCmdBuf: array[LineMax, char]
-  rightArgBuf: array[LineMax, char]
-  rightPathBuf: array[LineMax, char]
-
 
 ## Clears a line-sized shell buffer.
-proc clearBuffer(buf: var array[LineMax, char]) =
-  var i = U64(0)
-  while i < LineMax:
-    buf[i] = '\0'
-    inc i
+proc clearBuffer(buf: ptr UncheckedArray[char]) =
+  clearCommandScratchBuffer(buf)
 
 
 ## Advances a parser cursor over ASCII spaces.
@@ -35,8 +19,10 @@ proc skipSpaces(s: cstring, pos: var int) =
 
 
 ## Splits a command line into command and raw argument buffers.
-proc parseCommandInto(line: cstring, cmd: var array[LineMax, char],
-                      arg: var array[LineMax, char]): bool =
+proc parseCommandInto(line: cstring, cmd, arg: ptr UncheckedArray[char]): bool =
+  if line == nil or cmd == nil or arg == nil:
+    return false
+
   clearBuffer(cmd)
   clearBuffer(arg)
 
@@ -44,7 +30,7 @@ proc parseCommandInto(line: cstring, cmd: var array[LineMax, char],
   skipSpaces(line, pos)
 
   var i = U64(0)
-  while line[pos] != '\0' and line[pos] != ' ' and i < LineMax - 1:
+  while line[pos] != '\0' and line[pos] != ' ' and i < CommandScratchBufferCap - 1:
     cmd[i] = line[pos]
     inc i
     inc pos
@@ -54,7 +40,7 @@ proc parseCommandInto(line: cstring, cmd: var array[LineMax, char],
 
   skipSpaces(line, pos)
   i = 0
-  while line[pos] != '\0' and i < LineMax - 1:
+  while line[pos] != '\0' and i < CommandScratchBufferCap - 1:
     arg[i] = line[pos]
     inc i
     inc pos
@@ -109,7 +95,10 @@ proc parseCommand*(line: cstring): bool =
 
 
 ## Builds a /bin/<command> executable path into the requested buffer.
-proc buildBinPathInto(cmd: cstring, dst: var array[LineMax, char]): cstring =
+proc buildBinPathInto(cmd: cstring, dst: ptr UncheckedArray[char]): cstring =
+  if cmd == nil or dst == nil:
+    return nil
+
   clearBuffer(dst)
   dst[0] = '/'
   dst[1] = 'b'
@@ -117,11 +106,15 @@ proc buildBinPathInto(cmd: cstring, dst: var array[LineMax, char]): cstring =
   dst[3] = 'n'
   dst[4] = '/'
   var i = U64(0)
-  while cmd[i] != '\0' and i + 5 < LineMax - 1:
+  while cmd[i] != '\0' and i + 5 < CommandScratchBufferCap - 1:
     dst[i + 5] = cmd[i]
     inc i
+
+  if cmd[i] != '\0':
+    return nil
+
   dst[i + 5] = '\0'
-  cstr(dst)
+  cast[cstring](addr dst[0])
 
 
 ## Builds a /bin/<command> executable path into the shared path buffer.
@@ -141,6 +134,9 @@ proc buildBinPath*(cmd: cstring): cstring =
       pathBuf[pos] = cmd[pos]
       inc pos
 
+    if cmd[pos] != '\0':
+      return nil
+
     pathBuf[pos] = '\0'
     return pathCString()
 
@@ -158,14 +154,20 @@ proc buildBinPath*(cmd: cstring): cstring =
     inc pos
     inc i
 
+  if cmd[i] != '\0':
+    return nil
+
   pathBuf[pos] = '\0'
   pathCString()
 
 
 ## Removes a trailing background marker from an argument buffer.
-proc stripBackgroundMarkerFrom(buf: var array[LineMax, char]): bool =
+proc stripBackgroundMarkerFrom(buf: ptr UncheckedArray[char]): bool =
+  if buf == nil:
+    return false
+
   var len = U64(0)
-  while len < LineMax and buf[len] != '\0':
+  while len < CommandScratchBufferCap and buf[len] != '\0':
     inc len
 
   while len > 0 and buf[len - 1] == ' ':
@@ -209,6 +211,9 @@ proc buildBinPathIntoHeap*(
       inc pos
       inc i
 
+    if cmd[i] != '\0':
+      return nil
+
     outBuf[pos] = '\0'
     return cast[cstring](addr outBuf[0])
 
@@ -225,15 +230,21 @@ proc buildBinPathIntoHeap*(
     inc pos
     inc i
 
+  if cmd[i] != '\0':
+    return nil
+
   outBuf[pos] = '\0'
   cast[cstring](addr outBuf[0])
 
 
 ## Copies a command line into the pipeline scratch buffer.
 proc copyPipelineLine(line: cstring) =
+  if pipelineLineBuf == nil:
+    return
+
   clearBuffer(pipelineLineBuf)
   var i = U64(0)
-  while line[i] != '\0' and i < LineMax - 1:
+  while line[i] != '\0' and i < CommandScratchBufferCap - 1:
     pipelineLineBuf[i] = line[i]
     inc i
   pipelineLineBuf[i] = '\0'
@@ -241,6 +252,9 @@ proc copyPipelineLine(line: cstring) =
 
 ## Splits a single-pipe command line into left and right command lines.
 proc splitPipeline(line: cstring): bool =
+  if line == nil or leftLineBuf == nil or rightLineBuf == nil:
+    return false
+
   clearBuffer(leftLineBuf)
   clearBuffer(rightLineBuf)
 
@@ -258,14 +272,14 @@ proc splitPipeline(line: cstring): bool =
     return false
 
   var i = U64(0)
-  while int(i) < pipePos and i < LineMax - 1:
+  while int(i) < pipePos and i < CommandScratchBufferCap - 1:
     leftLineBuf[i] = line[i]
     inc i
   leftLineBuf[i] = '\0'
 
   i = 0
   pos = pipePos + 1
-  while line[pos] != '\0' and i < LineMax - 1:
+  while line[pos] != '\0' and i < CommandScratchBufferCap - 1:
     rightLineBuf[i] = line[pos]
     inc i
     inc pos
@@ -275,9 +289,12 @@ proc splitPipeline(line: cstring): bool =
 
 ## Copies a command line into the redirection scratch buffer.
 proc copyRedirectLine(line: cstring) =
+  if redirectLineBuf == nil:
+    return
+
   clearBuffer(redirectLineBuf)
   var i = U64(0)
-  while line[i] != '\0' and i < LineMax - 1:
+  while line[i] != '\0' and i < CommandScratchBufferCap - 1:
     redirectLineBuf[i] = line[i]
     inc i
   redirectLineBuf[i] = '\0'
@@ -296,7 +313,10 @@ proc containsChar(line: cstring, ch: char): bool =
 
 ## Copies and trims a substring from one command line into a buffer.
 proc copyTrimmedRange(src: cstring, startPos, endPos: int,
-                      dst: var array[LineMax, char]) =
+                      dst: ptr UncheckedArray[char]) =
+  if src == nil or dst == nil:
+    return
+
   clearBuffer(dst)
 
   var start = startPos
@@ -308,7 +328,7 @@ proc copyTrimmedRange(src: cstring, startPos, endPos: int,
 
   var i = U64(0)
   var pos = start
-  while pos < finish and i < LineMax - 1:
+  while pos < finish and i < CommandScratchBufferCap - 1:
     dst[i] = src[pos]
     inc i
     inc pos
@@ -317,6 +337,9 @@ proc copyTrimmedRange(src: cstring, startPos, endPos: int,
 
 ## Splits a stdout redirection command line into command and target path.
 proc splitRedirection(line: cstring): bool =
+  if line == nil or leftLineBuf == nil or redirectTargetBuf == nil:
+    return false
+
   clearBuffer(leftLineBuf)
   clearBuffer(redirectTargetBuf)
 
@@ -350,6 +373,11 @@ proc reportExecFailure(path: cstring) =
   write("command not found: ")
   write(path)
   write("\n")
+
+
+## Reports that a command executable path exceeded the shell path capacity.
+proc reportCommandPathTooLong() =
+  write("command path too long\n")
 
 
 ## check if the app execution is alloed or not
@@ -431,6 +459,11 @@ proc runRedirection*(line: cstring): bool =
   discard sysClose(outFd)
 
   let execPath = buildBinPathInto(cstr(leftCmdBuf), leftPathBuf)
+  if execPath == nil:
+    restoreFd(savedStdout, 1)
+    reportCommandPathTooLong()
+    return true
+
   if not isAllowedPath(execPath):
     restoreFd(savedStdout, 1)
     write("cannnot execute ")
@@ -489,8 +522,15 @@ proc runPipeline*(line: cstring): bool =
   discard sysClose(fds[1])
 
   let execPath = buildBinPathInto(cstr(leftCmdBuf), leftPathBuf)
+  if execPath == nil:
+    restoreFd(savedStdout, 1)
+    discard sysClose(fds[0])
+    reportCommandPathTooLong()
+    return true
+
   if not isAllowedPath(execPath):
     restoreFd(savedStdout, 1)
+    discard sysClose(fds[0])
     write("cannnot execute ")
     write(execPath)
     write(" directly from shell.\n")
@@ -519,7 +559,22 @@ proc runPipeline*(line: cstring): bool =
 
   discard sysClose(fds[0])
 
-  let rightPid = sysExec(buildBinPathInto(cstr(rightCmdBuf), rightPathBuf), cstr(rightArgBuf), background)
+  let rightExecPath = buildBinPathInto(cstr(rightCmdBuf), rightPathBuf)
+  if rightExecPath == nil:
+    restoreFd(savedStdin, 0)
+    discard sysWait(leftPid)
+    reportCommandPathTooLong()
+    return true
+
+  if not isAllowedPath(rightExecPath):
+    restoreFd(savedStdin, 0)
+    discard sysWait(leftPid)
+    write("cannnot execute ")
+    write(rightExecPath)
+    write(" directly from shell.\n")
+    return true
+
+  let rightPid = sysExec(rightExecPath, cstr(rightArgBuf), background)
   restoreFd(savedStdin, 0)
   if rightPid < 0:
     discard sysWait(leftPid)
@@ -586,4 +641,3 @@ proc stripBackgroundMarker*(): bool =
     return true
 
   false
-  
