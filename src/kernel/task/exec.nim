@@ -96,7 +96,7 @@ proc trustedCapsForPath(path: cstring): U32 =
   if cstringEq(path, "/bin/kill"):
     return SysCapProcessKill
 
-  if cstringEq(path, "/bin/shell"):
+  if cstringEq(path, "/bin/shutdown"):
     return SysCapShutdown
 
   if cstringEq(path, "/bin/svc"):

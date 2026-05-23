@@ -84,6 +84,10 @@ elif defined(userApp_passwd):
   import apps/passwd/passwd
 elif defined(userApp_whoami):
   import apps/whoami/whoami
+elif defined(userApp_sudo):
+  import apps/sudo/sudo
+elif defined(userApp_shutdown):
+  import apps/shutdown/shutdown
 # == test use only apps ==
 elif defined(userApp_faultcheck):
   import apps/faultcheck/faultcheck

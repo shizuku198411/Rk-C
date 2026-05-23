@@ -93,8 +93,7 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
       saveHistory()
       sysExit(0)
 
-    elif cstringEq(cmdCString(), "shutdown"):
-      kernelShutdown()
-
     else:
+      if cstringEq(cmdCString(), "sudo"):
+        saveHistory()
       runApp(buildBinPath(cmdCString()), copyArgToExecArgBuffer(), background)
