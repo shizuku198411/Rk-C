@@ -40,6 +40,20 @@ func pteToPa(pte: Pte): PAddr {.inline.} = (pte shr 10) shl PageShift
 func paToPte(pa: PAddr): Pte {.inline.} = (pa shr PageShift) shl 10
 
 
+## Returns whether a page table contains no valid child entries.
+proc pageTableEmpty(table: PageTable): bool =
+  if table == nil:
+    return true
+
+  var i = 0
+  while i < 512:
+    if pteIsValid(table[i]):
+      return false
+    inc i
+
+  true
+
+
 ## Returns whether sv39 canonical is true.
 proc isSv39Canonical(va: VAddr): bool =
   if (va and Sv39SignBit) == U64(0):
@@ -87,6 +101,28 @@ proc walkPageTable*(root: PageTable, va: VAddr, create: bool): ptr Pte =
   addr table[indexes[0]]
 
 
+## Frees empty intermediate page tables along a virtual-address path.
+proc pruneEmptyPageTablePath(root: PageTable, va: VAddr) =
+  if root == nil or not isSv39Canonical(va):
+    return
+
+  let level2Entry = addr root[sv39Vpn2(va)]
+  if not pteIsValid(level2Entry[]) or pteIsLeaf(level2Entry[]):
+    return
+
+  let level1Table = cast[PageTable](pteToPa(level2Entry[]))
+  let level1Entry = addr level1Table[sv39Vpn1(va)]
+  if pteIsValid(level1Entry[]) and not pteIsLeaf(level1Entry[]):
+    let level0Table = cast[PageTable](pteToPa(level1Entry[]))
+    if pageTableEmpty(level0Table):
+      discard pfree(cast[PAddr](level0Table), U64(1))
+      level1Entry[] = 0
+
+  if pageTableEmpty(level1Table):
+    discard pfree(cast[PAddr](level1Table), U64(1))
+    level2Entry[] = 0
+
+
 ## Maps page.
 proc mapPage*(root: PageTable, va: VAddr, pa: PAddr, flags: U64): int =
   if not isAligned(va, PageSize) or not isAligned(pa, PageSize):
@@ -94,6 +130,7 @@ proc mapPage*(root: PageTable, va: VAddr, pa: PAddr, flags: U64): int =
 
   let entry = walkPageTable(root, va, true)
   if entry == nil:
+    pruneEmptyPageTablePath(root, va)
     return -1
 
   if pteIsValid(entry[]):
@@ -208,6 +245,7 @@ proc unmapRangeFree*(root: PageTable, va: VAddr, pages: U64): int =
     if entry != nil and pteIsValid(entry[]) and pteIsLeaf(entry[]):
       discard pfree(pteToPa(entry[]), 1)
       entry[] = 0
+      pruneEmptyPageTablePath(root, va + page * PageSize)
     inc page
 
   flushTlb()

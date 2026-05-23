@@ -9,6 +9,8 @@ const
   HistorySaveBufMax* = HistoryMax * LineMax
   HistoryPathMax* = 128
   HistoryPath* = "/.history"
+  CommandScratchBufferCount = 11
+  CommandScratchBufferCap* = LineMax
 
   PromptOrange* = "\x1b[38;5;208m"
   PromptReset* = "\x1b[0m"
@@ -24,9 +26,21 @@ var
   argBufCap*: int = 0
   execArgBuf*: array[LineMax, char]
 
-  #pathBuf*: array[LineMax, char]
   pathBuf*: ptr UncheckedArray[char] = nil
   pathBufCap*: int = 0
+
+  commandScratchArena: ptr UncheckedArray[char] = nil
+  pipelineLineBuf*: ptr UncheckedArray[char] = nil
+  redirectLineBuf*: ptr UncheckedArray[char] = nil
+  leftLineBuf*: ptr UncheckedArray[char] = nil
+  rightLineBuf*: ptr UncheckedArray[char] = nil
+  redirectTargetBuf*: ptr UncheckedArray[char] = nil
+  leftCmdBuf*: ptr UncheckedArray[char] = nil
+  leftArgBuf*: ptr UncheckedArray[char] = nil
+  leftPathBuf*: ptr UncheckedArray[char] = nil
+  rightCmdBuf*: ptr UncheckedArray[char] = nil
+  rightArgBuf*: ptr UncheckedArray[char] = nil
+  rightPathBuf*: ptr UncheckedArray[char] = nil
 
   cwdBuf*: array[SysProcessCwdMax, char]
 
@@ -229,6 +243,52 @@ proc clearArgBuffer*() =
 ## Returns the heap-backed arg buffer as cstring.
 proc argCString*(): cstring =
   cstr(argBuf)
+
+
+## Initializes heap-backed scratch buffers used by pipe and redirection parsing.
+proc initCommandScratchBuffers*(): bool =
+  if commandScratchArena != nil:
+    return true
+
+  let bytes = CommandScratchBufferCount * CommandScratchBufferCap
+  commandScratchArena = cast[ptr UncheckedArray[char]](userAlloc(U64(bytes)))
+  if commandScratchArena == nil:
+    return false
+
+  template bufferAt(index: int): ptr UncheckedArray[char] =
+    cast[ptr UncheckedArray[char]](
+      cast[U64](commandScratchArena) + U64(index * CommandScratchBufferCap)
+    )
+
+  pipelineLineBuf = bufferAt(0)
+  redirectLineBuf = bufferAt(1)
+  leftLineBuf = bufferAt(2)
+  rightLineBuf = bufferAt(3)
+  redirectTargetBuf = bufferAt(4)
+  leftCmdBuf = bufferAt(5)
+  leftArgBuf = bufferAt(6)
+  leftPathBuf = bufferAt(7)
+  rightCmdBuf = bufferAt(8)
+  rightArgBuf = bufferAt(9)
+  rightPathBuf = bufferAt(10)
+
+  var i = 0
+  while i < bytes:
+    commandScratchArena[i] = '\0'
+    inc i
+
+  true
+
+
+## Clears one pipe or redirection command scratch buffer.
+proc clearCommandScratchBuffer*(buf: ptr UncheckedArray[char]) =
+  if buf == nil:
+    return
+
+  var i = 0
+  while i < CommandScratchBufferCap:
+    buf[i] = '\0'
+    inc i
 
 
 proc clearExecArgBuffer*() =

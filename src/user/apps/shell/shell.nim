@@ -28,6 +28,10 @@ proc allocateBuffers() =
     write("shell: failed to allocate path buffer\n")
     sysExit(1)
 
+  if not initCommandScratchBuffers():
+    write("shell: failed to allocate command scratch buffers\n")
+    sysExit(1)
+
   if not initHistorySaveBuffer():
     write("shell: failed to allocate history buffer\n")
     sysExit(1)
@@ -100,4 +104,9 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
     else:
       if cstringEq(cmdCString(), "sudo"):
         saveHistory()
-      runApp(buildBinPath(cmdCString()), copyArgToExecArgBuffer(), background)
+
+      let path = buildBinPath(cmdCString())
+      if path == nil:
+        write("command path too long\n")
+      else:
+        runApp(path, copyArgToExecArgBuffer(), background)

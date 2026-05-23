@@ -228,8 +228,8 @@ proc sysGetBitMap*(info: ptr SysBitmapInfo): I32 =
 
 
 ## Invokes the brk syscall wrapper.
-proc sysBrk*(newEnd: U64): I32 =
-  I32(rawSyscall3(SysBrk, newEnd, 0, 0))
+proc sysBrk*(newEnd: U64): I64 =
+  I64(rawSyscall3(SysBrk, newEnd, 0, 0))
 
 
 ## Invokes the sbrk syscall wrapper.

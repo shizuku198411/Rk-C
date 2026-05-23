@@ -84,8 +84,11 @@ proc printHistory*() =
 
 
 proc clearHistoryPathBuf() =
+  if historyPathBuf == nil:
+    return
+
   var i = 0
-  while i < HistoryPathMax:
+  while i < historyPathBufCap:
     historyPathBuf[i] = '\0'
     inc i
 
@@ -127,8 +130,8 @@ proc appendHistoryPathCString(pos: var int, s: cstring): bool =
 ## user:
 ##   /home/<user>/.history
 proc buildCurrentUserHistoryPath*(): cstring =
-  if not initHistorySaveBuffer():
-    return cstring(HistoryPath)
+  if not initHistoryPathBuffer():
+    return nil
 
   clearHistoryPathBuf()
 
@@ -136,23 +139,20 @@ proc buildCurrentUserHistoryPath*(): cstring =
   var entry: PasswdEntry
 
   if not resolveUid(uid, entry):
-    var fallbackPos = 0
-    discard appendHistoryPathCString(fallbackPos, cstring(HistoryPath))
-    return cast[cstring](addr historyPathBuf[0])
+    return nil
 
   let home = cast[cstring](addr entry.home[0])
 
   var pos = 0
   if not appendHistoryPathCString(pos, home):
-    clearHistoryPathBuf()
-    var fallbackPos = 0
-    discard appendHistoryPathCString(fallbackPos, cstring(HistoryPath))
-    return cast[cstring](addr historyPathBuf[0])
+    return nil
 
   if pos > 0 and historyPathBuf[pos - 1] != '/':
-    discard appendHistoryPathChar(pos, '/')
+    if not appendHistoryPathChar(pos, '/'):
+      return nil
 
-  discard appendHistoryPathCString(pos, cstring(HistoryFileName))
+  if not appendHistoryPathCString(pos, cstring(HistoryFileName)):
+    return nil
 
   historyPathCString()
 
@@ -238,6 +238,9 @@ proc saveHistory*() =
 
   let size = buildHistorySaveBuf()
   let path = buildCurrentUserHistoryPath()
+  if path == nil:
+    write("failed to resolve history path\n")
+    return
 
   if size == 0.U64:
     discard sysWriteFileMode(
@@ -268,6 +271,11 @@ proc loadHistory*() =
   clearHistorySaveBuffer()
 
   let path = buildCurrentUserHistoryPath()
+  if path == nil:
+    clearHistory()
+    write("failed to resolve history path\n")
+    return
+
   let size = sysReadFile(
     path,
     addr historySaveBuf[0],

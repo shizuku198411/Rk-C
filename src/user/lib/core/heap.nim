@@ -1,6 +1,6 @@
 ## Provides a minimal bump allocator on top of brk/sbrk.
 import ../../../lib/types
-from ./syscall import sysBrk, sysSbrk
+from ./syscall import sysSbrk
 
 var
   heapBase: types.U64 = 0
@@ -39,10 +39,3 @@ proc userAlloc*(size: types.U64): pointer =
     return nil
 
   cast[pointer](types.U64(old))
-
-
-proc userResetHeap*(): bool =
-  if not ensureHeapBase():
-    return false
-
-  sysBrk(heapBase) == 0

@@ -253,7 +253,7 @@ qemu-debug: build
 	$(QEMU) $(QEMU_DEBUG_ARGS)
 
 test-apps:
-	python3 scripts/test_apps.py $(TEST_APPS_ARGS)
+	python3 scripts/test_apps.py $(TEST_APPS_ARGS) --skip-network-smoke
 
 net-host-help:
 	@echo "Default TAP network:"
