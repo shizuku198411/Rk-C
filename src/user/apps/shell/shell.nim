@@ -15,11 +15,19 @@ import ./state
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   discard arg
 
+  if not initLineBuffer():
+    write("shell: failed to allocate line buffer\n")
+    sysExit(1)
+
   loadHistory()
 
   while true:
     printPrompt()
     let cmd = readLine()
+
+    if cmd == nil:
+      write("shell: failed to read line\n")
+      continue
 
     if runRedirection(cmd):
       storeHistory()

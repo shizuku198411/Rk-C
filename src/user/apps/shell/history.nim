@@ -76,14 +76,18 @@ proc buildCurrentUserHistoryPath(): cstring =
   cast[cstring](addr historyPathBuf[0])
 
 
-## Returns the current visible length of a shell input line buffer.
-proc lineLen*(buf: var array[LineMax, char]): int =
+## Returns the current visible length of a heap-backed shell input line buffer.
+proc lineLen*(buf: ptr UncheckedArray[char], cap: int): int =
+  if buf == nil:
+    return 0
+
   var i = 0
-  while i < LineMax:
+  while i < cap:
     if buf[i] == '\0':
       return i
     inc i
-  LineMax - 1
+
+  cap - 1
 
 
 ## Serializes in-memory history entries into the save buffer.
@@ -187,6 +191,12 @@ proc printHistory*() =
 
 ## Stores the latest command line and rotates older entries when full.
 proc storeHistory*() =
+  if lineBuf == nil:
+    return
+
+  if lineBuf[0] == '\0':
+    return
+
   if historyPos < int32(HistoryMax):
     copyMem(addr history[historyPos][0], addr lineBuf[0], LineMax)
     inc historyPos
@@ -195,4 +205,5 @@ proc storeHistory*() =
     while i < HistoryMax:
       copyMem(addr history[i - 1][0], addr history[i][0], LineMax)
       inc i
+
     copyMem(addr history[HistoryMax - 1][0], addr lineBuf[0], LineMax)

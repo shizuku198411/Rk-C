@@ -22,7 +22,7 @@ var
 
 ## Clears a line-sized shell buffer.
 proc clearBuffer(buf: var array[LineMax, char]) =
-  var i = 0
+  var i = U64(0)
   while i < LineMax:
     buf[i] = '\0'
     inc i
@@ -30,7 +30,7 @@ proc clearBuffer(buf: var array[LineMax, char]) =
 
 ## Clears the shared parsed command, argument, and path buffers.
 proc clearArg() =
-  var i = 0
+  var i = U64(0)
   while i < LineMax:
     cmdBuf[i] = '\0'
     argBuf[i] = '\0'
@@ -53,7 +53,7 @@ proc parseCommandInto(line: cstring, cmd: var array[LineMax, char],
   var pos = 0
   skipSpaces(line, pos)
 
-  var i = 0
+  var i = U64(0)
   while line[pos] != '\0' and line[pos] != ' ' and i < LineMax - 1:
     cmd[i] = line[pos]
     inc i
@@ -86,7 +86,7 @@ proc buildBinPathInto(cmd: cstring, dst: var array[LineMax, char]): cstring =
   dst[2] = 'i'
   dst[3] = 'n'
   dst[4] = '/'
-  var i = 0
+  var i = U64(0)
   while cmd[i] != '\0' and i + 5 < LineMax - 1:
     dst[i + 5] = cmd[i]
     inc i
@@ -101,7 +101,7 @@ proc buildBinPath*(cmd: cstring): cstring =
 
 ## Removes a trailing background marker from an argument buffer.
 proc stripBackgroundMarkerFrom(buf: var array[LineMax, char]): bool =
-  var len = 0
+  var len = U64(0)
   while len < LineMax and buf[len] != '\0':
     inc len
 
@@ -124,7 +124,7 @@ proc stripBackgroundMarkerFrom(buf: var array[LineMax, char]): bool =
 ## Copies a command line into the pipeline scratch buffer.
 proc copyPipelineLine(line: cstring) =
   clearBuffer(pipelineLineBuf)
-  var i = 0
+  var i = U64(0)
   while line[i] != '\0' and i < LineMax - 1:
     pipelineLineBuf[i] = line[i]
     inc i
@@ -149,8 +149,8 @@ proc splitPipeline(line: cstring): bool =
   if pipePos < 0:
     return false
 
-  var i = 0
-  while i < pipePos and i < LineMax - 1:
+  var i = U64(0)
+  while int(i) < pipePos and i < LineMax - 1:
     leftLineBuf[i] = line[i]
     inc i
   leftLineBuf[i] = '\0'
@@ -168,7 +168,7 @@ proc splitPipeline(line: cstring): bool =
 ## Copies a command line into the redirection scratch buffer.
 proc copyRedirectLine(line: cstring) =
   clearBuffer(redirectLineBuf)
-  var i = 0
+  var i = U64(0)
   while line[i] != '\0' and i < LineMax - 1:
     redirectLineBuf[i] = line[i]
     inc i
@@ -198,7 +198,7 @@ proc copyTrimmedRange(src: cstring, startPos, endPos: int,
   while finish > start and src[finish - 1] == ' ':
     dec finish
 
-  var i = 0
+  var i = U64(0)
   var pos = start
   while pos < finish and i < LineMax - 1:
     dst[i] = src[pos]

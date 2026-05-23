@@ -32,6 +32,9 @@ proc clearCurrentLine(len: var int, cursor: var int) =
   len = 0
   cursor = 0
 
+  if lineBuf != nil:
+    lineBuf[0] = '\0'
+
 
 ## Replaces the editable line with a selected history entry.
 proc loadHistoryLine(
@@ -41,9 +44,12 @@ proc loadHistoryLine(
 ) =
   clearCurrentLine(len, cursor)
 
+  if lineBuf == nil:
+    return
+
   copyMem(addr lineBuf[0], addr history[index][0], LineMax)
 
-  len = lineLen(lineBuf)
+  len = lineLen(lineBuf, lineBufCap)
   cursor = len
 
   var i = 0
@@ -54,6 +60,11 @@ proc loadHistoryLine(
 
 ## Reads one editable command line with arrows, backspace, and history keys.
 proc readLine*(): cstring =
+  if lineBuf == nil:
+    return nil
+
+  clearLineBuffer()
+
   var
     len = 0
     cursor = 0
@@ -65,7 +76,7 @@ proc readLine*(): cstring =
     if ch == '\r' or ch == '\n':
       lineBuf[len] = '\0'
       write("\n")
-      return cstr(lineBuf)
+      return lineCString()
 
     if ch == char(27):
       let ch1 = readChar()
@@ -77,15 +88,18 @@ proc readLine*(): cstring =
           if cursor > 0:
             dec cursor
             moveCursorLeft()
+
         of 'C':
           if cursor < len:
             inc cursor
             moveCursorRight()
+
         of 'A':
           if historyPos > 0:
             if historyView > 0:
               dec historyView
               loadHistoryLine(historyView, len, cursor)
+
         of 'B':
           if historyView < historyPos:
             inc historyView
@@ -94,6 +108,7 @@ proc readLine*(): cstring =
             else:
               clearCurrentLine(len, cursor)
               lineBuf[0] = '\0'
+
         else:
           discard
 
@@ -130,7 +145,7 @@ proc readLine*(): cstring =
     if ch < ' ' or ch > '~':
       continue
 
-    if len < LineMax - 1:
+    if len < lineBufCap - 1:
       if cursor == len:
         lineBuf[cursor] = ch
         inc cursor
