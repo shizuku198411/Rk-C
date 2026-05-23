@@ -19,6 +19,26 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
     write("shell: failed to allocate line buffer\n")
     sysExit(1)
 
+  if not initCmdBuffer():
+    write("shell: failed to allocate command buffer\n")
+    sysExit(1)
+
+  if not initArgBuffer():
+    write("shell: failed to allocate argument buffer\n")
+    sysExit(1)
+
+  if not initPathBuffer():
+    write("shell: failed to allocate path buffer\n")
+    sysExit(1)
+
+  if not initHistorySaveBuffer():
+    write("shell: failed to allocate history buffer\n")
+    sysExit(1)
+
+  if not initHistoryPathBuffer():
+    write("shell: failed to allocate history path buffer\n")
+    sysExit(1)
+
   loadHistory()
 
   while true:
@@ -44,37 +64,37 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
 
     let background = stripBackgroundMarker()
 
-    if cstringEq(cstr(cmdBuf), "help"):
+    if cstringEq(cmdCString(), "help"):
       printHelp()
 
-    elif cstringEq(cstr(cmdBuf), "cd"):
-      changeDirectory(cstr(argBuf))
+    elif cstringEq(cmdCString(), "cd"):
+      changeDirectory(argCString())
 
-    elif cstringEq(cstr(cmdBuf), "su"):
-      switchUser(cstr(argBuf))
-    
-    elif cstringEq(cstr(cmdBuf), "pwd"):
+    elif cstringEq(cmdCString(), "su"):
+      switchUser(argCString())
+
+    elif cstringEq(cmdCString(), "pwd"):
       printPwd()
 
-    elif cstringEq(cstr(cmdBuf), "ticks"):
+    elif cstringEq(cmdCString(), "ticks"):
       writeUnsigned(sysTicks())
       write("\n")
 
-    elif cstringEq(cstr(cmdBuf), "traps"):
+    elif cstringEq(cmdCString(), "traps"):
       printTrapCount()
 
-    elif cstringEq(cstr(cmdBuf), "bitmap"):
+    elif cstringEq(cmdCString(), "bitmap"):
       printBitmapInfo()
 
-    elif cstringEq(cstr(cmdBuf), "history"):
+    elif cstringEq(cmdCString(), "history"):
       printHistory()
 
-    elif cstringEq(cstr(cmdBuf), "exit"):
+    elif cstringEq(cmdCString(), "exit"):
       saveHistory()
       sysExit(0)
 
-    elif cstringEq(cstr(cmdBuf), "shutdown"):
+    elif cstringEq(cmdCString(), "shutdown"):
       kernelShutdown()
 
     else:
-      runApp(buildBinPath(cstr(cmdBuf)), cstr(argBuf), background)
+      runApp(buildBinPath(cmdCString()), copyArgToExecArgBuffer(), background)

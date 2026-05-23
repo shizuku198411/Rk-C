@@ -28,16 +28,6 @@ proc clearBuffer(buf: var array[LineMax, char]) =
     inc i
 
 
-## Clears the shared parsed command, argument, and path buffers.
-proc clearArg() =
-  var i = U64(0)
-  while i < LineMax:
-    cmdBuf[i] = '\0'
-    argBuf[i] = '\0'
-    pathBuf[i] = '\0'
-    inc i
-
-
 ## Advances a parser cursor over ASCII spaces.
 proc skipSpaces(s: cstring, pos: var int) =
   while s[pos] == ' ':
@@ -74,8 +64,48 @@ proc parseCommandInto(line: cstring, cmd: var array[LineMax, char],
 
 ## Parses the active shell line into the shared command and argument buffers.
 proc parseCommand*(line: cstring): bool =
-  clearArg()
-  parseCommandInto(line, cmdBuf, argBuf)
+  if line == nil:
+    return false
+
+  if cmdBuf == nil or argBuf == nil:
+    return false
+
+  clearCmdBuffer()
+  clearArgBuffer()
+
+  var i = 0
+
+  while line[i] == ' ':
+    inc i
+
+  if line[i] == '\0':
+    return false
+
+  var cmdPos = 0
+  while line[i] != '\0' and line[i] != ' ':
+    if cmdPos + 1 < cmdBufCap:
+      cmdBuf[cmdPos] = line[i]
+      inc cmdPos
+    inc i
+
+  cmdBuf[cmdPos] = '\0'
+
+  if cmdPos == 0:
+    return false
+
+  while line[i] == ' ':
+    inc i
+
+  var argPos = 0
+  while line[i] != '\0':
+    if argPos + 1 < argBufCap:
+      argBuf[argPos] = line[i]
+      inc argPos
+    inc i
+
+  argBuf[argPos] = '\0'
+
+  true
 
 
 ## Builds a /bin/<command> executable path into the requested buffer.
@@ -96,7 +126,40 @@ proc buildBinPathInto(cmd: cstring, dst: var array[LineMax, char]): cstring =
 
 ## Builds a /bin/<command> executable path into the shared path buffer.
 proc buildBinPath*(cmd: cstring): cstring =
-  buildBinPathInto(cmd, pathBuf)
+  if cmd == nil:
+    return nil
+
+  if not initPathBuffer():
+    return nil
+
+  clearPathBuffer()
+
+  var pos = 0
+
+  if cmd[0] == '/':
+    while cmd[pos] != '\0' and pos + 1 < pathBufCap:
+      pathBuf[pos] = cmd[pos]
+      inc pos
+
+    pathBuf[pos] = '\0'
+    return pathCString()
+
+  let prefix = cstring"/bin/"
+  var i = 0
+
+  while prefix[i] != '\0' and pos + 1 < pathBufCap:
+    pathBuf[pos] = prefix[i]
+    inc pos
+    inc i
+
+  i = 0
+  while cmd[i] != '\0' and pos + 1 < pathBufCap:
+    pathBuf[pos] = cmd[i]
+    inc pos
+    inc i
+
+  pathBuf[pos] = '\0'
+  pathCString()
 
 
 ## Removes a trailing background marker from an argument buffer.
@@ -119,6 +182,51 @@ proc stripBackgroundMarkerFrom(buf: var array[LineMax, char]): bool =
     buf[len] = '\0'
 
   true
+
+
+proc buildBinPathIntoHeap*(
+  cmd: cstring,
+  outBuf: ptr UncheckedArray[char],
+  outCap: int
+): cstring =
+  if outBuf == nil or outCap <= 0:
+    return nil
+
+  var i = 0
+  while i < outCap:
+    outBuf[i] = '\0'
+    inc i
+
+  if cmd == nil:
+    return cast[cstring](addr outBuf[0])
+
+  var pos = 0
+
+  if cmd[0] == '/':
+    i = 0
+    while cmd[i] != '\0' and pos + 1 < outCap:
+      outBuf[pos] = cmd[i]
+      inc pos
+      inc i
+
+    outBuf[pos] = '\0'
+    return cast[cstring](addr outBuf[0])
+
+  let prefix = cstring"/bin/"
+  i = 0
+  while prefix[i] != '\0' and pos + 1 < outCap:
+    outBuf[pos] = prefix[i]
+    inc pos
+    inc i
+
+  i = 0
+  while cmd[i] != '\0' and pos + 1 < outCap:
+    outBuf[pos] = cmd[i]
+    inc pos
+    inc i
+
+  outBuf[pos] = '\0'
+  cast[cstring](addr outBuf[0])
 
 
 ## Copies a command line into the pipeline scratch buffer.
@@ -455,4 +563,27 @@ proc runApp*(path: cstring, arg: cstring, background: bool) =
 
 ## Removes a trailing background marker from the shared argument buffer.
 proc stripBackgroundMarker*(): bool =
-  stripBackgroundMarkerFrom(argBuf)
+  if argBuf == nil:
+    return false
+
+  var len = 0
+
+  while len < argBufCap and argBuf[len] != '\0':
+    inc len
+
+  while len > 0 and argBuf[len - 1] == ' ':
+    dec len
+    argBuf[len] = '\0'
+
+  if len > 0 and argBuf[len - 1] == '&':
+    dec len
+    argBuf[len] = '\0'
+
+    while len > 0 and argBuf[len - 1] == ' ':
+      dec len
+      argBuf[len] = '\0'
+
+    return true
+
+  false
+  
