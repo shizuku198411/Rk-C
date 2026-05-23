@@ -649,6 +649,14 @@ proc renderRkxMap(pid: I32): U32 =
         cstring"rw-",
         cstring"stack",
       )
+      if procInfos[i].heapPages != 0:
+        appendRkxMapLine(
+          pos,
+          procInfos[i].heapStart,
+          procInfos[i].heapPages * ProcFsPageSize,
+          cstring"rw-",
+          cstring"heap",
+        )
       return pos
     inc i
 

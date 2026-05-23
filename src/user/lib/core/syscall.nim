@@ -227,6 +227,16 @@ proc sysGetBitMap*(info: ptr SysBitmapInfo): I32 =
   I32(rawSyscall3(SysGetBitMap, cast[U64](info), 0, 0))
 
 
+## Invokes the brk syscall wrapper.
+proc sysBrk*(newEnd: U64): I32 =
+  I32(rawSyscall3(SysBrk, newEnd, 0, 0))
+
+
+## Invokes the sbrk syscall wrapper.
+proc sysSbrk*(delta: I64): I64 =
+  I64(rawSyscall3(SysSbrk, U64(delta), 0, 0))
+
+
 ## Invokes the fs info syscall wrapper.
 proc sysFsInfo*(entries: ptr SysFsInfoEntry, maxEntries: U64): I32 =
   I32(rawSyscall3(SysFsInfo, cast[U64](entries), maxEntries, 0))

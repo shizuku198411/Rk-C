@@ -13,7 +13,7 @@ from pathlib import Path
 
 ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
 PROMPT_MARKER = "$ "
-TEST_APP_NAMES = ["faultcheck", "capcheck", "pollcheck", "signalcheck", "writecheck"]
+TEST_APP_NAMES = ["faultcheck", "capcheck", "pollcheck", "signalcheck", "writecheck", "heapcheck"]
 
 
 @dataclass
@@ -222,6 +222,7 @@ def normal_tests() -> list[TestCase]:
         "capcheck": "usage: capcheck",
         "pollcheck": "usage: pollcheck",
         "writecheck": "usage: writecheck",
+        "heapcheck": "usage: heapcheck",
         "login": "cannnot execute /bin/login directly from shell.",
     }
     for app, expected in help_cases.items():
@@ -382,6 +383,12 @@ def abnormal_tests() -> list[TestCase]:
                 "writecheck: invalid flags denied ok",
                 "writecheck: ok",
             ],
+            timeout=12.0,
+        ),
+        TestCase(
+            "heapcheck user heap",
+            "heapcheck",
+            ["heapcheck: ok"],
             timeout=12.0,
         ),
         TestCase(

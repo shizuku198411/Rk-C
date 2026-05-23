@@ -95,5 +95,7 @@ elif defined(userApp_signalcheck):
   import apps/signalcheck/signalcheck
 elif defined(userApp_writecheck):
   import apps/writecheck/writecheck
+elif defined(userApp_heapcheck):
+  import apps/heapcheck/heapcheck
 else:
   {.error: "missing user app define".}

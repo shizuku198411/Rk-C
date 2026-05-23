@@ -51,6 +51,9 @@ type
     sp*: VAddr
     imagePages*: U64
     stackPages*: U64
+    heapStart*: VAddr
+    heapEnd*: VAddr
+    heapLimit*: VAddr
     textVa*: VAddr
     textMemSize*: U64
     rodataVa*: VAddr
@@ -449,6 +452,14 @@ proc clearUserState(p: ptr Process) =
   p.user = UserState()
 
 
+## Returns the mapped heap page count for a user state.
+proc heapPageCount*(user: UserState): U64 =
+  if user.heapEnd <= user.heapStart:
+    return U64(0)
+
+  alignUp(user.heapEnd - user.heapStart, PageSize) div PageSize
+
+
 ## Clears wait.
 proc clearWait*(p: ptr Process) =
   if p == nil:
@@ -701,6 +712,24 @@ proc configureUserProcess*(p: ptr Process, root: PageTable, path: cstring,
   p.user.sp = userSp
   p.user.imagePages = imagePages
   p.user.stackPages = stackPages
+
+  p.user.heapStart = userBase + imagePages * PageSize
+  p.user.heapEnd = p.user.heapStart
+
+  const
+    UserHeapStackGuardPages = U64(1)
+
+  let stackBottom = userStackTop - stackPages * PageSize
+  let guardSize = UserHeapStackGuardPages * PageSize
+
+  p.user.heapLimit =
+    if stackBottom <= p.user.heapStart + guardSize:
+      p.user.heapStart
+    else:
+      stackBottom - guardSize
+  if p.user.heapStart > p.user.heapLimit:
+    panic("user heap overlaps stack")
+
   p.user.requestedCapabilityMask = requestedCapabilityMask
   p.user.capabilityMask = capabilityMask
   p.user.arg0 = arg0
@@ -739,6 +768,9 @@ proc releaseUserAddressSpace(p: ptr Process) =
       p.user.stackTop - p.user.stackPages * PageSize,
       p.user.stackPages,
     )
+  let heapPages = heapPageCount(p.user)
+  if heapPages != 0:
+    discard unmapRangeFree(p.rootPageTable, p.user.heapStart, heapPages)
 
   freePageTablePages(p.rootPageTable)
   p.rootPageTable = nil

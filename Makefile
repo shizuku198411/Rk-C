@@ -46,7 +46,7 @@ USER_APP_NAMES := \
 	curl stracectl dmesg rkxinfo echo touch cp mv df wc paniclog id chmod chown passwd \
 	whoami
 USER_SERVER_NAMES := svcmgtd procmgtd fsd blockd procfsd netd userd
-TEST_APP_NAMES := faultcheck capcheck pollcheck signalcheck writecheck
+TEST_APP_NAMES := faultcheck capcheck pollcheck signalcheck writecheck heapcheck
 APPFS_EXTRA_APPS ?=
 
 USER_PACK_NAMES := $(filter-out tcpcheck curl,$(USER_APP_NAMES)) $(USER_SERVER_NAMES) tcpcheck curl

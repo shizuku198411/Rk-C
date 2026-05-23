@@ -85,3 +85,5 @@ const
   SysLastError* = U64(83)
   SysExecAs* = U64(84)
   SysFdList* = U64(85)
+  SysBrk* = U64(86)
+  SysSbrk* = U64(87)

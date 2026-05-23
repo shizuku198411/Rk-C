@@ -162,6 +162,8 @@ type
     bssMemSize*: U64
     stackTop*: U64
     stackPages*: U64
+    heapStart*: U64
+    heapPages*: U64
     requestedCapabilityMask*: U32
     capabilityMask*: U32
     pendingSignals*: U32
