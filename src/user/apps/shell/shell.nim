@@ -11,10 +11,7 @@ import ./prompt
 import ./state
 
 
-## Starts the shell loop, reads commands, and dispatches built-ins or apps.
-proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
-  discard arg
-
+proc allocateBuffers() =
   if not initLineBuffer():
     write("shell: failed to allocate line buffer\n")
     sysExit(1)
@@ -38,6 +35,13 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   if not initHistoryPathBuffer():
     write("shell: failed to allocate history path buffer\n")
     sysExit(1)
+
+
+## Starts the shell loop, reads commands, and dispatches built-ins or apps.
+proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
+  discard arg
+
+  allocateBuffers()
 
   loadHistory()
 
