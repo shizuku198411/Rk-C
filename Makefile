@@ -198,7 +198,7 @@ $(USER_ENTRY_OBJ): $(SRC_DIR)/user/lib/runtime/entry.S
 	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c -o $@ $<
 
-$(USER_SHELL_ELF): $(SRC_DIR)/user/app_main.nim $(SRC_DIR)/user/apps/shell/shell.nim $(SRC_DIR)/user/panicoverride.nim $(SHARED_LIB_SRCS) $(USER_LIB_SRCS) $(USER_SYSCALL_OBJ) $(USER_ENTRY_OBJ) $(USER_LINKER_SCRIPT) | $(BIN_DIR)
+$(USER_SHELL_ELF): $(SRC_DIR)/user/app_main.nim $(shell find $(SRC_DIR)/user/apps/shell -type f -name '*.nim' | sort) $(SRC_DIR)/user/panicoverride.nim $(SHARED_LIB_SRCS) $(USER_LIB_SRCS) $(USER_SYSCALL_OBJ) $(USER_ENTRY_OBJ) $(USER_LINKER_SCRIPT) | $(BIN_DIR)
 	$(NIM) c $(USER_NIMFLAGS) -d:userApp_shell --nimcache:$(USER_NIMCACHE_DIR)/shell --passL:"$(USER_ENTRY_OBJ)" --passL:"$(USER_SYSCALL_OBJ)" --passL:"-Wl,-T,$(USER_LINKER_SCRIPT)" -o:$@ $<
 
 $(USER_SHELL_RKX): $(USER_SHELL_ELF) $(RKX_TOOL) $(SRC_DIR)/user/apps/shell/rkx.toml | $(BIN_DIR)
@@ -208,7 +208,7 @@ appfs: $(DISK_IMG) $(USER_SHELL_RKX) $(USER_APP_RKXS) $(USER_SERVER_RKXS)
 	python3 $(APPFS_TOOL) --disk $(DISK_IMG) --bin-dir $(BIN_DIR) --ext rkx --apps shell $(USER_PACK_NAMES) $(APPFS_EXTRA_APPS)
 
 define USER_APP_template
-$(BIN_DIR)/$(1).elf: $(SRC_DIR)/user/app_main.nim $$(wildcard $(SRC_DIR)/user/apps/$(1)/*.nim) $(SRC_DIR)/user/panicoverride.nim $$(SHARED_LIB_SRCS) $$(USER_LIB_SRCS) $(USER_SYSCALL_OBJ) $(USER_ENTRY_OBJ) $(USER_APP_LINKER_SCRIPT) | $(BIN_DIR)
+$(BIN_DIR)/$(1).elf: $(SRC_DIR)/user/app_main.nim $$(shell find $(SRC_DIR)/user/apps/$(1) -type f -name '*.nim' | sort) $(SRC_DIR)/user/panicoverride.nim $$(SHARED_LIB_SRCS) $$(USER_LIB_SRCS) $(USER_SYSCALL_OBJ) $(USER_ENTRY_OBJ) $(USER_APP_LINKER_SCRIPT) | $(BIN_DIR)
 	$$(NIM) c $$(USER_NIMFLAGS) -d:userApp_$(1) --nimcache:$$(USER_NIMCACHE_DIR)/$(1) --passL:"$$(USER_ENTRY_OBJ)" --passL:"$$(USER_SYSCALL_OBJ)" --passL:"-Wl,-T,$$(USER_APP_LINKER_SCRIPT)" -o:$$@ $$<
 
 $(BIN_DIR)/$(1).rkx: $(BIN_DIR)/$(1).elf $$(RKX_TOOL) $(SRC_DIR)/user/apps/$(1)/rkx.toml | $(BIN_DIR)
@@ -219,7 +219,7 @@ $(foreach app,$(USER_APP_NAMES),$(eval $(call USER_APP_template,$(app))))
 $(foreach app,$(TEST_APP_NAMES),$(eval $(call USER_APP_template,$(app))))
 
 define USER_SERVER_template
-$(BIN_DIR)/$(1).elf: $(SRC_DIR)/user/app_main.nim $$(wildcard $(SRC_DIR)/user/server/$(1)/*.nim) $$(USER_SERVER_LIB_SRCS) $(SRC_DIR)/user/panicoverride.nim $$(SHARED_LIB_SRCS) $$(USER_LIB_SRCS) $(USER_SYSCALL_OBJ) $(USER_ENTRY_OBJ) $(USER_APP_LINKER_SCRIPT) | $(BIN_DIR)
+$(BIN_DIR)/$(1).elf: $(SRC_DIR)/user/app_main.nim $$(shell find $(SRC_DIR)/user/server/$(1) -type f -name '*.nim' | sort) $$(USER_SERVER_LIB_SRCS) $(SRC_DIR)/user/panicoverride.nim $$(SHARED_LIB_SRCS) $$(USER_LIB_SRCS) $(USER_SYSCALL_OBJ) $(USER_ENTRY_OBJ) $(USER_APP_LINKER_SCRIPT) | $(BIN_DIR)
 	$$(NIM) c $$(USER_NIMFLAGS) -d:userApp_$(1) --nimcache:$$(USER_NIMCACHE_DIR)/$(1) --passL:"$$(USER_ENTRY_OBJ)" --passL:"$$(USER_SYSCALL_OBJ)" --passL:"-Wl,-T,$$(USER_APP_LINKER_SCRIPT)" -o:$$@ $$<
 
 $(BIN_DIR)/$(1).rkx: $(BIN_DIR)/$(1).elf $$(RKX_TOOL) $(SRC_DIR)/user/server/$(1)/rkx.toml | $(BIN_DIR)
