@@ -152,6 +152,13 @@ proc fsInit*() =
     RootGid,
     FsModeDirDefault,
   ) or fsChanged
+  fsChanged = ensureRootDirOwned(
+    "usr",
+    FsTypeDir,
+    RootUid,
+    RootGid,
+    FsModeDirDefault,
+  ) or fsChanged
 
   let homeIdx = resolvePath("/home")
   fsChanged = ensureChildDirOwned(
@@ -159,6 +166,52 @@ proc fsInit*() =
     "rkc",
     UserUid,
     UserGid,
+    FsModeDirDefault,
+  ) or fsChanged
+
+  let userHomeIdx = resolvePath("/home/rkc")
+  fsChanged = ensureChildDirOwned(
+    userHomeIdx,
+    "bin",
+    UserUid,
+    UserGid,
+    FsModeDirDefault,
+  ) or fsChanged
+  fsChanged = ensureChildDirOwned(
+    userHomeIdx,
+    "src",
+    UserUid,
+    UserGid,
+    FsModeDirDefault,
+  ) or fsChanged
+
+  let usrIdx = resolvePath("/usr")
+  fsChanged = ensureChildDirOwned(
+    usrIdx,
+    "bin",
+    RootUid,
+    RootGid,
+    FsModeDirDefault,
+  ) or fsChanged
+  fsChanged = ensureChildDirOwned(
+    usrIdx,
+    "src",
+    RootUid,
+    RootGid,
+    FsModeDirDefault,
+  ) or fsChanged
+  fsChanged = ensureChildDirOwned(
+    usrIdx,
+    "include",
+    RootUid,
+    RootGid,
+    FsModeDirDefault,
+  ) or fsChanged
+  fsChanged = ensureChildDirOwned(
+    usrIdx,
+    "lib",
+    RootUid,
+    RootGid,
     FsModeDirDefault,
   ) or fsChanged
 
@@ -300,4 +353,3 @@ proc fsInfo*(outEntries: ptr SysFsInfoEntry, maxEntries: U64): I32 =
     inc count
 
   I32(count)
-
