@@ -30,6 +30,11 @@ const
   DevEntryCount = 4
   OsReleaseContent = cstring"""NAME="Rk-C"
 VERSION="0.1.1"
+VERSION_ID="0.1.1"
+VERSION="0.1.1"
+ID=rk-c
+ID_LIKE=rk-c
+HOME_URL="https://shizuku198411.github.io/Rk-C-Doc"
 GITHUB_URL="https://github.com/shizuku198411/Rk-C"
 """
 
