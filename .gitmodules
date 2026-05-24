@@ -1,0 +1,3 @@
+[submodule "modules/rkc-toolchain"]
+	path = modules/rkc-toolchain
+	url = https://github.com/shizuku198411/Rk-C-Toolchain.git

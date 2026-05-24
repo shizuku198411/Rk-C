@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Boots Rk-C on QEMU and executes categorized application smoke tests."""
 import argparse
+import importlib.util
 import os
 import re
 import selectors
@@ -22,6 +23,8 @@ from app_tests.user_cases import user_tests
 ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
 PROMPT_MARKER = "$ "
 TEST_APP_NAMES = ["faultcheck", "capcheck", "pollcheck", "signalcheck", "writecheck", "heapcheck", "orccheck"]
+OPTIONAL_TOOLCHAIN_TESTS = os.environ.get("RKC_OPTIONAL_TOOLCHAIN_TESTS", "")
+OPTIONAL_TOOLCHAIN_TEST_APPS = os.environ.get("RKC_OPTIONAL_TOOLCHAIN_TEST_APPS", "").split()
 
 
 @dataclass
@@ -128,10 +131,10 @@ class QemuConsole:
             self.buffer += self.read_some(max(0.05, min(0.5, deadline - time.monotonic())))
         raise TimeoutError(f"timed out waiting for {needle!r}")
 
-    def run_command(self, command: str, timeout: float) -> str:
-        """Runs one shell command and waits for the next prompt."""
+    def run_command(self, command: str, timeout: float, append_newline: bool = True) -> str:
+        """Runs one shell input sequence and waits for the next prompt."""
         self.buffer = ""
-        self.send(command + "\n")
+        self.send(command + ("\n" if append_newline else ""))
         return self.wait_for(PROMPT_MARKER, timeout)
 
     def login(self, username: str, password: str, timeout: float) -> str:
@@ -168,8 +171,9 @@ def prepare_test_disk(test_disk: Path, base_disk: Path, no_build: bool) -> None:
     with test_disk.open("wb") as disk:
         disk.truncate(disk_size)
 
+    test_app_names = [*TEST_APP_NAMES, *OPTIONAL_TOOLCHAIN_TEST_APPS]
     subprocess.run(
-        ["make", f"DISK_IMG={test_disk}", f"APPFS_EXTRA_APPS={' '.join(TEST_APP_NAMES)}", "appfs"],
+        ["make", f"DISK_IMG={test_disk}", f"APPFS_EXTRA_APPS={' '.join(test_app_names)}", "appfs"],
         check=True,
     )
 
@@ -264,7 +268,7 @@ def run_and_validate(
         time.sleep(case.delay_before)
 
     try:
-        output = qemu.run_command(case.command, case.timeout)
+        output = qemu.run_command(case.command, case.timeout, case.append_newline)
         return CommandResult(output, validate(case, output))
     except TimeoutError as exc:
         timeout_output = qemu.buffer
@@ -301,6 +305,17 @@ def build_sections(include_network: bool, host_ip: str, network_delay: float) ->
         TestSection("security/fault tests", security_tests()),
         TestSection("multi-user tests", user_tests()),
     ]
+    if OPTIONAL_TOOLCHAIN_TESTS:
+        optional_toolchain_tests = Path(OPTIONAL_TOOLCHAIN_TESTS)
+        spec = importlib.util.spec_from_file_location(
+            "optional_toolchain_app_cases",
+            optional_toolchain_tests,
+        )
+        if spec is None or spec.loader is None:
+            raise RuntimeError(f"failed to load {optional_toolchain_tests}")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        sections.append(TestSection("optional toolchain tests", module.toolchain_tests(TestCase)))
     if include_network:
         sections.append(TestSection("network tests", network_tests(host_ip, network_delay)))
     return sections

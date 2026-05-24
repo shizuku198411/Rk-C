@@ -16,6 +16,7 @@ class TestCase:
     recover_timeout: float | None = None
     delay_before: float = 0.0
     number: int = 0
+    append_newline: bool = True
 
 
 @dataclass
