@@ -1,14 +1,22 @@
 #!/usr/bin/env python3
+"""Boots Rk-C on QEMU and executes categorized application smoke tests."""
 import argparse
 import os
 import re
 import selectors
 import signal
 import subprocess
-import sys
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
+
+from app_tests.filesystem_cases import filesystem_tests
+from app_tests.model import TestCase, TestSection
+from app_tests.network_cases import network_tests
+from app_tests.runtime_cases import runtime_tests
+from app_tests.security_cases import security_tests
+from app_tests.shell_cases import shell_tests
+from app_tests.user_cases import user_tests
 
 
 ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
@@ -17,33 +25,17 @@ TEST_APP_NAMES = ["faultcheck", "capcheck", "pollcheck", "signalcheck", "writech
 
 
 @dataclass
-class TestCase:
-    name: str
-    command: str
-    contains: list[str] = field(default_factory=list)
-    not_contains: list[str] = field(default_factory=list)
-    regex: list[str] = field(default_factory=list)
-    any_of: list[str] = field(default_factory=list)
-    timeout: float = 8.0
-    recover_timeout: float | None = None
-    delay_before: float = 0.0
-    number: int = 0
-
-
-@dataclass
 class CommandResult:
+    """Stores a command response and validation outcome."""
+
     output: str
     errors: list[str]
     fatal: bool = False
 
 
-@dataclass
-class TestSection:
-    name: str
-    tests: list[TestCase]
-
-
 class QemuConsole:
+    """Runs QEMU and exchanges commands through its serial console."""
+
     def __init__(self, command: list[str], log_path: Path | None = None):
         self.command = command
         self.log_path = log_path
@@ -53,6 +45,7 @@ class QemuConsole:
         self.log_file = None
 
     def start(self) -> None:
+        """Starts the QEMU process and captures its serial output."""
         if self.log_path is not None:
             self.log_path.parent.mkdir(parents=True, exist_ok=True)
             self.log_file = self.log_path.open("w", encoding="utf-8", errors="replace")
@@ -70,6 +63,7 @@ class QemuConsole:
         self.selector.register(self.proc.stdout, selectors.EVENT_READ)
 
     def close(self) -> None:
+        """Requests shutdown and forcibly cleans up QEMU when needed."""
         if self.proc is None:
             return
 
@@ -98,12 +92,14 @@ class QemuConsole:
             self.log_file = None
 
     def send(self, data: str) -> None:
+        """Writes terminal input to the running guest."""
         if self.proc is None or self.proc.stdin is None:
             raise RuntimeError("QEMU is not running")
         self.proc.stdin.write(data.encode("utf-8"))
         self.proc.stdin.flush()
 
     def read_some(self, timeout: float) -> str:
+        """Reads currently available serial console output."""
         if self.proc is None:
             raise RuntimeError("QEMU is not running")
         if self.proc.poll() is not None:
@@ -122,6 +118,7 @@ class QemuConsole:
         return "".join(chunks)
 
     def wait_for(self, needle: str, timeout: float) -> str:
+        """Reads console output until the requested terminal marker appears."""
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             if needle in self.buffer:
@@ -132,11 +129,13 @@ class QemuConsole:
         raise TimeoutError(f"timed out waiting for {needle!r}")
 
     def run_command(self, command: str, timeout: float) -> str:
+        """Runs one shell command and waits for the next prompt."""
         self.buffer = ""
         self.send(command + "\n")
         return self.wait_for(PROMPT_MARKER, timeout)
 
     def login(self, username: str, password: str, timeout: float) -> str:
+        """Authenticates to the initial login process."""
         boot = self.wait_for("login: ", timeout)
         self.send(username + "\n")
         boot += self.wait_for("password: ", timeout)
@@ -146,14 +145,17 @@ class QemuConsole:
 
 
 def strip_ansi(text: str) -> str:
+    """Removes terminal escape sequences before assertion matching."""
     return ANSI_RE.sub("", text)
 
 
 def run_build() -> None:
+    """Builds regular and test-only RKX binaries."""
     subprocess.run(["make", "build-test-bins"], check=True)
 
 
 def prepare_test_disk(test_disk: Path, base_disk: Path, no_build: bool) -> None:
+    """Creates a clean disk image and packs apps for one test execution."""
     test_disk.parent.mkdir(parents=True, exist_ok=True)
     test_disk.unlink(missing_ok=True)
     if not no_build:
@@ -172,396 +174,8 @@ def prepare_test_disk(test_disk: Path, base_disk: Path, no_build: bool) -> None:
     )
 
 
-def normal_tests() -> list[TestCase]:
-    tests = [
-        TestCase("shell help", "help", ["available commands:", "curl", "stracectl", "dmesg"]),
-        TestCase("shell ticks", "ticks", regex=[r"\d+"]),
-        TestCase("shell traps", "traps", ["trap count:", "supervisor timer"]),
-        TestCase("shell bitmap", "bitmap", ["bitmap:", "free"]),
-        TestCase("shell history", "history", ["history"]),
-        TestCase("shell cd", "cd /bin", []),
-        TestCase("shell cwd ls", "ls", ["shell", "tcpcheck", "curl"]),
-        TestCase("shell cd dot", "cd .", []),
-        TestCase("shell pwd after dot", "pwd", ["/bin"]),
-        TestCase("shell cd parent", "cd ..", []),
-        TestCase("shell pwd after parent", "pwd", ["/"]),
-        TestCase("shell cd root", "cd /", []),
-        TestCase("shell cd etc", "cd /etc", []),
-        TestCase("wc relative path", "wc interface.conf", ["/etc/interface.conf"], regex=[r"\d+ \d+ \d+ /etc/interface\.conf"]),
-        TestCase("shell cd root after wc", "cd /", []),
-    ]
-
-    help_cases = {
-        "ls": "usage: ls",
-        "cat": "usage: cat",
-        "mkdir": "usage: mkdir",
-        "rm": "usage: rm",
-        "rmdir": "usage: rmdir",
-        "date": "usage: date",
-        "edit": "usage: edit",
-        "ipc": "usage:",
-        "kill": "usage: kill",
-        "svc": "usage:",
-        "ping": "usage: ping",
-        "nslookup": "usage: nslookup",
-        "tcpcheck": "usage: tcpcheck",
-        "curl": "usage: curl",
-        "stracectl": "usage:",
-        "dmesg": "usage: dmesg",
-        "rkxinfo": "usage: rkxinfo",
-        "echo": "usage: echo",
-        "touch": "usage: touch",
-        "cp": "usage: cp",
-        "mv": "usage: mv",
-        "df": "usage: df",
-        "paniclog": "usage: paniclog",
-        "id": "usage: id",
-        "chmod": "usage: chmod",
-        "chown": "usage: chown",
-        "passwd": "usage: passwd",
-        "capcheck": "usage: capcheck",
-        "pollcheck": "usage: pollcheck",
-        "writecheck": "usage: writecheck",
-        "heapcheck": "usage: heapcheck",
-        "orccheck": "usage: orccheck",
-        "login": "cannnot execute /bin/login directly from shell.",
-    }
-    for app, expected in help_cases.items():
-        tests.append(TestCase(f"{app} --help", f"{app} --help", [expected]))
-
-    tests.extend(
-        [
-            TestCase("ls root dirs", "ls /", ["var/"], not_contains=["var/log/"]),
-            TestCase("ls /var", "ls /var", ["log/"]),
-            TestCase("ls /bin", "ls /bin", ["shell", "svcmgtd", "tcpcheck", "curl", "dmesg"], not_contains=["./", "../"]),
-            TestCase("ls -a dot entries", "ls -a /bin", ["./", "../", "shell"]),
-            TestCase("ls -al dot entries", "ls -al /bin", ["./", "../", "shell", "bytes"]),
-            TestCase("ls parent path", "ls /bin/..", ["bin/", "tmp/"]),
-            TestCase("ls -l /bin", "ls -l /bin", ["shell", "bytes"]),
-            TestCase("touch chmod target", "touch /tmp/chmod_smoke", []),
-            TestCase("ls -l default mode", "ls -l /tmp", ["-rw-r--r--", "root:root", "chmod_smoke"]),
-            TestCase("chmod 600", "chmod 600 /tmp/chmod_smoke", []),
-            TestCase("ls -l chmod 600", "ls -l /tmp", ["-rw-------", "root:root", "chmod_smoke"]),
-            TestCase("rm chmod target", "rm /tmp/chmod_smoke", []),
-            TestCase("prepare chown file", "echo shared > /tmp/chown_user_file", []),
-            TestCase("chown file to rkc", "chown rkc /tmp/chown_user_file", []),
-            TestCase("ls -l chown rkc", "ls -l /tmp", ["-rw-r--r--", "rkc:rkc", "chown_user_file"]),
-            TestCase("chown file to root", "chown root /tmp/chown_user_file", []),
-            TestCase("ls -l chown root", "ls -l /tmp", ["-rw-r--r--", "root:root", "chown_user_file"]),
-            TestCase("chown file back to rkc", "chown 1000:1000 /tmp/chown_user_file", []),
-            TestCase("rkxinfo curl", "rkxinfo curl", ["path: /bin/curl", "magic: RKX1", "version: 2", "text:", "stack_pages:"]),
-            TestCase("mkdir /tmp/appsmoke", "mkdir /tmp/appsmoke", []),
-            TestCase("ls /tmp after mkdir", "ls /tmp", ["appsmoke/"]),
-            TestCase("rmdir /tmp/appsmoke", "rmdir /tmp/appsmoke", []),
-            TestCase("date", "date", regex=[r"\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}"]),
-            TestCase("redirection creates file", "date > /tmp/date_smoke", []),
-            TestCase("cat redirected file", "cat /tmp/date_smoke", regex=[r"\d{4}/\d{2}/\d{2}"]),
-            TestCase("pipe cat", "cat /tmp/date_smoke | cat", regex=[r"\d{4}/\d{2}/\d{2}"]),
-            TestCase("cp file", "cp /tmp/date_smoke /tmp/date_copy", []),
-            TestCase("cat copied file", "cat /tmp/date_copy", regex=[r"\d{4}/\d{2}/\d{2}"]),
-            TestCase("mv rename file", "mv /tmp/date_copy /tmp/date_moved", []),
-            TestCase("cat renamed file", "cat /tmp/date_moved", regex=[r"\d{4}/\d{2}/\d{2}"]),
-            TestCase("mkdir /tmp/mvdir", "mkdir /tmp/mvdir", []),
-            TestCase("prepare rootfs mv file", "date > /mv_cross", []),
-            TestCase("mv rootfs file into tmpfs directory", "mv /mv_cross /tmp", []),
-            TestCase("cat rootfs file moved into tmpfs", "cat /tmp/mv_cross", regex=[r"\d{4}/\d{2}/\d{2}"]),
-            TestCase("mv tmpfs file with new name", "mv /tmp/mv_cross /tmp/mv_cross_renamed", []),
-            TestCase("cat renamed tmpfs file", "cat /tmp/mv_cross_renamed", regex=[r"\d{4}/\d{2}/\d{2}"]),
-            TestCase("prepare rootfs mv file explicit dst", "date > /mv2", []),
-            TestCase("mv rootfs file to explicit tmpfs path", "mv /mv2 /tmp/mv2", []),
-            TestCase("cat explicit tmpfs path", "cat /tmp/mv2", regex=[r"\d{4}/\d{2}/\d{2}"]),
-            TestCase("mv file into directory", "mv /tmp/date_moved /tmp/mvdir", []),
-            TestCase("cat moved file", "cat /tmp/mvdir/date_moved", regex=[r"\d{4}/\d{2}/\d{2}"]),
-            TestCase("prepare mv multi file a", "date > /tmp/mv_a", []),
-            TestCase("prepare mv multi file b", "date > /tmp/mv_b", []),
-            TestCase("mv multiple files", "mv /tmp/mv_a /tmp/mv_b /tmp/mvdir", []),
-            TestCase("cat moved multi file a", "cat /tmp/mvdir/mv_a", regex=[r"\d{4}/\d{2}/\d{2}"]),
-            TestCase("ls moved multi file b", "ls /tmp/mvdir", ["mv_b"]),
-            TestCase("rm moved file", "rm /tmp/mvdir/date_moved", []),
-            TestCase("rm moved multi file a", "rm /tmp/mvdir/mv_a", []),
-            TestCase("rm moved multi file b", "rm /tmp/mvdir/mv_b", []),
-            TestCase("rm cross moved file", "rm /tmp/mv_cross_renamed", []),
-            TestCase("rm explicit cross moved file", "rm /tmp/mv2", []),
-            TestCase("rmdir /tmp/mvdir", "rmdir /tmp/mvdir", []),
-            TestCase("rm redirected file", "rm /tmp/date_smoke", []),
-            TestCase("ps", "ps", ["pid", "exe", "shell"]),
-            TestCase("id", "id", ["uid=0", "gid=0"]),
-            TestCase("ps -f", "ps -f", ["pid", "ppid", "uid", "gid", "state", "mode", "shell"]),
-            TestCase("ps -l", "ps -l", ["pid", "ppid", "uid", "gid", "cpu", "mem", "shell"]),
-            TestCase("ps -ef", "ps -ef", ["pid", "ppid", "uid", "gid", "state", "mode", "svcmgtd"]),
-            TestCase("ps -e -f", "ps -e -f", ["pid", "ppid", "uid", "gid", "state", "mode", "svcmgtd"]),
-            TestCase(
-                "ls /proc",
-                "ls /proc",
-                ["uptime", "cpuinfo", "kmsg", "3/", "4/", "5/", "6/", "7/", "8/", "9/"],
-                not_contains=["./", "../"],
-                regex=[r"\d+/"],
-            ),
-            TestCase(
-                "ls -a /proc",
-                "ls -a /proc",
-                ["./", "../", "uptime", "cpuinfo", "kmsg", "3/", "4/", "5/", "6/", "7/", "8/", "9/"],
-                regex=[r"\d+/"],
-            ),
-            TestCase("cat /proc/processes", "cat /proc/processes", ["pid", "ppid", "uid", "gid", "exe"]),
-            TestCase("cat /proc/fsinfo", "cat /proc/fsinfo", ["Filesystem", "rootfs", "tmpfs", "appfs", "/bin"]),
-            TestCase("df", "df", ["Filesystem", "rootfs", "tmpfs", "appfs", "Mounted on"]),
-            TestCase("shell cd /proc", "cd /proc", []),
-            TestCase("shell pwd after cd /proc", "pwd", ["/proc"]),
-            TestCase("shell ls proc cwd", "ls", ["uptime", "cpuinfo", "kmsg"], not_contains=["./", "../"], regex=[r"\d+/"]),
-            TestCase("shell cd proc pid", "cd 1", []),
-            TestCase("shell pwd after cd proc pid", "pwd", ["/proc/1"]),
-            TestCase("shell ls proc pid cwd", "ls", ["status", "rkx_map"], not_contains=["./", "../"]),
-            TestCase("shell cd proc parent", "cd ..", []),
-            TestCase("shell pwd after cd proc parent", "pwd", ["/proc"]),
-            TestCase("shell cd root after proc", "cd /", []),
-            TestCase("dmesg", "dmesg", ["[boot]", "set trap vector"]),
-            TestCase("cat /proc/kmsg", "cat /proc/kmsg", ["[boot]"]),
-            TestCase("cat /proc/uptime", "cat /proc/uptime", ["ticks:"], regex=[r"uptime: \d{2}:\d{2}:\d{2}"]),
-            TestCase("ls /proc/1", "ls /proc/1", ["status", "rkx_map"], not_contains=["./", "../"]),
-            TestCase("cat /proc/1/status", "cat /proc/1/status", ["pid: 1", "uid: 0", "gid: 0", "cpu:", "mem:", "exe: init"]),
-            TestCase("cat /proc/3/status", "cat /proc/3/status", ["pid: 3", "uid: 0", "gid: 0", "exe: /bin/svcmgtd"]),
-            TestCase("svc list", "svc list", ["service", "procmgtd", "blockd", "fsd", "netd"]),
-            TestCase("svc status", "svc status", ["service", "state", "starts", "restarts", "ready_tick", "procmgtd"]),
-            TestCase("svc status netd", "svc status netd", ["netd", "reason"]),
-            TestCase("svc degraded", "svc degraded", ["service", "state"]),
-            TestCase("svc logs", "svc logs", ["started", "ready"]),
-            TestCase("rkxinfo svc root only", "rkxinfo svc", ["path: /bin/svc", "allowed_uids: 0"]),
-            TestCase("rkxinfo ls all users", "rkxinfo ls", ["path: /bin/ls", "allowed_uids: all"]),
-            TestCase("stracectl app", "stracectl ls /bin", ["shell", "tcpcheck", "curl"], timeout=12.0),
-            TestCase("stracectl on", "stracectl on", ["strace on"]),
-            TestCase("stracectl off", "stracectl off", ["strace off"]),
-        ]
-    )
-    return tests
-
-
-def abnormal_tests() -> list[TestCase]:
-    overlong_command = "a" * 75
-
-    return [
-        TestCase("missing command", "definitely_missing_command", ["command not found: /bin/definitely_missing_command"]),
-        TestCase("deny truncated command path", overlong_command, ["command path too long"]),
-        TestCase("deny server binary in pipeline", "echo ok | userd", ["cannnot execute /bin/userd directly from shell."]),
-        TestCase("kill invalid pid", "kill 999", ["kill: failed"]),
-        TestCase("svc stop required service", "svc stop fsd", ["cannot stop required service"]),
-        TestCase("ipc invalid send", "ipc send 999 hello", ["ipc: send failed"]),
-        TestCase("deny write under /bin", "ls > /bin/ls.txt", ["redirect: failed to open /bin/ls.txt"]),
-        TestCase("deny mkdir under /bin", "mkdir /bin/scratch", ["mkdir: failed"]),
-        TestCase("deny unlink under /bin", "rm /bin/ls", ["rm: failed"]),
-        TestCase("deny read-only dev stdout", "cat /dev/stdout", ["cat: failed"]),
-        TestCase("deny invalid chown target", "chown 123:456 /tmp/chown_user_file", ["chown: invalid argument"]),
-        TestCase(
-            "pollcheck event wait",
-            "pollcheck",
-            [
-                "pollcheck: ipc empty ok",
-                "pollcheck: timer ok",
-                "pollcheck: pipe read empty ok",
-                "pollcheck: pipe write ready ok",
-                "pollcheck: pipe read ready ok",
-                "pollcheck: invalid fd error ok",
-                "pollcheck: ok",
-            ],
-            timeout=12.0,
-        ),
-        TestCase(
-            "signalcheck process events",
-            "signalcheck",
-            [
-                "signalcheck: child wait ok",
-                "signalcheck: child_exited signal ok",
-                "signalcheck: empty signal queue ok",
-                "signalcheck: ok",
-            ],
-            timeout=12.0,
-        ),
-        TestCase(
-            "writecheck file write modes",
-            "writecheck",
-            [
-                "writecheck: create overwrite ok",
-                "writecheck: append existing ok",
-                "writecheck: overwrite existing ok",
-                "writecheck: append missing denied ok",
-                "writecheck: create append ok",
-                "writecheck: invalid flags denied ok",
-                "writecheck: large rootfs write ok",
-                "writecheck: released blocks reused ok",
-                "writecheck: ok",
-            ],
-            timeout=12.0,
-        ),
-        TestCase(
-            "heapcheck user heap",
-            "heapcheck",
-            ["heapcheck: ok"],
-            timeout=12.0,
-        ),
-        TestCase(
-            "orccheck managed heap",
-            "orccheck",
-            [
-                "orccheck: allocator release ok",
-                "orccheck: string ok",
-                "orccheck: seq ok",
-                "orccheck: ref ok",
-                "orccheck: ok",
-            ],
-            timeout=12.0,
-        ),
-        TestCase(
-            "capcheck unauthorized rkx caps",
-            "capcheck",
-            [
-                "capcheck: requested caps visible",
-                "capcheck: requested cap names visible",
-                "capcheck: granted caps stripped",
-                "capcheck: raw_net denied",
-                "capcheck: process_list denied",
-                "capcheck: forged kill denied",
-                "capcheck: ok",
-            ],
-            timeout=12.0,
-        ),
-        *[
-            TestCase("faultcheck --help", "faultcheck --help", ["usage: faultcheck"]),
-            TestCase("faultcheck bad cstring", "faultcheck bad-cstring", ["bad-cstring: rejected"]),
-            TestCase(
-                "faultcheck write text",
-                "faultcheck write-text",
-                ["write-text: touching text"],
-                any_of=[
-                    "PAGE FAULT DETECTED: Store/AMO Page Fault",
-                    "PAGE FAULT DETECTED: Store/AMO Access Fault",
-                ],
-                timeout=10.0,
-            ),
-            TestCase(
-                "faultcheck exec stack",
-                "faultcheck exec-stack",
-                ["exec-stack: jumping to stack"],
-                any_of=[
-                    "PAGE FAULT DETECTED: Instruction Page Fault",
-                    "PAGE FAULT DETECTED: Instruction Access Fault",
-                ],
-                timeout=10.0,
-            ),
-            TestCase(
-                "user panic log",
-                "paniclog",
-                [
-                    "pid=",
-                    "exe=/bin/faultcheck",
-                    "scause=",
-                    "stval=",
-                    "sepc=",
-                    "sp=",
-                    "a0=",
-                    "a1=",
-                    "a2=",
-                    "a3=",
-                ],
-            ),
-        ],
-    ]
-
-
-def user_tests() -> list[TestCase]:
-    return [
-        TestCase("prepare root sticky file", "echo root-owned > /tmp/root_sticky", []),
-        TestCase("prepare root private file", "echo private > /tmp/root_private", []),
-        TestCase("chmod root private file", "chmod 600 /tmp/root_private", []),
-        TestCase("prepare protected root dir", "mkdir /tmp/root_dir", []),
-        TestCase("chmod protected root dir", "chmod 700 /tmp/root_dir", []),
-        TestCase("ls root includes home", "ls /", ["home/"]),
-        TestCase("ls -l root home owner", "ls -l /", ["drwxr-xr-x", "root:root", "home/"]),
-        TestCase("ls -l rkc home owner", "ls -l /home", ["drwxr-xr-x", "rkc:rkc", "rkc/"]),
-        TestCase("root can change rkc password", "passwd rkc\nrkc2\nrkc2", ["passwd: password updated"]),
-        TestCase("passwd mismatch rejected", "passwd rkc\nleft\nright", ["passwd: password mismatch"]),
-        TestCase("switch to rkc with new password", "su rkc\nrkc2", []),
-        TestCase("id as rkc", "id", ["uid=1000(rkc)", "gid=1000(rkc)"]),
-        TestCase("rkc can restore own password", "passwd rkc\nrkc\nrkc", ["passwd: password updated"]),
-        TestCase("rkc cannot change root password", "passwd root\nbad\nbad", ["passwd: failed"]),
-        TestCase("user can switch root with password", "su root\nroot", []),
-        TestCase("id after su root", "id", ["uid=0", "gid=0"]),
-        TestCase("switch back to rkc", "su rkc\nrkc", []),
-        TestCase("start nested rkc shell for history", "shell", []),
-        TestCase("nested rkc history command", "pwd", ["/home/rkc"]),
-        TestCase("nested rkc shell saves history on exit", "exit", []),
-        TestCase("rkc history saved under home", "cat /home/rkc/.history", ["pwd", "exit"]),
-        TestCase("user history typo path absent", "cat /home.history", ["cat: failed"]),
-        TestCase("root history saved under root", "cat /.history", ["su rkc"]),
-        TestCase("user can run normal app", "ls /", ["tmp/", "bin/", "home/"]),
-        TestCase("user cannot run svc", "svc list", ["permission denied: /bin/svc"]),
-        TestCase("user cannot run server binary", "userd", ["cannnot execute /bin/userd directly from shell."]),
-        TestCase("user can read /etc", "cat /etc/interface.conf", ["address", "gateway"]),
-        TestCase("user cannot chmod root file", "chmod 600 /etc/interface.conf", ["chmod: failed"]),
-        TestCase("user cannot chown root file", "chown rkc /etc/interface.conf", ["chown: permission denied"]),
-        TestCase("user cannot write /etc", "touch /etc/user_denied", ["failed to create file"]),
-        TestCase("user cannot write root tmp file", "echo denied > /tmp/root_sticky", ["redirect: failed to open /tmp/root_sticky"]),
-        TestCase("user cannot read private root file", "cat /tmp/root_private", ["cat: failed"]),
-        TestCase("user cannot list protected root dir", "ls /tmp/root_dir", ["ls: not found"]),
-        TestCase("user cannot remove sticky root file", "rm /tmp/root_sticky", ["rm: failed"]),
-        TestCase("user can read chowned file", "cat /tmp/chown_user_file", ["shared"]),
-        TestCase("user can chmod chowned file", "chmod 600 /tmp/chown_user_file", []),
-        TestCase("user chowned file mode visible", "ls -l /tmp", ["-rw-------", "rkc:rkc", "chown_user_file"]),
-        TestCase("user can remove own sticky file", "rm /tmp/chown_user_file", []),
-        TestCase("user create tmp sticky file", "touch /tmp/user_sticky", []),
-        TestCase("user-owned tmp file visible", "ls -l /tmp", ["-rw-r--r--", "rkc:rkc", "user_sticky"]),
-        TestCase("user remove own tmp sticky file", "rm /tmp/user_sticky", []),
-        TestCase("user can write dev stdout", "echo dev-ok > /dev/stdout", ["dev-ok"]),
-        TestCase("user cannot write dev stdin", "echo denied > /dev/stdin", ["redirect: failed to open /dev/stdin"]),
-        TestCase("user cd home", "cd /home/rkc", []),
-        TestCase("user pwd home", "pwd", ["/home/rkc"]),
-        TestCase("user create home file", "echo hello > note.txt", []),
-        TestCase("user read home file", "cat note.txt", ["hello"]),
-        TestCase("user-owned home file", "ls -l /home/rkc", ["-rw-r--r--", "rkc:rkc", "note.txt"]),
-        TestCase("user chmod own file", "chmod 600 note.txt", []),
-        TestCase("user chmod own file visible", "ls -l /home/rkc", ["-rw-------", "rkc:rkc", "note.txt"]),
-        TestCase("user cleanup own file", "rm note.txt", []),
-        TestCase("user cd root after home", "cd /", []),
-    ]
-
-
-def network_tests(host_ip: str, delay: float) -> list[TestCase]:
-    return [
-        TestCase(
-            "ping gateway",
-            f"ping {host_ip}",
-            [f"PING {host_ip}"],
-            any_of=["reply from", "timeout from"],
-            timeout=12.0,
-            delay_before=delay,
-        ),
-        TestCase(
-            "nslookup example.com",
-            "nslookup example.com",
-            ["Name: example.com"],
-            any_of=["Address:", "nslookup: no A record"],
-            timeout=30.0,
-            delay_before=delay,
-        ),
-        TestCase(
-            "curl example.com http",
-            "curl -i http://example.com",
-            ["HTTP/1.1 200 OK"],
-            timeout=30.0,
-            recover_timeout=120.0,
-            delay_before=delay,
-        ),
-        TestCase(
-            "curl example.com https",
-            "curl -v https://example.com",
-            ["TLS: TLS1.3"],
-            timeout=45.0,
-            recover_timeout=180.0,
-            delay_before=delay,
-        ),
-    ]
-
-
 def validate(case: TestCase, output: str) -> list[str]:
+    """Checks console text against all expectations for a test case."""
     clean = strip_ansi(output)
     errors = []
     for expected in case.contains:
@@ -579,6 +193,7 @@ def validate(case: TestCase, output: str) -> list[str]:
 
 
 def expected_summary(case: TestCase) -> str:
+    """Builds the compact expected-output description shown in logs."""
     parts = []
     if case.contains:
         parts.append("contains=" + repr(case.contains))
@@ -595,6 +210,7 @@ def expected_summary(case: TestCase) -> str:
 
 
 def actual_summary(output: str, limit: int = 420) -> str:
+    """Builds a bounded one-line display of actual console output."""
     clean = strip_ansi(output).replace("\r", "")
     lines = [line.rstrip() for line in clean.splitlines()]
     lines = [line for line in lines if line.strip()]
@@ -605,6 +221,7 @@ def actual_summary(output: str, limit: int = 420) -> str:
 
 
 def print_result(status: str, case: TestCase, output: str) -> None:
+    """Prints one PASS or FAIL test result with a concise output summary."""
     label = case.name
     if case.number > 0:
         label = f"#{case.number:03d} {case.name}"
@@ -618,6 +235,7 @@ def print_result(status: str, case: TestCase, output: str) -> None:
 
 
 def print_section(name: str) -> None:
+    """Prints a category heading in test output."""
     print("")
     print("=" * 72)
     print(name)
@@ -625,9 +243,10 @@ def print_section(name: str) -> None:
 
 
 def print_failure(case: TestCase, output: str, errors: list[str]) -> None:
+    """Prints validation failures plus enough console tail for diagnosis."""
     print_result("FAIL", case, output)
     for error in errors:
-      print(f"       {error}")
+        print(f"       {error}")
     clean = strip_ansi(output)
     tail = clean[-1200:].replace("\r", "")
     print("------- output tail -------")
@@ -640,6 +259,7 @@ def run_and_validate(
     case: TestCase,
     default_recover_timeout: float,
 ) -> CommandResult:
+    """Runs one case and attempts prompt recovery after a command timeout."""
     if case.delay_before > 0:
         time.sleep(case.delay_before)
 
@@ -672,7 +292,22 @@ def run_and_validate(
         return CommandResult(qemu.buffer, [str(exc)], fatal=True)
 
 
+def build_sections(include_network: bool, host_ip: str, network_delay: float) -> list[TestSection]:
+    """Assembles categorized cases in dependency-preserving execution order."""
+    sections = [
+        TestSection("shell/command tests", shell_tests()),
+        TestSection("filesystem tests", filesystem_tests()),
+        TestSection("runtime/service tests", runtime_tests()),
+        TestSection("security/fault tests", security_tests()),
+        TestSection("multi-user tests", user_tests()),
+    ]
+    if include_network:
+        sections.append(TestSection("network tests", network_tests(host_ip, network_delay)))
+    return sections
+
+
 def main() -> int:
+    """Parses test options, boots QEMU, and reports categorized test results."""
     parser = argparse.ArgumentParser(description="Boot QEMU and smoke-test all user apps.")
     parser.add_argument("--no-build", action="store_true", help="skip make build before booting")
     parser.add_argument("--qemu-net", default="tap", choices=["user", "tap"], help="QEMU_NET value")
@@ -747,13 +382,11 @@ def main() -> int:
             )
 
         qemu.buffer = ""
-        sections = [
-            TestSection("normal tests", normal_tests()),
-            TestSection("abnormal/security tests", abnormal_tests()),
-            TestSection("user tests", user_tests()),
-        ]
-        if not args.skip_network_smoke:
-            sections.append(TestSection("network tests", network_tests(args.host_ip, args.network_test_delay)))
+        sections = build_sections(
+            not args.skip_network_smoke,
+            args.host_ip,
+            args.network_test_delay,
+        )
 
         stop = False
         for section in sections:
@@ -763,11 +396,7 @@ def main() -> int:
             for case in section.tests:
                 case.number = case_number
                 case_number += 1
-                result = run_and_validate(
-                    qemu,
-                    case,
-                    args.command_recover_timeout,
-                )
+                result = run_and_validate(qemu, case, args.command_recover_timeout)
 
                 if result.errors:
                     print_failure(case, result.output, result.errors)
