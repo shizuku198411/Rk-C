@@ -1,3 +1,7 @@
+## Implements the procfs userspace server with ORC-owned rendering workspaces.
+{.warning[UnusedImport]: off.}
+
+import ../../lib/runtime/orc_osalloc
 import ../../lib/core/io
 import ../../lib/core/syscall
 import ../../lib/core/strutils
@@ -29,20 +33,34 @@ let procEntries = [
 var
   packet: SysIpcPacket
   response: SysIpcPacket
-  outBuf: array[ProcFsBufSize, char]
-  procInfos: array[I32(SysProcessMaxSlots), SysProcessInfo]
-  services: array[8, SysServiceInfo]
+  renderedText: string = ""
+  procInfos: seq[SysProcessInfo] = @[]
+  services: seq[SysServiceInfo] = @[]
   traps: SysTrapCount
   bitmap: SysBitmapInfo
   cpuInfo: SysCpuInfo
-  fsInfos: array[SysFsInfoMaxEntries, SysFsInfoEntry]
-  fdInfos: array[SysFdMax, SysFdInfo]
+  fsInfos: seq[SysFsInfoEntry] = @[]
+  fdInfos: seq[SysFdInfo] = @[]
+
+
+## Allocates stable ORC-owned workspaces used while generating procfs replies.
+proc initManagedStorage(): bool =
+  procInfos = newSeq[SysProcessInfo](int(SysProcessMaxSlots))
+  services = newSeq[SysServiceInfo](8)
+  fsInfos = newSeq[SysFsInfoEntry](int(SysFsInfoMaxEntries))
+  fdInfos = newSeq[SysFdInfo](int(SysFdMax))
+
+  procInfos.len == int(SysProcessMaxSlots) and
+    services.len == 8 and
+    fsInfos.len == int(SysFsInfoMaxEntries) and
+    fdInfos.len == int(SysFdMax)
 
 
 ## Includes formats procfs response text and virtual directory entries.
 include ./internal/formatting
 
 
+## Returns the pathname contained in the current procfs IPC request packet.
 proc reqPath(): cstring =
   cast[cstring](addr packet.data[0])
 
@@ -67,6 +85,7 @@ include ./internal/directory_views
 include ./internal/fd_views
 
 
+## Renders a virtual procfs regular file identified by its absolute path.
 proc renderRead(path: cstring): U32 =
   var pid = I32(0)
   var fd = I32(0)
@@ -108,15 +127,17 @@ proc renderRead(path: cstring): U32 =
   U32(0)
 
 
+## Copies the request-local managed text builder into the fixed IPC response ABI.
 proc copyOutToResponse(size: U32) =
   response.len = size
 
   var i = U32(0)
   while i < size and i < SysIpcMessageMax:
-    response.data[i] = outBuf[i]
+    response.data[i] = renderedText[int(i)]
     inc i
 
 
+## Dispatches one procfs request and replies with fixed-format IPC payload data.
 proc handlePacket() =
   response = SysIpcPacket()
   response.op =
@@ -141,10 +162,16 @@ proc handlePacket() =
     copyOutToResponse(size)
   
   discard sysIpcSendPacket(packet.senderPid, addr response)
+  renderedText = ""
 
 
+## Initializes the server and processes procfs IPC requests indefinitely.
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   discard arg
+
+  if not initManagedStorage():
+    write("[procfsd] managed workspace allocation failed\n")
+    sysExit(1)
 
   if not waitUntilServiceRegistered(SysServiceKindProcFs):
     write("[procfsd] service registration timeout\n")

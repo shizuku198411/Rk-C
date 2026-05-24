@@ -1,19 +1,18 @@
-## Formats procfs response text and virtual directory entries.
+## Builds request-local managed procfs text and fixed virtual directory entries.
 
+## Releases prior rendered text before constructing the current virtual file.
 proc clearOut() =
-  var i = U32(0)
-  while i < ProcFsBufSize:
-    outBuf[i] = '\0'
-    inc i
+  renderedText = ""
 
 
+## Appends one character to the capped ORC-managed response builder.
 proc appendChar(pos: var U32, ch: char) =
   if pos + U32(1) < ProcFsBufSize:
-    outBuf[pos] = ch
+    renderedText.add(ch)
     inc pos
-    outBuf[pos] = '\0'
 
 
+## Appends a zero-terminated character sequence to the managed builder.
 proc appendStr(pos: var U32, s: cstring) =
   var i = U32(0)
   while s[i] != '\0':
@@ -21,6 +20,7 @@ proc appendStr(pos: var U32, s: cstring) =
     inc i
 
 
+## Appends an unsigned decimal integer to the managed builder.
 proc appendU64(pos: var U32, value: U64) =
   var
     tmp: array[32, char]
@@ -41,6 +41,7 @@ proc appendU64(pos: var U32, value: U64) =
     appendChar(pos, tmp[i])
 
 
+## Appends a signed decimal integer to the managed builder.
 proc appendI32(pos: var U32, value: I32) =
   if value < 0:
     appendChar(pos, '-')
@@ -49,26 +50,31 @@ proc appendI32(pos: var U32, value: I32) =
     appendU64(pos, U64(value))
 
 
+## Appends a percentage value to the managed builder.
 proc appendPercent(pos: var U32, value: U32) =
   appendU64(pos, U64(value))
   appendChar(pos, '%')
 
 
+## Appends a page-count value to the managed builder.
 proc appendPages(pos: var U32, value: U64) =
   appendU64(pos, value)
   appendChar(pos, 'p')
 
 
+## Appends a block count converted to rounded-up KiB.
 proc appendKb(pos: var U32, blocks, blockSize: U64) =
   let bytes = blocks * blockSize
   appendU64(pos, (bytes + U64(1023)) div U64(1024))
 
 
+## Appends the low two decimal digits of a value.
 proc appendTwoDigits(pos: var U32, value: U64) =
   appendChar(pos, char(ord('0') + int((value div U64(10)) mod U64(10))))
   appendChar(pos, char(ord('0') + int(value mod U64(10))))
 
 
+## Appends tick time using an hours, minutes, and seconds representation.
 proc appendDuration(pos: var U32, ticks: U64) =
   let ticksPerSecond = U64(1000) div ProcFsTickMillis
   let totalSeconds = ticks div ticksPerSecond
@@ -83,6 +89,7 @@ proc appendDuration(pos: var U32, ticks: U64) =
   appendTwoDigits(pos, seconds)
 
 
+## Appends a compact hexadecimal value to the managed builder.
 proc appendHex64(pos: var U32, value: U64) =
   appendStr(pos, cstring("0x"))
 
@@ -99,6 +106,7 @@ proc appendHex64(pos: var U32, value: U64) =
     shift -= 4
 
 
+## Appends one RKX virtual memory mapping row.
 proc appendRkxMapLine(pos: var U32, start, size: U64, perms, name: cstring) =
   if size == 0:
     return
@@ -113,6 +121,7 @@ proc appendRkxMapLine(pos: var U32, start, size: U64, perms, name: cstring) =
   appendChar(pos, '\n')
 
 
+## Appends a named capability when its bit is present in a mask.
 proc appendCapName(pos: var U32, mask: U32, cap: U32, name: cstring, first: var bool) =
   if (mask and cap) == 0:
     return
@@ -123,6 +132,7 @@ proc appendCapName(pos: var U32, mask: U32, cap: U32, name: cstring, first: var 
   first = false
 
 
+## Appends the recognized names represented by a capability mask.
 proc appendCapNames(pos: var U32, mask: U32) =
   if mask == SysCapNone:
     appendStr(pos, cstring("none"))
@@ -146,6 +156,7 @@ proc appendCapNames(pos: var U32, mask: U32) =
     appendHex64(pos, U64(unknown))
 
 
+## Appends one labeled capability mask row.
 proc appendCapMaskLine(pos: var U32, label: cstring, mask: U32) =
   appendStr(pos, label)
   appendStr(pos, cstring(": "))
@@ -155,6 +166,7 @@ proc appendCapMaskLine(pos: var U32, label: cstring, mask: U32) =
   appendStr(pos, cstring(")\n"))
 
 
+## Appends a named pending signal when its bit is present in a mask.
 proc appendSignalName(pos: var U32, mask, bit: U32, name: cstring, first: var bool) =
   if (mask and bit) == 0:
     return
@@ -165,10 +177,12 @@ proc appendSignalName(pos: var U32, mask, bit: U32, name: cstring, first: var bo
   first = false
 
 
+## Returns the bit mask for one supported signal number.
 proc signalMask(signal: U32): U32 =
   U32(1'u32 shl signal)
 
 
+## Appends the recognized names represented by a pending signal mask.
 proc appendSignalNames(pos: var U32, mask: U32) =
   if mask == U32(0):
     appendStr(pos, cstring("none"))
@@ -181,6 +195,7 @@ proc appendSignalNames(pos: var U32, mask: U32) =
   appendSignalName(pos, mask, signalMask(SysSignalServiceStopped), cstring("service_stopped"), first)
 
 
+## Appends one labeled pending-signal mask row.
 proc appendSignalMaskLine(pos: var U32, label: cstring, mask: U32) =
   appendStr(pos, label)
   appendStr(pos, cstring(": "))
@@ -190,6 +205,7 @@ proc appendSignalMaskLine(pos: var U32, label: cstring, mask: U32) =
   appendStr(pos, cstring(")\n"))
 
 
+## Clears the fixed IPC directory-entry response data buffer.
 proc clearResponseData() =
   var i = U32(0)
   while i < SysIpcMessageMax:
@@ -197,6 +213,7 @@ proc clearResponseData() =
     inc i
 
 
+## Writes one named virtual directory entry into the fixed IPC response data.
 proc writeDirEntry(entry: ptr DirEntry, name: cstring, typ: U32) =
   entry.typ = typ
   entry.size = 0
@@ -209,6 +226,7 @@ proc writeDirEntry(entry: ptr DirEntry, name: cstring, typ: U32) =
   entry.name[i] = '\0'
 
 
+## Writes one process-id virtual directory entry into the fixed IPC response data.
 proc writePidDirEntry(entry: ptr DirEntry, pid: I32) =
   entry.typ = DirEntryTypeDir
   entry.size = 0
@@ -234,5 +252,4 @@ proc writePidDirEntry(entry: ptr DirEntry, pid: I32) =
     inc pos
 
   entry.name[pos] = '\0'
-
 

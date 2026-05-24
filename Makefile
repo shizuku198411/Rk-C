@@ -46,6 +46,7 @@ USER_APP_NAMES := \
 	curl stracectl dmesg rkxinfo echo touch cp mv df wc paniclog id chmod chown passwd \
 	whoami sudo shutdown
 USER_SERVER_NAMES := svcmgtd procmgtd fsd blockd procfsd netd userd
+USER_ORC_SERVER_NAMES := procfsd
 TEST_APP_NAMES := faultcheck capcheck pollcheck signalcheck writecheck heapcheck
 ORC_TEST_APP_NAMES := orccheck
 APPFS_EXTRA_APPS ?=
@@ -230,7 +231,7 @@ $(BIN_DIR)/orccheck.rkx: $(BIN_DIR)/orccheck.elf $(RKX_TOOL) $(SRC_DIR)/user/app
 
 define USER_SERVER_template
 $(BIN_DIR)/$(1).elf: $(SRC_DIR)/user/app_main.nim $$(shell find $(SRC_DIR)/user/server/$(1) -type f -name '*.nim' | sort) $$(USER_SERVER_LIB_SRCS) $(SRC_DIR)/user/panicoverride.nim $$(SHARED_LIB_SRCS) $$(USER_LIB_SRCS) $(USER_SYSCALL_OBJ) $(USER_ENTRY_OBJ) $(USER_APP_LINKER_SCRIPT) | $(BIN_DIR)
-	$$(NIM) c $$(USER_NIMFLAGS) -d:userApp_$(1) --nimcache:$$(USER_NIMCACHE_DIR)/$(1) --passL:"$$(USER_ENTRY_OBJ)" --passL:"$$(USER_SYSCALL_OBJ)" --passL:"-Wl,-T,$$(USER_APP_LINKER_SCRIPT)" -o:$$@ $$<
+	$$(NIM) c $$(if $$(filter $(1),$$(USER_ORC_SERVER_NAMES)),$$(USER_ORC_NIMFLAGS),$$(USER_NIMFLAGS)) -d:userApp_$(1) --nimcache:$$(USER_NIMCACHE_DIR)/$(1) --passL:"$$(USER_ENTRY_OBJ)" --passL:"$$(USER_SYSCALL_OBJ)" --passL:"-Wl,-T,$$(USER_APP_LINKER_SCRIPT)" -o:$$@ $$<
 
 $(BIN_DIR)/$(1).rkx: $(BIN_DIR)/$(1).elf $$(RKX_TOOL) $(SRC_DIR)/user/server/$(1)/rkx.toml | $(BIN_DIR)
 	python3 $$(RKX_TOOL) --elf $$< --out $$@

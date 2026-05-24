@@ -67,16 +67,21 @@ proc renderTraps(): U32 =
 proc renderKmsg(): U32 =
   clearOut()
   let capacity = U64(ProcFsBufSize - U32(1))
-  let n = sysKmsg(addr outBuf[0], capacity)
+  var kernelLog = newSeq[char](int(ProcFsBufSize))
+  let n = sysKmsg(addr kernelLog[0], capacity)
   if n < 0:
     var pos = U32(0)
     appendStr(pos, cstring("error\n"))
     return pos
 
-  if U32(n) < ProcFsBufSize:
-    outBuf[U32(n)] = '\0'
+  var
+    pos = U32(0)
+    i = U32(0)
+  while i < U32(n) and i + U32(1) < ProcFsBufSize:
+    appendChar(pos, kernelLog[int(i)])
+    inc i
 
-  U32(n)
+  pos
 
 
 proc renderFsinfo(): U32 =
@@ -115,5 +120,4 @@ proc renderFsinfo(): U32 =
     inc i
 
   pos
-
 
