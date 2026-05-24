@@ -41,6 +41,9 @@ svc --help
 
 - Control commands wait for a short IPC reply from `svcmgtd`
 - Actual stop, unregister, kill, wait, and start logic lives in `svcmgtd`
+- `list` stores registry entries in an ORC-managed `seq[SysServiceInfo]` and builds its formatted table in an ORC-managed `string`
+- IPC request and response packets remain fixed-layout structures because they form the service ABI
+- Status, log, and command response text is transported by `svcmgtd` packets and forwarded directly to stdout
 
 ## RKX Metadata
 

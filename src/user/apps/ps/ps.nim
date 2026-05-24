@@ -1,4 +1,7 @@
 ## Prints process information through the process manager service.
+{.warning[UnusedImport]: off.}
+
+import ../../lib/runtime/orc_osalloc
 import ../../lib/core/io
 import ../../lib/ipc/packet_data
 import ../../lib/ipc/ipc_request
@@ -20,225 +23,17 @@ let optionSpecs = [
 ]
 
 var
-  entries: array[PsMaxEntries, SysProcessInfo]
-  requestPacket: SysIpcPacket
-  responsePacket: SysIpcPacket
+  entries: seq[SysProcessInfo] = @[]
   parsedArgs: UserArgs
   parsedOptions: ParsedOptions
 
 
-## Converts a process state code to a fixed-width display label.
-proc stateName(state: U32): cstring =
-  if state == SysProcessRunnable:
-    "runnable"
-  elif state == SysProcessRunning:
-    "running "
-  elif state == SysProcessSleeping:
-    "sleeping"
-  elif state == SysProcessZombie:
-    "zombie  "
-  else:
-    "unused  "
+## Includes procmgtd request handling and the managed process snapshot workspace.
+include ./internal/process_client
 
 
-## Converts the user/kernel process flag to a display label.
-proc modeName(isUser: U32): cstring =
-  if isUser != 0:
-    "user"
-  else:
-    "kernel"
-
-
-## Prints a signed pid value.
-proc printPid(pid: I32) =
-  if pid < 0:
-    write("-")
-    writeUnsigned(U64(-pid))
-  else:
-    writeUnsigned(U64(pid))
-
-
-## Prints a CPU usage percentage.
-proc printCpuPercent(value: U32) =
-  writeUnsigned(U64(value))
-  write("%")
-
-
-## Prints a memory usage value in pages.
-proc printMemoryPages(value: U64) =
-  writeUnsigned(value)
-  write("p")
-
-
-## Prints one process row using the selected ps format.
-proc printProcess(entry: ptr SysProcessInfo, full, longFormat: bool) =
-  var
-    userEntry: PasswdEntry
-    groupEntry: GroupEntry
-
-  printPid(entry.pid)
-  if not full and not longFormat:
-    write("\t")
-    write(cast[cstring](addr entry.exePath[0]))
-    write("\n")
-    return
-
-  write("\t")
-  printPid(entry.ppid)
-  write("\t")
-  if resolveUid(entry.uid, userEntry):
-    write(cast[cstring](addr userEntry.name[0]))
-  else:
-    writeUnsigned(U64(entry.uid))
-  write("\t")
-  if resolveGid(entry.gid, groupEntry):
-    write(cast[cstring](addr groupEntry.name[0]))
-  else:
-    writeUnsigned(U64(entry.gid))
-  write("\t")
-  write(stateName(entry.state))
-  write("\t")
-  write(modeName(entry.isUser))
-  if longFormat:
-    write("\t")
-    printCpuPercent(entry.cpuPercent)
-    write("\t")
-    printMemoryPages(entry.memoryPages)
-  write("\t")
-  write(cast[cstring](addr entry.exePath[0]))
-  write("\n")
-
-
-## Sorts process entries by pid in ascending order.
-proc sortProcessByPid(entries: var array[PsMaxEntries, SysProcessInfo], count: I32) =
-  var i = 1
-
-  while i < count:
-    let key = entries[i]
-    var j = i
-    
-    while j > 0 and entries[j - 1].pid > key.pid:
-      entries[j] = entries[j - 1]
-      dec j
-    
-    entries[j] = key
-    inc i
-
-
-## Finds the index of a process entry by pid.
-proc findEntryIndex(pid: I32, count: I32): I32 =
-  var i = I32(0)
-  while i < count:
-    if entries[i].pid == pid:
-      return i
-    inc i
-
-  -1
-
-
-## Returns whether a pid belongs to the subtree rooted at rootPid.
-proc isDescendantOf(pid, rootPid: I32, count: I32): bool =
-  var cur = pid
-  var depth = I32(0)
-
-  while cur > 0 and depth < count:
-    if cur == rootPid:
-      return true
-
-    let idx = findEntryIndex(cur, count)
-    if idx < 0:
-      return false
-
-    cur = entries[idx].ppid
-    inc depth
-
-  false
-
-
-## Decides whether a process should be visible in the selected view.
-proc shouldPrintProcess(entry: ptr SysProcessInfo, count: I32, fullList: bool): bool =
-  if entry.state == SysProcessUnused:
-    return false
-  
-  if entry.pid == 1:
-    return false
-
-  if fullList:
-    return true
-
-  let selfPid = sysGetPid()
-  let selfIdx = findEntryIndex(selfPid, count)
-  if selfIdx < 0:
-    return true
-
-  let rootPid = entries[selfIdx].ppid
-  if rootPid <= 0:
-    return true
-
-  entry.pid == rootPid or isDescendantOf(entry.pid, rootPid, count)
-
-
-## Prints the ps header for the selected format.
-proc printHeader(full, longFormat: bool) =
-  if full or longFormat:
-    write("pid\tppid\tuid\tgid\tstate\t\tmode")
-    if longFormat:
-      write("\tcpu\tmem")
-    write("\texe\n")
-  else:
-    write("pid\texe\n")
-
-
-## Sorts and prints all selected process entries.
-proc printProcesses(count: I32, full, every, longFormat: bool) =
-  sortProcessByPid(entries, count)
-
-  printHeader(full, longFormat)
-  var i = I32(0)
-  while i < count:
-    if shouldPrintProcess(addr entries[i], count, every):
-      printProcess(addr entries[i], full, longFormat)
-    inc i
-
-
-## Returns the process manager service pid.
-proc processManagerPid(): I32 =
-  servicePidByKind(SysServiceKindProcess)
-
-
-## Copies packed process info from an IPC packet into a process entry.
-proc copyPacketToProcess(entry: ptr SysProcessInfo, packet: ptr SysIpcPacket) =
-  discard copyFromPacketData(entry, packet, U32(sizeof(SysProcessInfo)))
-
-
-## Requests a process list from procmgtd.
-proc requestProcessList(maxEntries: I32, flags: U64): I32 =
-  let pid = processManagerPid()
-  if pid <= 0:
-    return -1
-
-  requestPacket = SysIpcPacket()
-  requestPacket.op = SysIpcOpProcListRequest
-  requestPacket.arg0 = U64(maxEntries)
-  requestPacket.arg1 = flags
-  if requestIpcReply(pid, addr requestPacket, addr responsePacket, SysIpcOpProcListResponse) != 0:
-    return -1
-
-  let count = I32(responsePacket.arg0)
-  if count < 0:
-    return -1
-
-  var i = I32(0)
-  while i < count and i < maxEntries:
-    if receiveIpcReply(pid, addr responsePacket, SysIpcOpProcListEntry) != 0:
-      return -1
-    if I32(responsePacket.arg0) < 0 or I32(responsePacket.arg0) >= maxEntries:
-      return -1
-
-    copyPacketToProcess(addr entries[I32(responsePacket.arg0)], addr responsePacket)
-    inc i
-
-  count
+## Includes process filtering and ORC-managed table rendering.
+include ./internal/rendering
 
 
 ## Prints ps usage information.
@@ -270,6 +65,10 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   let full = hasOption(parsedOptions, 'f')
   let every = hasOption(parsedOptions, 'e')
   let longFormat = hasOption(parsedOptions, 'l')
+
+  if not initManagedStorage():
+    write("ps: failed to allocate workspace\n")
+    sysExit(1)
 
   let count = requestProcessList(I32(PsMaxEntries), U64(0))
   if count < 0:
