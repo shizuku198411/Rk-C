@@ -1,6 +1,9 @@
 ## Prints metadata from an RKX executable image.
+{.warning[UnusedImport]: off.}
+
 import ../../../lib/rkx
 import ../../../lib/syscall_caps
+import ../../lib/runtime/orc_osalloc
 import ../../lib/core/args
 import ../../lib/core/io
 import ../../lib/core/pathutils
@@ -8,12 +11,23 @@ import ../../lib/core/strutils
 import ../../lib/core/syscall
 
 const
-  PathBufSize = 128
+  RkxInfoPathMax = 128
 
 var
   parsedArgs: UserArgs
-  pathBuf: array[PathBufSize, char]
   header: RkxHeader
+
+  ## ORC-managed text used for output rendering.
+  renderedText: string = ""
+
+  ## ORC-managed path text used for formatting/debug display.
+  pathText: string = ""
+
+  ## Stable fixed buffer used for syscall path arguments.
+  ##
+  ## Do not pass pathText.cstring directly to sysOpen().  Keep a fixed
+  ## syscall-facing path buffer so the kernel sees a stable user pointer.
+  syscallPathBuf: array[RkxInfoPathMax, char]
 
 
 ## Prints rkxinfo usage information.
@@ -21,148 +35,315 @@ proc printUsage() =
   write("usage: rkxinfo <app|/bin/app>\n")
 
 
-## Clears the path construction buffer.
-proc clearPathBuf() =
+## Clears the syscall path buffer.
+proc clearSyscallPathBuf() =
   var i = 0
-  while i < PathBufSize:
-    pathBuf[i] = '\0'
+  while i < RkxInfoPathMax:
+    syscallPathBuf[i] = '\0'
     inc i
 
 
-## Appends a string to the path buffer with bounds checking.
-proc appendPath(s: cstring, pos: var U32): bool =
-  var i = U32(0)
-  while s[i] != '\0':
-    if pos + U32(1) >= U32(PathBufSize):
+## Copies a cstring into the syscall path buffer.
+proc copyToSyscallPathBuf(src: cstring): bool =
+  clearSyscallPathBuf()
+
+  if src == nil:
+    return false
+
+  var i = 0
+  while src[i] != '\0':
+    if i + 1 >= RkxInfoPathMax:
       return false
-    pathBuf[pos] = s[i]
-    inc pos
+
+    syscallPathBuf[i] = src[i]
     inc i
-  pathBuf[pos] = '\0'
+
+  syscallPathBuf[i] = '\0'
   true
 
 
-## Builds a /bin/<name> path for app-name inputs.
-proc buildBinPath(name: cstring): cstring =
-  clearPathBuf()
-  var pos = U32(0)
-  if not appendPath(cstring("/bin/"), pos):
-    return nil
-  if not appendPath(name, pos):
+## Returns the syscall-facing path cstring.
+proc syscallPathCString(): cstring =
+  cast[cstring](addr syscallPathBuf[0])
+
+
+## Copies a cstring into ORC-managed path text.
+proc setPathText(src: cstring): bool =
+  pathText = ""
+
+  if src == nil:
+    return false
+
+  var i = 0
+  while src[i] != '\0':
+    pathText.add(src[i])
+    inc i
+
+  true
+
+
+## Sets both display path text and syscall path buffer.
+proc setResolvedPath(src: cstring): cstring =
+  if src == nil:
     return nil
 
-  cast[cstring](addr pathBuf[0])
+  if not setPathText(src):
+    return nil
+
+  if not copyToSyscallPathBuf(src):
+    return nil
+
+  syscallPathCString()
 
 
 ## Resolves an absolute path or converts an app name to /bin/<name>.
 proc inputPath(arg: cstring): cstring =
   if arg == nil or arg[0] == '\0':
     return nil
+
   if arg[0] == '/':
-    return resolvePath(arg)
+    return setResolvedPath(resolvePath(arg))
 
-  buildBinPath(arg)
+  pathText = ""
+  pathText.add("/bin/")
 
+  var i = 0
+  while arg[i] != '\0':
+    pathText.add(arg[i])
+    inc i
 
-## Prints one decimal RKX header field.
-proc writeField(name: cstring, value: U64) =
-  write(name)
-  write(": ")
-  writeUnsigned(value)
-  write("\n")
+  if not copyToSyscallPathBuf(pathText.cstring):
+    return nil
 
-
-## Prints one hexadecimal RKX header field.
-proc writeHexField(name: cstring, value: U64) =
-  write(name)
-  write(": ")
-  writeHexValue(value)
-  write("\n")
+  syscallPathCString()
 
 
-## Writes a named capability when the bit is present.
-proc writeCapName(mask: U32, bit: U32, name: cstring, first: var bool) =
+## Clears the ORC-owned output buffer.
+proc clearRenderedText() =
+  renderedText = ""
+
+
+## Appends a cstring to the ORC-owned output buffer.
+proc appendText(s: cstring) =
+  if s == nil:
+    return
+
+  var i = 0
+  while s[i] != '\0':
+    renderedText.add(s[i])
+    inc i
+
+
+## Appends an ORC-managed string to the ORC-owned output buffer.
+proc appendString(s: string) =
+  var i = 0
+  while i < s.len:
+    renderedText.add(s[i])
+    inc i
+
+
+## Appends one character to the ORC-owned output buffer.
+proc appendChar(ch: char) =
+  renderedText.add(ch)
+
+
+## Appends a decimal unsigned integer to the ORC-owned output buffer.
+proc appendUnsignedValue(value: U64) =
+  var tmp: array[32, char]
+  var n = value
+  var len = 0
+
+  if n == U64(0):
+    appendChar('0')
+    return
+
+  while n > U64(0) and len < 32:
+    tmp[len] = char(ord('0') + int(n mod U64(10)))
+    n = n div U64(10)
+    inc len
+
+  while len > 0:
+    dec len
+    appendChar(tmp[len])
+
+
+## Appends a hexadecimal unsigned integer to the ORC-owned output buffer.
+proc appendHexValue(value: U64) =
+  appendText(cstring("0x"))
+
+  if value == U64(0):
+    appendChar('0')
+    return
+
+  var started = false
+  var shift = 60
+
+  while shift >= 0:
+    let digit = int((value shr U64(shift)) and U64(0xf))
+
+    if digit != 0 or started:
+      started = true
+      if digit < 10:
+        appendChar(char(ord('0') + digit))
+      else:
+        appendChar(char(ord('a') + digit - 10))
+
+    shift -= 4
+
+
+## Appends a hexadecimal U32 value to the ORC-owned output buffer.
+proc appendHex32Value(value: U32) =
+  appendHexValue(U64(value))
+
+
+## Flushes the ORC-owned output buffer to stdout.
+proc flushRenderedText() =
+  var i = 0
+  while i < renderedText.len:
+    writeChar(renderedText[i])
+    inc i
+
+
+## Appends one decimal RKX header field.
+proc appendField(name: cstring, value: U64) =
+  appendText(name)
+  appendText(cstring(": "))
+  appendUnsignedValue(value)
+  appendChar('\n')
+
+
+## Appends one hexadecimal RKX header field.
+proc appendHexField(name: cstring, value: U64) =
+  appendText(name)
+  appendText(cstring(": "))
+  appendHexValue(value)
+  appendChar('\n')
+
+
+## Appends a named capability when the bit is present.
+proc appendCapName(mask: U32, bit: U32, name: cstring, first: var bool) =
   if (mask and bit) == 0:
     return
+
   if not first:
-    write(",")
-  write(name)
+    appendText(cstring(","))
+
+  appendText(name)
   first = false
 
 
-## Prints the decoded capability mask.
-proc writeCaps(mask: U32) =
-  writeHex32Value(mask)
-  write(" (")
+## Appends the decoded capability mask.
+proc appendCaps(mask: U32) =
+  appendHex32Value(mask)
+  appendText(cstring(" ("))
+
   if mask == SysCapNone:
-    write("none")
+    appendText(cstring("none"))
   else:
     var first = true
-    writeCapName(mask, SysCapServiceManager, SysCapServiceManagerName, first)
-    writeCapName(mask, SysCapRawFs, SysCapRawFsName, first)
-    writeCapName(mask, SysCapRawBlock, SysCapRawBlockName, first)
-    writeCapName(mask, SysCapRawNet, SysCapRawNetName, first)
-    writeCapName(mask, SysCapProcessList, SysCapProcessListName, first)
-    writeCapName(mask, SysCapProcessKill, SysCapProcessKillName, first)
-    writeCapName(mask, SysCapTrace, SysCapTraceName, first)
-    writeCapName(mask, SysCapShutdown, SysCapShutdownName, first)
+
+    appendCapName(mask, SysCapServiceManager, SysCapServiceManagerName, first)
+    appendCapName(mask, SysCapRawFs, SysCapRawFsName, first)
+    appendCapName(mask, SysCapRawBlock, SysCapRawBlockName, first)
+    appendCapName(mask, SysCapRawNet, SysCapRawNetName, first)
+    appendCapName(mask, SysCapProcessList, SysCapProcessListName, first)
+    appendCapName(mask, SysCapProcessKill, SysCapProcessKillName, first)
+    appendCapName(mask, SysCapTrace, SysCapTraceName, first)
+    appendCapName(mask, SysCapShutdown, SysCapShutdownName, first)
+
     let unknown = mask and not SysCapAllKnown
     if unknown != SysCapNone:
       if not first:
-        write(",")
-      write("unknown:")
-      writeHex32Value(unknown)
-  write(")")
+        appendText(cstring(","))
+      appendText(cstring("unknown:"))
+      appendHex32Value(unknown)
+
+  appendText(cstring(")"))
 
 
-## Prints one RKX memory segment descriptor.
-proc writeSegment(name: cstring, va, off, fileSize, memSize: U64) =
-  write(name)
-  write(": va=")
-  writeHexValue(va)
-  write(" off=")
-  writeUnsigned(off)
-  write(" file=")
-  writeUnsigned(fileSize)
-  write(" mem=")
-  writeUnsigned(memSize)
-  write("\n")
+## Appends one RKX memory segment descriptor.
+proc appendSegment(name: cstring, va, off, fileSize, memSize: U64) =
+  appendText(name)
+  appendText(cstring(": va="))
+  appendHexValue(va)
+  appendText(cstring(" off="))
+  appendUnsignedValue(off)
+  appendText(cstring(" file="))
+  appendUnsignedValue(fileSize)
+  appendText(cstring(" mem="))
+  appendUnsignedValue(memSize)
+  appendChar('\n')
 
 
 ## Prints all decoded RKX header fields.
 proc printHeader(path: cstring) =
-  write("path: ")
-  write(path)
-  write("\n")
-  write("magic: RKX1\n")
-  writeField("version", U64(header.version))
-  writeField("header_size", U64(header.headerSize))
-  writeHexField("entry", header.entryVa)
-  write("capability_mask: ")
-  writeCaps(header.capabilityMask)
-  write("\n")
+  clearRenderedText()
 
-  writeSegment("text", header.textVa, header.textOff, header.textFileSize, header.textMemSize)
-  writeSegment("rodata", header.rodataVa, header.rodataOff, header.rodataFileSize, header.rodataMemSize)
-  writeSegment("data", header.dataVa, header.dataOff, header.dataFileSize, header.dataMemSize)
-  write("bss: va=")
-  writeHexValue(header.bssVa)
-  write(" mem=")
-  writeUnsigned(header.bssMemSize)
-  write("\n")
-  writeField("stack_pages", U64(header.stackPages))
-  write("allowed_uids: ")
+  appendText(cstring("path: "))
+
+  if pathText.len > 0:
+    appendString(pathText)
+  else:
+    appendText(path)
+
+  appendChar('\n')
+
+  appendText(cstring("magic: RKX1\n"))
+  appendField(cstring("version"), U64(header.version))
+  appendField(cstring("header_size"), U64(header.headerSize))
+  appendHexField(cstring("entry"), header.entryVa)
+
+  appendText(cstring("capability_mask: "))
+  appendCaps(header.capabilityMask)
+  appendChar('\n')
+
+  appendSegment(
+    cstring("text"),
+    header.textVa,
+    header.textOff,
+    header.textFileSize,
+    header.textMemSize
+  )
+
+  appendSegment(
+    cstring("rodata"),
+    header.rodataVa,
+    header.rodataOff,
+    header.rodataFileSize,
+    header.rodataMemSize
+  )
+
+  appendSegment(
+    cstring("data"),
+    header.dataVa,
+    header.dataOff,
+    header.dataFileSize,
+    header.dataMemSize
+  )
+
+  appendText(cstring("bss: va="))
+  appendHexValue(header.bssVa)
+  appendText(cstring(" mem="))
+  appendUnsignedValue(header.bssMemSize)
+  appendChar('\n')
+
+  appendField(cstring("stack_pages"), U64(header.stackPages))
+
+  appendText(cstring("allowed_uids: "))
   if header.allowedUidCount == U32(0):
-    write("all")
+    appendText(cstring("all"))
   else:
     var i = U32(0)
     while i < header.allowedUidCount and i < U32(RkxAllowedUidMax):
       if i > U32(0):
-        write(",")
-      writeUnsigned(U64(header.allowedUids[i]))
+        appendText(cstring(","))
+      appendUnsignedValue(U64(header.allowedUids[i]))
       inc i
-  write("\n")
-  writeHexField("flags", U64(header.flags))
+  appendChar('\n')
+
+  appendHexField(cstring("flags"), U64(header.flags))
+
+  flushRenderedText()
 
 
 ## Prints an rkxinfo error and exits.
@@ -184,10 +365,13 @@ proc readHeader(path: cstring) =
 
   if readLen != I32(sizeof(RkxHeader)):
     fail(cstring("short read"))
+
   if header.magic != RkxMagic:
     fail(cstring("bad magic"))
+
   if header.version != RkxVersion:
     fail(cstring("unsupported version"))
+
   if header.headerSize < U32(sizeof(RkxHeader)):
     fail(cstring("bad header size"))
 
@@ -198,15 +382,15 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
     printUsage()
     sysExit(1)
 
-  if parsedArgs.argc == 1 and cstringEq(argAt(parsedArgs, 0), "--help"):
+  if parsedArgs.argc == U32(1) and cstringEq(argAt(parsedArgs, U32(0)), cstring("--help")):
     printUsage()
     sysExit(0)
 
-  if parsedArgs.argc != 1:
+  if parsedArgs.argc != U32(1):
     printUsage()
     sysExit(1)
 
-  let path = inputPath(argAt(parsedArgs, 0))
+  let path = inputPath(argAt(parsedArgs, U32(0)))
   if path == nil:
     fail(cstring("path too long"))
 
