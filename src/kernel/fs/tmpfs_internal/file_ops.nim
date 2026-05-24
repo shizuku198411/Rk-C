@@ -170,3 +170,30 @@ proc tmpfsWriteBytesWithFlags*(path: cstring, data: pointer, size: U64, flags: U
   else:
     nodes[idx].size = U32(size)
   0
+
+
+## Implements the tmpfs range write kernel helper.
+proc tmpfsWriteRange*(path: cstring, data: pointer, offset, size: U64): int =
+  if not ready or path == nil or (data == nil and size > U64(0)):
+    return -1
+  if offset + size < offset or offset + size > U64(TmpfsFileMax):
+    return -1
+
+  let idx = resolvePath(path)
+  if idx < 0 or nodes[idx].typ != TmpfsTypeFile:
+    return -1
+
+  var i = U64(nodes[idx].size)
+  while i < offset:
+    nodes[idx].data[i] = '\0'
+    inc i
+
+  let src = cast[ptr UncheckedArray[char]](data)
+  i = U64(0)
+  while i < size:
+    nodes[idx].data[offset + i] = src[i]
+    inc i
+
+  if offset + size > U64(nodes[idx].size):
+    nodes[idx].size = U32(offset + size)
+  0

@@ -30,6 +30,9 @@ ps --help
 
 ## Boundaries and Notes
 
-- The local process entry buffer is fixed size
+- The local process entry workspace is an ORC-managed `seq[SysProcessInfo]`
+- Formatted table output is constructed in an ORC-managed `string` and flushed once per invocation
 - Process information is transported as `SysProcessInfo` through IPC packet data
 - The app uses `procmgtd` instead of calling `sysPs` directly
+- IPC request and response packets remain fixed-layout structures because they form the service ABI
+- `internal/process_client.nim` contains snapshot retrieval and `internal/rendering.nim` contains selection and table formatting

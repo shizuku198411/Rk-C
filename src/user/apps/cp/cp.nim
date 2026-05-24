@@ -19,6 +19,34 @@ proc printUsage() =
   write("usage: cp <srcpath> <dstpath>\n")
 
 
+## Copies file content through descriptors so files larger than one syscall chunk are supported.
+proc copyFile(srcPath, dstPath: cstring): bool =
+  let srcFd = sysOpen(srcPath, SysOpenRead)
+  if srcFd < 0:
+    return false
+
+  let dstFd = sysOpen(dstPath, SysOpenWrite or SysOpenCreate or SysOpenTrunc)
+  if dstFd < 0:
+    discard sysClose(srcFd)
+    return false
+
+  var ok = true
+  while true:
+    let readLen = sysReadFd(srcFd, addr buffer[0], U64(buffSize))
+    if readLen < 0:
+      ok = false
+      break
+    if readLen == 0:
+      break
+    if sysWriteFd(dstFd, addr buffer[0], U64(readLen)) != readLen:
+      ok = false
+      break
+
+  discard sysClose(srcFd)
+  discard sysClose(dstFd)
+  ok
+
+
 ## Parses source and destination paths, then copies file contents.
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
   if not parseUserArgs(arg, parsedArgs):
@@ -40,13 +68,8 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
     write("path too long\n")
     sysExit(1)
   
-  let srcLen = sysReadFile(srcPath, addr buffer[0], U64(buffSize))
-  if srcLen < 0:
-    write("failed to read file\n")
-    sysExit(1)
-  
-  if sysWriteFileMode(dstPath, addr buffer[0], U64(srcLen), SysFsWriteCreate or SysFsWriteOverwrite) != 0:
-    write("failed to write file\n")
+  if not copyFile(srcPath, dstPath):
+    write("failed to copy file\n")
     sysExit(1)
 
   sysExit(0)

@@ -87,3 +87,4 @@ const
   SysFdList* = U64(85)
   SysBrk* = U64(86)
   SysSbrk* = U64(87)
+  SysRawWriteRange* = U64(88)

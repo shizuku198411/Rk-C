@@ -88,6 +88,8 @@ elif defined(userApp_sudo):
   import apps/sudo/sudo
 elif defined(userApp_shutdown):
   import apps/shutdown/shutdown
+elif defined(userApp_which):
+  import apps/which/which
 # == test use only apps ==
 elif defined(userApp_faultcheck):
   import apps/faultcheck/faultcheck

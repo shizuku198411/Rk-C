@@ -363,6 +363,11 @@ proc sysRawReadRange*(req: ptr SysFsRequest): I32 =
   I32(rawSyscall3(SysRawReadRange, cast[U64](req), 0, 0))
 
 
+## Invokes the raw write range syscall wrapper.
+proc sysRawWriteRange*(req: ptr SysFsRequest): I32 =
+  I32(rawSyscall3(SysRawWriteRange, cast[U64](req), 0, 0))
+
+
 ## Invokes the block service register syscall wrapper.
 proc sysBlockServiceRegister*(): I32 =
   I32(rawSyscall3(SysBlockServiceRegister, 0, 0, 0))

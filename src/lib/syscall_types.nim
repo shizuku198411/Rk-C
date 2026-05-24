@@ -31,6 +31,7 @@ const
   SysFsOpRename* = U32(9)
   SysFsOpChmod* = U32(10)
   SysFsOpChown* = U32(11)
+  SysFsOpWriteRange* = U32(12)
   SysBlockOpRead* = U32(1)
   SysBlockOpWrite* = U32(2)
 

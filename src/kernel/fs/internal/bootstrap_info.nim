@@ -117,10 +117,9 @@ proc ensureFileContent(parentIdx: int, name, data: cstring, uid, gid, mode: U32)
     superBlock.nodes[idx].mode = mode
     changed = true
   if superBlock.nodes[idx].size != U32(size):
-    superBlock.nodes[idx].size = U32(size)
     changed = true
 
-  if writeFileBytes(superBlock.nodes[idx], cast[pointer](data), size) < 0:
+  if writeFileBytes(idx, cast[pointer](data), size) < 0:
     panic("failed to write ensured file")
 
   true
@@ -153,6 +152,13 @@ proc fsInit*() =
     RootGid,
     FsModeDirDefault,
   ) or fsChanged
+  fsChanged = ensureRootDirOwned(
+    "usr",
+    FsTypeDir,
+    RootUid,
+    RootGid,
+    FsModeDirDefault,
+  ) or fsChanged
 
   let homeIdx = resolvePath("/home")
   fsChanged = ensureChildDirOwned(
@@ -160,6 +166,52 @@ proc fsInit*() =
     "rkc",
     UserUid,
     UserGid,
+    FsModeDirDefault,
+  ) or fsChanged
+
+  let userHomeIdx = resolvePath("/home/rkc")
+  fsChanged = ensureChildDirOwned(
+    userHomeIdx,
+    "bin",
+    UserUid,
+    UserGid,
+    FsModeDirDefault,
+  ) or fsChanged
+  fsChanged = ensureChildDirOwned(
+    userHomeIdx,
+    "src",
+    UserUid,
+    UserGid,
+    FsModeDirDefault,
+  ) or fsChanged
+
+  let usrIdx = resolvePath("/usr")
+  fsChanged = ensureChildDirOwned(
+    usrIdx,
+    "bin",
+    RootUid,
+    RootGid,
+    FsModeDirDefault,
+  ) or fsChanged
+  fsChanged = ensureChildDirOwned(
+    usrIdx,
+    "src",
+    RootUid,
+    RootGid,
+    FsModeDirDefault,
+  ) or fsChanged
+  fsChanged = ensureChildDirOwned(
+    usrIdx,
+    "include",
+    RootUid,
+    RootGid,
+    FsModeDirDefault,
+  ) or fsChanged
+  fsChanged = ensureChildDirOwned(
+    usrIdx,
+    "lib",
+    RootUid,
+    RootGid,
     FsModeDirDefault,
   ) or fsChanged
 
@@ -197,7 +249,7 @@ proc rootfsUsedBlocks(): U64 =
   var i = 0
   while i < FsMaxNodes:
     if superBlock.nodes[i].used != 0 and superBlock.nodes[i].typ == FsTypeFile:
-      blocks += FsFileBlocks
+      blocks += U64(superBlock.nodes[i].blockCount)
     inc i
   blocks
 
@@ -252,14 +304,13 @@ proc fsInfo*(outEntries: ptr SysFsInfoEntry, maxEntries: U64): I32 =
   var count = U64(0)
 
   if count < maxEntries:
-    let totalBlocks = U64(FsMaxNodes) * FsFileBlocks
     setFsInfo(
       addr entries[count],
       cstring"rootfs",
-      cstring"nfs2",
+      cstring"nfs3",
       cstring"/",
       BlockSize,
-      totalBlocks,
+      U64(FsDataBlockCount),
       rootfsUsedBlocks(),
       U64(FsMaxNodes),
       U64(superBlock.count),
@@ -302,5 +353,3 @@ proc fsInfo*(outEntries: ptr SysFsInfoEntry, maxEntries: U64): I32 =
     inc count
 
   I32(count)
-
-

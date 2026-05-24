@@ -3,6 +3,7 @@ import ../../lib/core/io
 import ../../lib/core/strutils
 import ../../lib/core/pathutils
 import ../../lib/core/syscall
+import ../../lib/core/command_resolver
 import ../../../lib/service_catalog
 import ./state
 

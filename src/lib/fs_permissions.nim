@@ -72,6 +72,11 @@ proc fsModeAllowsWrite*(nodeUid, nodeGid, mode, uid, gid: U32): bool =
 
 ## Checks filesystem permission helper mode allows execute.
 proc fsModeAllowsExecute*(nodeUid, nodeGid, mode, uid, gid: U32): bool =
+  if uid == RootUid:
+    return (mode and (
+      FsPermOwnerExec or FsPermGroupExec or FsPermOtherExec
+    )) != U32(0)
+
   fsModeAllows(
     nodeUid,
     nodeGid,

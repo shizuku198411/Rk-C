@@ -143,7 +143,22 @@ proc reportCommandPathTooLong() =
   write("command path too long\n")
 
 
-## check if the app execution is alloed or not
+## Resolves one entered command and reports lookup errors on the console.
+proc resolveExecPath*(command: cstring, outBuf: ptr UncheckedArray[char],
+                      outCap: int): cstring =
+  let status = resolveExecutableInto(command, outBuf, outCap)
+  if status == CommandResolved:
+    return cast[cstring](addr outBuf[0])
+
+  if status == CommandPathTooLong:
+    reportCommandPathTooLong()
+  else:
+    reportExecFailure(cast[cstring](addr outBuf[0]))
+
+  nil
+
+
+## Checks whether an executable may be launched directly by the interactive shell.
 proc isAllowedPath(path: cstring): bool =
   # deny login app
   if cstringEq(path, "/bin/login"):
@@ -195,6 +210,16 @@ proc runRedirection*(line: cstring): bool =
     write("usage: <command> > <path>\n")
     return true
 
+  let execPath = resolveExecPath(cstr(leftCmdBuf), leftPathBuf, CommandScratchBufferCap)
+  if execPath == nil:
+    return true
+
+  if not isAllowedPath(execPath):
+    write("cannnot execute ")
+    write(execPath)
+    write(" directly from shell.\n")
+    return true
+
   let targetPath = resolvePath(cstr(redirectTargetBuf))
   if targetPath == nil:
     write("redirect: path too long\n")
@@ -220,19 +245,6 @@ proc runRedirection*(line: cstring): bool =
     return true
 
   discard sysClose(outFd)
-
-  let execPath = buildBinPathInto(cstr(leftCmdBuf), leftPathBuf)
-  if execPath == nil:
-    restoreFd(savedStdout, 1)
-    reportCommandPathTooLong()
-    return true
-
-  if not isAllowedPath(execPath):
-    restoreFd(savedStdout, 1)
-    write("cannnot execute ")
-    write(execPath)
-    write(" directly from shell.\n")
-    return true
 
   let pid = sysExec(execPath, cstr(leftArgBuf), background)
   restoreFd(savedStdout, 1)
@@ -263,6 +275,30 @@ proc runPipeline*(line: cstring): bool =
     write("usage: <command> | <command>\n")
     return true
 
+  let execPath = resolveExecPath(cstr(leftCmdBuf), leftPathBuf, CommandScratchBufferCap)
+  if execPath == nil:
+    return true
+
+  if not isAllowedPath(execPath):
+    write("cannnot execute ")
+    write(execPath)
+    write(" directly from shell.\n")
+    return true
+
+  let rightExecPath = resolveExecPath(
+    cstr(rightCmdBuf),
+    rightPathBuf,
+    CommandScratchBufferCap,
+  )
+  if rightExecPath == nil:
+    return true
+
+  if not isAllowedPath(rightExecPath):
+    write("cannnot execute ")
+    write(rightExecPath)
+    write(" directly from shell.\n")
+    return true
+
   var fds: array[2, I32]
   if sysPipe(addr fds[0]) != 0:
     write("pipe: failed\n")
@@ -283,21 +319,6 @@ proc runPipeline*(line: cstring): bool =
     return true
 
   discard sysClose(fds[1])
-
-  let execPath = buildBinPathInto(cstr(leftCmdBuf), leftPathBuf)
-  if execPath == nil:
-    restoreFd(savedStdout, 1)
-    discard sysClose(fds[0])
-    reportCommandPathTooLong()
-    return true
-
-  if not isAllowedPath(execPath):
-    restoreFd(savedStdout, 1)
-    discard sysClose(fds[0])
-    write("cannnot execute ")
-    write(execPath)
-    write(" directly from shell.\n")
-    return true
 
   let leftPid = sysExec(execPath, cstr(leftArgBuf), background)
   restoreFd(savedStdout, 1)
@@ -321,21 +342,6 @@ proc runPipeline*(line: cstring): bool =
     return true
 
   discard sysClose(fds[0])
-
-  let rightExecPath = buildBinPathInto(cstr(rightCmdBuf), rightPathBuf)
-  if rightExecPath == nil:
-    restoreFd(savedStdin, 0)
-    discard sysWait(leftPid)
-    reportCommandPathTooLong()
-    return true
-
-  if not isAllowedPath(rightExecPath):
-    restoreFd(savedStdin, 0)
-    discard sysWait(leftPid)
-    write("cannnot execute ")
-    write(rightExecPath)
-    write(" directly from shell.\n")
-    return true
 
   let rightPid = sysExec(rightExecPath, cstr(rightArgBuf), background)
   restoreFd(savedStdin, 0)

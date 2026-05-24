@@ -27,7 +27,7 @@ proc fsMkdir*(path: cstring): int =
 ## Implements the fs write text kernel helper.
 proc fsWriteText*(path: cstring, data: cstring): int =
   var size = U64(0)
-  while data[size] != '\0' and size < FsFileBlocks * BlockSize:
+  while data[size] != '\0' and size < U64(FsDataBlockCount) * BlockSize:
     inc size
   fsWriteFile(path, cast[pointer](data), size)
 
@@ -45,7 +45,7 @@ proc fsWriteFileWithFlags*(path: cstring, data: pointer, size: U64, flags: U32):
     return -1
   if data == nil and size > 0:
     return -1
-  if size > FsFileBlocks * BlockSize:
+  if size > U64(SysFsDataMax):
     return -1
   if (flags and (not SysFsWriteKnownFlags)) != U32(0):
     return -1
@@ -72,23 +72,33 @@ proc fsWriteFileWithFlags*(path: cstring, data: pointer, size: U64, flags: U32):
   if idx < 0 or superBlock.nodes[idx].typ != FsTypeFile:
     return -1
 
-  let writeData =
+  let rc =
     if (mode and SysFsWriteAppend) != U32(0):
-      if readNodeBytes(superBlock.nodes[idx], addr fsWriteBuf[0], U64(SysFsDataMax)) < 0:
-        return -1
-      let currentSize = U64(superBlock.nodes[idx].size)
-      if currentSize + size > FsFileBlocks * BlockSize:
-        return -1
-      if size > 0:
-        discard copyMem(addr fsWriteBuf[currentSize], data, size)
-      superBlock.nodes[idx].size = U32(currentSize + size)
-      cast[pointer](addr fsWriteBuf[0])
+      writeFileRangeBytes(idx, data, U64(superBlock.nodes[idx].size), size)
     else:
-      superBlock.nodes[idx].size = U32(size)
-      data
-
-  if writeFileBytes(superBlock.nodes[idx], writeData, U64(superBlock.nodes[idx].size)) < 0:
+      writeFileBytes(idx, data, size)
+  if rc < 0:
     return -1
+  writeSuper()
+
+
+## Implements range writes used by descriptor-based streaming I/O.
+proc fsWriteFileRange*(path: cstring, data: pointer, offset, size: U64): int =
+  if not fsReady or path == nil:
+    return -1
+  if isBinPath(path) or (data == nil and size > U64(0)):
+    return -1
+
+  let mountIdx = findMount(path)
+  if mountIdx >= 0 and mounts[mountIdx].backend == vfsTmpfs:
+    return tmpfsWriteRange(mountLocalPath(path, mounts[mountIdx].pathLen), data, offset, size)
+
+  let idx = resolvePath(path)
+  if idx < 0 or superBlock.nodes[idx].typ != FsTypeFile:
+    return -1
+  if writeFileRangeBytes(idx, data, offset, size) < 0:
+    return -1
+
   writeSuper()
 
 
@@ -110,6 +120,8 @@ proc fsUnlink*(path: cstring): int =
   if idx <= 0 or superBlock.nodes[idx].typ != FsTypeFile:
     return -1
 
+  if resizeFileExtent(idx, U32(0), false) < 0:
+    return -1
   superBlock.nodes[idx] = FsNode()
   if superBlock.count > 0:
     dec superBlock.count
@@ -262,7 +274,7 @@ proc fsReadFile*(path: cstring, dst: pointer, capacity: U64): int =
   let outBuf = cast[ptr UncheckedArray[U8]](dst)
   var done = U64(0)
   var blk = U64(0)
-  while done < size and blk < FsFileBlocks:
+  while done < size and blk < U64(node.blockCount):
     if serviceBlockRead(U64(node.startBlock) + blk, addr blockBuf[0]) < 0:
       return -1
     var i = U64(0)
@@ -319,7 +331,7 @@ proc fsReadFileRange*(path: cstring, dst: pointer, offset, capacity: U64): int =
     let cur = offset + done
     let blk = cur div BlockSize
     let inBlk = cur mod BlockSize
-    if blk >= FsFileBlocks:
+    if blk >= U64(node.blockCount):
       return -1
     if serviceBlockRead(U64(node.startBlock) + blk, addr blockBuf[0]) < 0:
       return -1

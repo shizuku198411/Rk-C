@@ -22,10 +22,12 @@ for a resident shell process.
 - `traps`
 - `bitmap`
 - `history`
+- `which`
 - `exit`
 - `shutdown`
 
-Other commands are executed from `/bin/<command>` with `sysExec`.
+Other commands are resolved using the shared executable search policy and executed
+with `sysExec`.
 
 ## Command Features
 
@@ -35,6 +37,7 @@ Other commands are executed from `/bin/<command>` with `sysExec`.
 - One-stage pipe with `|`
 - Basic stdin/stdout save and restore using `sysOpen`, `sysDup2`, and `sysClose`
 - Prompt includes the current working directory from `sysGetCwd`
+- Command lookup order is explicit paths, `/home/<user>/bin`, `/usr/bin`, then `/bin`
 
 ## RKX Metadata
 
@@ -47,7 +50,7 @@ Other commands are executed from `/bin/<command>` with `sysExec`.
 - `shell.nim`
   - Main loop and built-in dispatch
 - `command.nim`
-  - Command parsing, exec, background jobs, redirection, and pipe handling
+  - Command parsing, resolver use, exec, background jobs, redirection, and pipe handling
 - `builtins.nim`
   - Built-in command implementations
 - `help.nim`
@@ -65,5 +68,5 @@ Other commands are executed from `/bin/<command>` with `sysExec`.
 
 - Only one pipe is supported in a command line
 - Redirection and pipe together are not currently supported
-- Command paths are resolved as `/bin/<command>`
+- Explicit slash-containing command paths do not fall back to the search path
 - Shell history has fixed in-memory and save-buffer limits

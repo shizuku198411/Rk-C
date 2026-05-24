@@ -44,14 +44,32 @@ USER_SHELL_RKX := $(BIN_DIR)/shell.rkx
 USER_APP_NAMES := \
 	login ls cat mkdir ps rm rmdir date edit ipc kill svc ping nslookup tcpcheck \
 	curl stracectl dmesg rkxinfo echo touch cp mv df wc paniclog id chmod chown passwd \
-	whoami sudo shutdown
+	whoami sudo shutdown which
+
 USER_SERVER_NAMES := svcmgtd procmgtd fsd blockd procfsd netd userd
+
+USER_ORC_APP_NAMES := rkxinfo ps svc
 USER_ORC_SERVER_NAMES := procfsd
+
 TEST_APP_NAMES := faultcheck capcheck pollcheck signalcheck writecheck heapcheck
 ORC_TEST_APP_NAMES := orccheck
 APPFS_EXTRA_APPS ?=
 
-USER_PACK_NAMES := $(filter-out tcpcheck curl,$(USER_APP_NAMES)) $(USER_SERVER_NAMES) tcpcheck curl
+MODULES_DIR ?= modules
+RKC_TOOLCHAIN_DIR := $(MODULES_DIR)/rkc-toolchain
+RKC_TOOLCHAIN_MK := $(RKC_TOOLCHAIN_DIR)/module.mk
+OPTIONAL_APP_RKXS :=
+OPTIONAL_APPFS_NAMES :=
+OPTIONAL_TEST_APP_RKXS :=
+OPTIONAL_TEST_APPFS_NAMES :=
+
+ifneq ($(wildcard $(RKC_TOOLCHAIN_MK)),)
+include $(RKC_TOOLCHAIN_MK)
+else
+$(info optional module rkc-toolchain is not present; skipping toolchain apps)
+endif
+
+USER_PACK_NAMES := $(filter-out tcpcheck curl,$(USER_APP_NAMES)) $(USER_SERVER_NAMES) tcpcheck curl $(OPTIONAL_APPFS_NAMES)
 
 USER_APP_RKXS := $(foreach app,$(USER_APP_NAMES),$(BIN_DIR)/$(app).rkx)
 USER_SERVER_RKXS := $(foreach server,$(USER_SERVER_NAMES),$(BIN_DIR)/$(server).rkx)
@@ -184,9 +202,9 @@ all: build
 
 build: $(KERNEL_ELF) appfs
 
-build-bins: $(KERNEL_ELF) $(USER_SHELL_RKX) $(USER_APP_RKXS) $(USER_SERVER_RKXS)
+build-bins: $(KERNEL_ELF) $(USER_SHELL_RKX) $(USER_APP_RKXS) $(USER_SERVER_RKXS) $(OPTIONAL_APP_RKXS)
 
-build-test-bins: build-bins $(TEST_APP_RKXS)
+build-test-bins: build-bins $(TEST_APP_RKXS) $(OPTIONAL_TEST_APP_RKXS)
 
 $(KERNEL_ELF): $(NIM_SRCS) $(ASM_OBJS) $(LINKER_SCRIPT) | $(BIN_DIR) $(MAP_DIR) $(NIMCACHE_DIR)
 	$(NIM) c $(NIMFLAGS) $(foreach obj,$(ASM_OBJS),--passL:"$(obj)") -o:$@ $(KERNEL_NIM)
@@ -209,12 +227,12 @@ $(USER_SHELL_ELF): $(SRC_DIR)/user/app_main.nim $(shell find $(SRC_DIR)/user/app
 $(USER_SHELL_RKX): $(USER_SHELL_ELF) $(RKX_TOOL) $(SRC_DIR)/user/apps/shell/rkx.toml | $(BIN_DIR)
 	python3 $(RKX_TOOL) --elf $< --out $@
 
-appfs: $(DISK_IMG) $(USER_SHELL_RKX) $(USER_APP_RKXS) $(USER_SERVER_RKXS)
+appfs: $(DISK_IMG) $(USER_SHELL_RKX) $(USER_APP_RKXS) $(USER_SERVER_RKXS) $(OPTIONAL_APP_RKXS)
 	python3 $(APPFS_TOOL) --disk $(DISK_IMG) --bin-dir $(BIN_DIR) --ext rkx --apps shell $(USER_PACK_NAMES) $(APPFS_EXTRA_APPS)
 
 define USER_APP_template
 $(BIN_DIR)/$(1).elf: $(SRC_DIR)/user/app_main.nim $$(shell find $(SRC_DIR)/user/apps/$(1) -type f -name '*.nim' | sort) $(SRC_DIR)/user/panicoverride.nim $$(SHARED_LIB_SRCS) $$(USER_LIB_SRCS) $(USER_SYSCALL_OBJ) $(USER_ENTRY_OBJ) $(USER_APP_LINKER_SCRIPT) | $(BIN_DIR)
-	$$(NIM) c $$(USER_NIMFLAGS) -d:userApp_$(1) --nimcache:$$(USER_NIMCACHE_DIR)/$(1) --passL:"$$(USER_ENTRY_OBJ)" --passL:"$$(USER_SYSCALL_OBJ)" --passL:"-Wl,-T,$$(USER_APP_LINKER_SCRIPT)" -o:$$@ $$<
+	$$(NIM) c $$(if $$(filter $(1),$$(USER_ORC_APP_NAMES)),$$(USER_ORC_NIMFLAGS),$$(USER_NIMFLAGS)) -d:userApp_$(1) --nimcache:$$(USER_NIMCACHE_DIR)/$(1) --passL:"$$(USER_ENTRY_OBJ)" --passL:"$$(USER_SYSCALL_OBJ)" --passL:"-Wl,-T,$$(USER_APP_LINKER_SCRIPT)" -o:$$@ $$<
 
 $(BIN_DIR)/$(1).rkx: $(BIN_DIR)/$(1).elf $$(RKX_TOOL) $(SRC_DIR)/user/apps/$(1)/rkx.toml | $(BIN_DIR)
 	python3 $$(RKX_TOOL) --elf $$< --out $$@
@@ -264,7 +282,7 @@ qemu-debug: build
 	$(QEMU) $(QEMU_DEBUG_ARGS)
 
 test-apps:
-	python3 scripts/test_apps.py $(TEST_APPS_ARGS) --skip-network-smoke
+	RKC_OPTIONAL_TOOLCHAIN_TESTS="$(wildcard $(RKC_TOOLCHAIN_DIR)/tests/app_cases.py)" RKC_OPTIONAL_TOOLCHAIN_TEST_APPS="$(OPTIONAL_TEST_APPFS_NAMES)" python3 scripts/test_apps.py $(TEST_APPS_ARGS) --skip-network-smoke
 
 net-host-help:
 	@echo "Default TAP network:"

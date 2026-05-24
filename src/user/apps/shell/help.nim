@@ -40,6 +40,7 @@ proc printHelp*() =
   write("  traps\n")
   write("  bitmap\n")
   write("  history\n")
+  write("  which\n")
   write("  exit\n")
   write("  shutdown\n")
   write("\n")

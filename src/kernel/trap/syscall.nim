@@ -212,6 +212,9 @@ proc handleSyscall*(frame: ptr TrapFrame) =
   of SysRawReadRange:
     frame.a0 = syscallRawReadRange(frame.a0)
 
+  of SysRawWriteRange:
+    frame.a0 = syscallRawWriteRange(frame.a0)
+
   of SysRawRename:
     frame.a0 = syscallRawRename(frame.a0, frame.a1)
 

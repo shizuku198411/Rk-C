@@ -60,6 +60,7 @@ proc syscallName*(num: U64): cstring =
   of SysRawWriteFile: cstring("raw_write_file")
   of SysRawFileSize: cstring("raw_file_size")
   of SysRawReadRange: cstring("raw_read_range")
+  of SysRawWriteRange: cstring("raw_write_range")
   of SysRawRename: cstring("raw_rename")
   of SysRawChmod: cstring("raw_chmod")
   of SysRawChown: cstring("raw_chown")
@@ -393,7 +394,7 @@ proc printSyscallArgs(frame: ptr TrapFrame) =
     printNamedPtr("arg1", frame.a1)
     print(", ")
     printNamedU64("arg2", frame.a2)
-  of SysRawReadRange:
+  of SysRawReadRange, SysRawWriteRange:
     printNamedPtr("req", frame.a0)
   of SysBlockServiceReceive:
     printNamedPtr("req", frame.a0)

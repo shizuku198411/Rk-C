@@ -124,6 +124,25 @@ proc syscallRawReadRange*(reqVal: U64): U64 =
   U64(readLen)
 
 
+## Handles the raw write range syscall operation.
+proc syscallRawWriteRange*(reqVal: U64): U64 =
+  if not canSyscallRawFs() or reqVal == 0:
+    return U64(-1'i64)
+
+  var req: SysFsRequest
+  if copyFromUser(addr req, reqVal, U64(sizeof(SysFsRequest))) != 0:
+    return U64(-1'i64)
+  if req.size > SysFsDataMax:
+    return U64(-1'i64)
+
+  U64(rawWriteFileRangeKernel(
+    cast[cstring](addr req.path[0]),
+    addr req.data[0],
+    req.capacity,
+    req.size,
+  ))
+
+
 ## Handles the raw write file syscall operation.
 proc syscallRawWriteFile*(pathVal, bufVal, sizeFlags: U64): U64 =
   var size: U64
