@@ -1,5 +1,7 @@
-## Holds shared shell buffers, limits, prompt colors, and buffer helpers.
-import ../../lib/core/heap
+## Holds ORC-managed shell buffers, limits, prompt colors, and buffer helpers.
+{.warning[UnusedImport]: off.}
+
+import ../../lib/runtime/orc_osalloc
 import ../../lib/core/syscall
 
 const
@@ -11,11 +13,21 @@ const
   HistoryPath* = "/.history"
   CommandScratchBufferCount = 11
   CommandScratchBufferCap* = LineMax
+  LineBufferOffset = 0
+  CmdBufferOffset = LineBufferOffset + LineMax
+  ArgBufferOffset = CmdBufferOffset + LineMax
+  PathBufferOffset = ArgBufferOffset + LineMax
+  CommandScratchOffset = PathBufferOffset + LineMax
+  HistorySaveBufferOffset = CommandScratchOffset +
+    CommandScratchBufferCount * CommandScratchBufferCap
+  HistoryPathBufferOffset = HistorySaveBufferOffset + HistorySaveBufMax
+  ShellManagedStorageSize = HistoryPathBufferOffset + HistoryPathMax
 
   PromptOrange* = "\x1b[38;5;208m"
   PromptReset* = "\x1b[0m"
 
 var
+  shellManagedStorage: seq[char] = @[]
   lineBuf*: ptr UncheckedArray[char] = nil
   lineBufCap*: int = 0
 
@@ -52,12 +64,29 @@ var
   historyPathBufCap*: int = 0
 
 
+## Allocates the single ORC-owned arena that backs all mutable shell buffers.
+proc ensureManagedStorage(): bool =
+  if shellManagedStorage.len == ShellManagedStorageSize:
+    return true
+
+  shellManagedStorage = newSeq[char](ShellManagedStorageSize)
+  shellManagedStorage.len == ShellManagedStorageSize
+
+
+## Returns a stable pointer view for one range within the managed shell arena.
+proc managedBufferAt(offset: int): ptr UncheckedArray[char] =
+  if not ensureManagedStorage() or offset < 0 or offset >= ShellManagedStorageSize:
+    return nil
+
+  cast[ptr UncheckedArray[char]](addr shellManagedStorage[offset])
+
+
 ## Returns a C string view over a shell line-sized fixed character buffer.
 proc cstr*(buf: var array[LineMax, char]): cstring =
   cast[cstring](addr buf[0])
 
 
-## Returns a C string view over a heap-backed character buffer.
+## Returns a C string view over an ORC-managed character buffer.
 proc cstr*(buf: ptr UncheckedArray[char]): cstring =
   if buf == nil:
     return nil
@@ -65,12 +94,12 @@ proc cstr*(buf: ptr UncheckedArray[char]): cstring =
   cast[cstring](addr buf[0])
 
 
-## Initializes the heap-backed editable shell line buffer.
+## Initializes the ORC-managed editable shell line buffer.
 proc initLineBuffer*(): bool =
   if lineBuf != nil:
     return true
 
-  lineBuf = cast[ptr UncheckedArray[char]](userAlloc(LineMax))
+  lineBuf = managedBufferAt(LineBufferOffset)
   if lineBuf == nil:
     lineBufCap = 0
     return false
@@ -85,7 +114,7 @@ proc initLineBuffer*(): bool =
   true
 
 
-## Clears the heap-backed editable shell line buffer.
+## Clears the ORC-managed editable shell line buffer.
 proc clearLineBuffer*() =
   if lineBuf == nil:
     return
@@ -96,17 +125,17 @@ proc clearLineBuffer*() =
     inc i
 
 
-## Returns the current heap-backed line buffer as cstring.
+## Returns the current ORC-managed line buffer as cstring.
 proc lineCString*(): cstring =
   cstr(lineBuf)
 
 
-## Initializes the heap-backed history save/load buffer.
+## Initializes the ORC-managed history save/load buffer.
 proc initHistorySaveBuffer*(): bool =
   if historySaveBuf != nil:
     return true
 
-  historySaveBuf = cast[ptr UncheckedArray[char]](userAlloc(HistorySaveBufMax))
+  historySaveBuf = managedBufferAt(HistorySaveBufferOffset)
   if historySaveBuf == nil:
     historySaveBufCap = 0
     return false
@@ -121,7 +150,7 @@ proc initHistorySaveBuffer*(): bool =
   true
 
 
-## Clears the heap-backed history save/load buffer.
+## Clears the ORC-managed history save/load buffer.
 proc clearHistorySaveBuffer*() =
   if historySaveBuf == nil:
     return
@@ -132,17 +161,17 @@ proc clearHistorySaveBuffer*() =
     inc i
 
 
-## Returns the heap-backed history save/load buffer as cstring.
+## Returns the ORC-managed history save/load buffer as cstring.
 proc historySaveCString*(): cstring =
   cstr(historySaveBuf)
 
 
-## Initializes the heap-backed history path buffer.
+## Initializes the ORC-managed history path buffer.
 proc initHistoryPathBuffer*(): bool =
   if historyPathBuf != nil:
     return true
 
-  historyPathBuf = cast[ptr UncheckedArray[char]](userAlloc(HistoryPathMax))
+  historyPathBuf = managedBufferAt(HistoryPathBufferOffset)
   if historyPathBuf == nil:
     historyPathBufCap = 0
     return false
@@ -157,7 +186,7 @@ proc initHistoryPathBuffer*(): bool =
   true
 
 
-## Clears the heap-backed history path buffer.
+## Clears the ORC-managed history path buffer.
 proc clearHistoryPathBuffer*() =
   if historyPathBuf == nil:
     return
@@ -168,17 +197,17 @@ proc clearHistoryPathBuffer*() =
     inc i
 
 
-## Returns the heap-backed history path buffer as cstring.
+## Returns the ORC-managed history path buffer as cstring.
 proc historyPathCString*(): cstring =
   cstr(historyPathBuf)
 
 
-## Initializes the heap-backed 1 buffer.
+## Initializes the ORC-managed command buffer.
 proc initCmdBuffer*(): bool =
   if cmdBuf != nil:
     return true
 
-  cmdBuf = cast[ptr UncheckedArray[char]](userAlloc(LineMax))
+  cmdBuf = managedBufferAt(CmdBufferOffset)
   if cmdBuf == nil:
     cmdBufCap = 0
     return false
@@ -193,7 +222,7 @@ proc initCmdBuffer*(): bool =
   true
 
 
-## Clears the heap-backed command line buffer.
+## Clears the ORC-managed command line buffer.
 proc clearCmdBuffer*() =
   if cmdBuf == nil:
     return
@@ -204,17 +233,17 @@ proc clearCmdBuffer*() =
     inc i
 
 
-## Returns the heap-backed command line buffer as cstring.
+## Returns the ORC-managed command line buffer as cstring.
 proc cmdCString*(): cstring =
   cstr(cmdBuf)
 
 
-## Initializes the heap-backed arg buffer.
+## Initializes the ORC-managed argument buffer.
 proc initArgBuffer*(): bool =
   if argBuf != nil:
     return true
 
-  argBuf = cast[ptr UncheckedArray[char]](userAlloc(LineMax))
+  argBuf = managedBufferAt(ArgBufferOffset)
   if argBuf == nil:
     argBufCap = 0
     return false
@@ -229,7 +258,7 @@ proc initArgBuffer*(): bool =
   true
 
 
-## Clears the heap-backed arg buffer.
+## Clears the ORC-managed argument buffer.
 proc clearArgBuffer*() =
   if argBuf == nil:
     return
@@ -240,18 +269,18 @@ proc clearArgBuffer*() =
     inc i
 
 
-## Returns the heap-backed arg buffer as cstring.
+## Returns the ORC-managed argument buffer as cstring.
 proc argCString*(): cstring =
   cstr(argBuf)
 
 
-## Initializes heap-backed scratch buffers used by pipe and redirection parsing.
+## Initializes ORC-managed scratch buffers used by pipe and redirection parsing.
 proc initCommandScratchBuffers*(): bool =
   if commandScratchArena != nil:
     return true
 
   let bytes = CommandScratchBufferCount * CommandScratchBufferCap
-  commandScratchArena = cast[ptr UncheckedArray[char]](userAlloc(U64(bytes)))
+  commandScratchArena = managedBufferAt(CommandScratchOffset)
   if commandScratchArena == nil:
     return false
 
@@ -291,6 +320,7 @@ proc clearCommandScratchBuffer*(buf: ptr UncheckedArray[char]) =
     inc i
 
 
+## Clears the fixed argument handoff buffer used for child execution.
 proc clearExecArgBuffer*() =
   var i = 0
   while i < LineMax:
@@ -298,6 +328,7 @@ proc clearExecArgBuffer*() =
     inc i
 
 
+## Copies parsed arguments into the stable buffer handed to a child process.
 proc copyArgToExecArgBuffer*(): cstring =
   clearExecArgBuffer()
 
@@ -317,11 +348,12 @@ proc copyArgToExecArgBuffer*(): cstring =
   cast[cstring](addr execArgBuf[0])
 
 
+## Initializes the ORC-managed executable path buffer.
 proc initPathBuffer*(): bool =
   if pathBuf != nil:
     return true
 
-  pathBuf = cast[ptr UncheckedArray[char]](userAlloc(LineMax))
+  pathBuf = managedBufferAt(PathBufferOffset)
   if pathBuf == nil:
     pathBufCap = 0
     return false
@@ -336,6 +368,7 @@ proc initPathBuffer*(): bool =
   true
 
 
+## Clears the ORC-managed executable path buffer.
 proc clearPathBuffer*() =
   if pathBuf == nil:
     return
@@ -346,5 +379,6 @@ proc clearPathBuffer*() =
     inc i
 
 
+## Returns the ORC-managed executable path buffer as cstring.
 proc pathCString*(): cstring =
   cstr(pathBuf)

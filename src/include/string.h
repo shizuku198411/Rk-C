@@ -1,5 +1,10 @@
 #pragma once
 
+#ifndef RKC_SIZE_T_DEFINED
+#define RKC_SIZE_T_DEFINED
+typedef __SIZE_TYPE__ size_t;
+#endif
+
 void *memset(void *s, int c, size_t n);
 void *memcpy(void *dest, const void *src, size_t n);
 void *memmove(void *dest, const void *src, size_t n);

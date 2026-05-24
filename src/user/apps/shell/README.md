@@ -3,6 +3,9 @@
 `shell` is the interactive RK-C command shell.
 It provides built-in commands, command execution, simple history, redirection,
 and one-stage pipelines.
+Its mutable command and history buffers are backed by one Nim ORC-managed arena.
+The userland ORC build uses a small configurable initial allocator arena suitable
+for a resident shell process.
 
 ## Startup
 
@@ -56,7 +59,7 @@ Other commands are executed from `/bin/<command>` with `sysExec`.
 - `prompt.nim`
   - Prompt rendering
 - `state.nim`
-  - Shared shell state
+  - Shared shell state and the ORC-managed buffer arena
 
 ## Boundaries and Notes
 

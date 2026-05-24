@@ -47,13 +47,14 @@ USER_APP_NAMES := \
 	whoami sudo shutdown
 USER_SERVER_NAMES := svcmgtd procmgtd fsd blockd procfsd netd userd
 TEST_APP_NAMES := faultcheck capcheck pollcheck signalcheck writecheck heapcheck
+ORC_TEST_APP_NAMES := orccheck
 APPFS_EXTRA_APPS ?=
 
 USER_PACK_NAMES := $(filter-out tcpcheck curl,$(USER_APP_NAMES)) $(USER_SERVER_NAMES) tcpcheck curl
 
 USER_APP_RKXS := $(foreach app,$(USER_APP_NAMES),$(BIN_DIR)/$(app).rkx)
 USER_SERVER_RKXS := $(foreach server,$(USER_SERVER_NAMES),$(BIN_DIR)/$(server).rkx)
-TEST_APP_RKXS := $(foreach app,$(TEST_APP_NAMES),$(BIN_DIR)/$(app).rkx)
+TEST_APP_RKXS := $(foreach app,$(TEST_APP_NAMES) $(ORC_TEST_APP_NAMES),$(BIN_DIR)/$(app).rkx)
 TEST_APPS_ARGS ?= --boot-timeout 60 --command-recover-timeout 30
 
 USER_APP_ELFS := $(foreach app,$(USER_APP_NAMES),$(BIN_DIR)/$(app).elf)
@@ -136,6 +137,9 @@ USER_NIMFLAGS := \
 	--passL:"-nostdlib" \
 	--passL:"-Wl,--no-relax"
 
+USER_ORC_MIN_HEAP_PAGES ?= 4
+USER_ORC_NIMFLAGS := $(filter-out --mm:none,$(USER_NIMFLAGS)) --mm:orc -d:nimAllocPagesViaMalloc -d:nimMinHeapPages=$(USER_ORC_MIN_HEAP_PAGES)
+
 ifeq ($(QEMU_NET),tap)
 QEMU_NETDEV_ARGS := -netdev tap,id=net0,ifname=$(QEMU_TAP_IF),script=no,downscript=no
 else
@@ -199,7 +203,7 @@ $(USER_ENTRY_OBJ): $(SRC_DIR)/user/lib/runtime/entry.S
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 $(USER_SHELL_ELF): $(SRC_DIR)/user/app_main.nim $(shell find $(SRC_DIR)/user/apps/shell -type f -name '*.nim' | sort) $(SRC_DIR)/user/panicoverride.nim $(SHARED_LIB_SRCS) $(USER_LIB_SRCS) $(USER_SYSCALL_OBJ) $(USER_ENTRY_OBJ) $(USER_LINKER_SCRIPT) | $(BIN_DIR)
-	$(NIM) c $(USER_NIMFLAGS) -d:userApp_shell --nimcache:$(USER_NIMCACHE_DIR)/shell --passL:"$(USER_ENTRY_OBJ)" --passL:"$(USER_SYSCALL_OBJ)" --passL:"-Wl,-T,$(USER_LINKER_SCRIPT)" -o:$@ $<
+	$(NIM) c $(USER_ORC_NIMFLAGS) -d:userApp_shell --nimcache:$(USER_NIMCACHE_DIR)/shell --passL:"$(USER_ENTRY_OBJ)" --passL:"$(USER_SYSCALL_OBJ)" --passL:"-Wl,-T,$(USER_LINKER_SCRIPT)" -o:$@ $<
 
 $(USER_SHELL_RKX): $(USER_SHELL_ELF) $(RKX_TOOL) $(SRC_DIR)/user/apps/shell/rkx.toml | $(BIN_DIR)
 	python3 $(RKX_TOOL) --elf $< --out $@
@@ -217,6 +221,12 @@ endef
 
 $(foreach app,$(USER_APP_NAMES),$(eval $(call USER_APP_template,$(app))))
 $(foreach app,$(TEST_APP_NAMES),$(eval $(call USER_APP_template,$(app))))
+
+$(BIN_DIR)/orccheck.elf: $(SRC_DIR)/user/app_main.nim $(shell find $(SRC_DIR)/user/apps/orccheck -type f -name '*.nim' | sort) $(SRC_DIR)/user/panicoverride.nim $(SHARED_LIB_SRCS) $(USER_LIB_SRCS) $(USER_SYSCALL_OBJ) $(USER_ENTRY_OBJ) $(USER_APP_LINKER_SCRIPT) | $(BIN_DIR)
+	$(NIM) c $(USER_ORC_NIMFLAGS) -d:userApp_orccheck --nimcache:$(USER_NIMCACHE_DIR)/orccheck --passL:"$(USER_ENTRY_OBJ)" --passL:"$(USER_SYSCALL_OBJ)" --passL:"-Wl,-T,$(USER_APP_LINKER_SCRIPT)" -o:$@ $<
+
+$(BIN_DIR)/orccheck.rkx: $(BIN_DIR)/orccheck.elf $(RKX_TOOL) $(SRC_DIR)/user/apps/orccheck/rkx.toml | $(BIN_DIR)
+	python3 $(RKX_TOOL) --elf $< --out $@
 
 define USER_SERVER_template
 $(BIN_DIR)/$(1).elf: $(SRC_DIR)/user/app_main.nim $$(shell find $(SRC_DIR)/user/server/$(1) -type f -name '*.nim' | sort) $$(USER_SERVER_LIB_SRCS) $(SRC_DIR)/user/panicoverride.nim $$(SHARED_LIB_SRCS) $$(USER_LIB_SRCS) $(USER_SYSCALL_OBJ) $(USER_ENTRY_OBJ) $(USER_APP_LINKER_SCRIPT) | $(BIN_DIR)
