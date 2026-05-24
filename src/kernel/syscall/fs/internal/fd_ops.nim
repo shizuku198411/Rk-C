@@ -137,36 +137,16 @@ proc syscallWriteFd*(fdVal, bufVal, len: U64): U64 =
   if not canWritePath(fdPath(entry[])):
     return U64(-1'i64)
 
-  var currentSize = U64(0)
-  if entry.size > 0:
-    let size = serviceReadFileToKernel(fdPath(entry[]), addr fdFileBuf[0], SysFileIoMax)
-    if size < 0:
-      return U64(-1'i64)
-    currentSize = U64(size)
-
-  if entry.offset > currentSize:
-    while currentSize < entry.offset and currentSize < SysFileIoMax:
-      fdFileBuf[currentSize] = 0
-      inc currentSize
-
-  if entry.offset + len > SysFileIoMax:
+  if copyFromUser(addr fdFileBuf[0], bufVal, len) != 0:
     return U64(-1'i64)
 
-  if copyFromUser(cast[pointer](cast[U64](addr fdFileBuf[0]) + entry.offset), bufVal, len) != 0:
-    return U64(-1'i64)
-
-  let newSize =
-    if entry.offset + len > currentSize:
-      entry.offset + len
-    else:
-      currentSize
-
-  let rc = serviceWriteFile(fdPath(entry[]), addr fdFileBuf[0], newSize)
+  let rc = serviceWriteFileRange(fdPath(entry[]), addr fdFileBuf[0], entry.offset, len)
   if I32(rc) != 0:
     return U64(-1'i64)
 
   entry.offset += len
-  entry.size = newSize
+  if entry.offset > entry.size:
+    entry.size = entry.offset
   len
 
 
@@ -270,5 +250,4 @@ proc syscallLseek*(fdVal, offsetVal, whence: U64): U64 =
 
   entry.offset = U64(next)
   entry.offset
-
 

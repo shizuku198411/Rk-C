@@ -14,7 +14,7 @@ proc findPending(id: U64): ptr PendingFsRequest =
 proc queueFsRequest(op: U32, path: cstring, data: pointer, size, capacity: U64): ptr PendingFsRequest =
   if not fsServiceAvailable() or currentIsFsService():
     return nil
-  if capacity > SysFsDataMax:
+  if op != SysFsOpWriteRange and capacity > SysFsDataMax:
     return nil
   if data != nil and size > SysFsDataMax:
     return nil
@@ -85,6 +85,11 @@ proc rawFileSizeKernel(path: cstring): int =
 ## Implements the raw read file range kernel kernel helper.
 proc rawReadFileRangeKernel(path: cstring, buf: pointer, offset, capacity: U64): int =
   fsReadFileRange(path, buf, offset, capacity)
+
+
+## Implements the raw write file range kernel helper.
+proc rawWriteFileRangeKernel(path: cstring, buf: pointer, offset, size: U64): int =
+  fsWriteFileRange(path, buf, offset, size)
 
 
 ## Implements the raw rename kernel kernel helper.
@@ -185,5 +190,3 @@ proc syscallFsServiceReply*(respVal: U64): U64 =
   p.ipc.completed = true
   wakeFsWaiter(resp.id)
   0
-
-

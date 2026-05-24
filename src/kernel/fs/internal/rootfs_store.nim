@@ -67,39 +67,6 @@ proc readSuper(): int =
     inc blk
 
   discard copyMem(addr superBlock, addr superRawBuf[0], U64(sizeof(FsSuper)))
-  if superBlock.magic != FsMagic:
-    return 0
-
-  if superBlock.nodes[0].used != U32(0) and
-      superBlock.nodes[0].typ == FsTypeDir and
-      superBlock.nodes[0].mode != FsModeNone:
-    return 0
-
-  var oldSuper: FsOldSuper
-  discard copyMem(addr oldSuper, addr superRawBuf[0], U64(sizeof(FsOldSuper)))
-  superBlock = FsSuper()
-  superBlock.magic = oldSuper.magic
-
-  var usedCount = U32(0)
-  var j = 0
-  while j < FsMaxNodes:
-    if oldSuper.nodes[j].used != U32(0):
-      superBlock.nodes[j].used = oldSuper.nodes[j].used
-      superBlock.nodes[j].typ = oldSuper.nodes[j].typ
-      superBlock.nodes[j].parent = oldSuper.nodes[j].parent
-      superBlock.nodes[j].size = oldSuper.nodes[j].size
-      superBlock.nodes[j].startBlock = oldSuper.nodes[j].startBlock
-      discard copyMem(addr superBlock.nodes[j].name[0], addr oldSuper.nodes[j].name[0], U64(FsNameMax))
-      initNodeMetadata(
-        addr superBlock.nodes[j],
-        int(superBlock.nodes[j].parent),
-        cast[cstring](addr superBlock.nodes[j].name[0]),
-        superBlock.nodes[j].typ,
-      )
-      inc usedCount
-    inc j
-
-  superBlock.count = usedCount
   0
 
 
@@ -116,7 +83,8 @@ proc allocNode(parent: int, name: cstring, typ: U32): int =
       superBlock.nodes[i].typ = typ
       superBlock.nodes[i].parent = U32(parent)
       superBlock.nodes[i].size = 0
-      superBlock.nodes[i].startBlock = U32(FsDataStartBlock + U64(i) * FsFileBlocks)
+      superBlock.nodes[i].startBlock = 0
+      superBlock.nodes[i].blockCount = 0
       discard copyCString(superBlock.nodes[i].name, name)
       initNodeMetadata(addr superBlock.nodes[i], parent, name, typ)
       inc superBlock.count
@@ -205,55 +173,221 @@ proc resolveParentWithSearch(uid, gid: U32, path: cstring, leaf: var array[FsNam
   -1
 
 
-## Writes file bytes.
-proc writeFileBytes(node: FsNode, data: pointer, size: U64): int =
+## Returns the data block count required to store a byte length.
+proc dataBlocksForSize(size: U64): U32 =
+  if size == U64(0):
+    return U32(0)
+
+  U32((size + BlockSize - U64(1)) div BlockSize)
+
+
+## Returns whether a rootfs data block is reserved in the allocation bitmap.
+proc dataBlockUsed(relativeBlock: U32): bool =
+  let byteIdx = relativeBlock div U32(8)
+  let bit = relativeBlock mod U32(8)
+  (superBlock.dataBitmap[byteIdx] and U8(U32(1) shl bit)) != U8(0)
+
+
+## Marks or releases one rootfs data block in the allocation bitmap.
+proc setDataBlockUsed(relativeBlock: U32, used: bool) =
+  let byteIdx = relativeBlock div U32(8)
+  let bit = relativeBlock mod U32(8)
+  let mask = U8(U32(1) shl bit)
+  if used:
+    superBlock.dataBitmap[byteIdx] = superBlock.dataBitmap[byteIdx] or mask
+  else:
+    superBlock.dataBitmap[byteIdx] = superBlock.dataBitmap[byteIdx] and (not mask)
+
+
+## Marks or releases a contiguous absolute rootfs data extent.
+proc setExtentUsed(startBlock, blockCount: U32, used: bool) =
+  if blockCount == U32(0):
+    return
+
+  var i = U32(0)
+  while i < blockCount:
+    let relative = startBlock + i - U32(FsDataStartBlock)
+    setDataBlockUsed(relative, used)
+    inc i
+
+
+## Locates a free contiguous rootfs data extent.
+proc findFreeExtent(blockCount: U32): U32 =
+  if blockCount == U32(0):
+    return U32(FsDataStartBlock)
+
+  var begin = U32(0)
+  while begin + blockCount <= U32(FsDataBlockCount):
+    var available = true
+    var i = U32(0)
+    while i < blockCount:
+      if dataBlockUsed(begin + i):
+        available = false
+        break
+      inc i
+
+    if available:
+      return U32(FsDataStartBlock) + begin
+    inc begin
+
+  U32(0)
+
+
+## Writes zeroes into every block of an extent before it is exposed or released.
+proc zeroExtent(startBlock, blockCount: U32): int =
+  clearBlock()
+  var i = U32(0)
+  while i < blockCount:
+    if serviceBlockWrite(U64(startBlock + i), addr blockBuf[0]) < 0:
+      return -1
+    inc i
+
+  0
+
+
+## Resizes one file extent, relocating and preserving blocks when growth needs it.
+proc resizeFileExtent(idx: int, requiredBlocks: U32, preserve: bool): int =
+  let oldStart = superBlock.nodes[idx].startBlock
+  let oldCount = superBlock.nodes[idx].blockCount
+  if requiredBlocks == oldCount:
+    return 0
+
+  if requiredBlocks < oldCount:
+    let releaseStart = oldStart + requiredBlocks
+    let releaseCount = oldCount - requiredBlocks
+    if zeroExtent(releaseStart, releaseCount) < 0:
+      return -1
+    setExtentUsed(releaseStart, releaseCount, false)
+    superBlock.nodes[idx].blockCount = requiredBlocks
+    if requiredBlocks == U32(0):
+      superBlock.nodes[idx].startBlock = U32(0)
+    return 0
+
+  if oldCount > U32(0) and oldStart + requiredBlocks <= U32(AppfsStartBlock):
+    var canExtend = true
+    var i = oldCount
+    while i < requiredBlocks:
+      if dataBlockUsed(oldStart + i - U32(FsDataStartBlock)):
+        canExtend = false
+        break
+      inc i
+
+    if canExtend:
+      let added = requiredBlocks - oldCount
+      setExtentUsed(oldStart + oldCount, added, true)
+      if zeroExtent(oldStart + oldCount, added) < 0:
+        return -1
+      superBlock.nodes[idx].blockCount = requiredBlocks
+      return 0
+
+  let newStart = findFreeExtent(requiredBlocks)
+  if newStart == U32(0):
+    return -1
+
+  setExtentUsed(newStart, requiredBlocks, true)
+  if zeroExtent(newStart, requiredBlocks) < 0:
+    return -1
+
+  if preserve:
+    var i = U32(0)
+    while i < oldCount:
+      if serviceBlockRead(U64(oldStart + i), addr blockBuf[0]) < 0:
+        return -1
+      if serviceBlockWrite(U64(newStart + i), addr blockBuf[0]) < 0:
+        return -1
+      inc i
+
+  if oldCount > U32(0):
+    if zeroExtent(oldStart, oldCount) < 0:
+      return -1
+    setExtentUsed(oldStart, oldCount, false)
+
+  superBlock.nodes[idx].startBlock = newStart
+  superBlock.nodes[idx].blockCount = requiredBlocks
+  0
+
+
+## Writes a complete replacement value into one rootfs file node.
+proc writeFileBytes(idx: int, data: pointer, size: U64): int =
   if data == nil and size > 0:
     return -1
-  if size > FsFileBlocks * BlockSize:
+  if dataBlocksForSize(size) > U32(FsDataBlockCount):
+    return -1
+  if resizeFileExtent(idx, dataBlocksForSize(size), false) < 0:
     return -1
 
   let src = cast[ptr UncheckedArray[U8]](data)
   var written = U64(0)
-
-  var blk = U64(0)
-  while blk < FsFileBlocks:
+  var blk = U32(0)
+  while blk < superBlock.nodes[idx].blockCount:
     clearBlock()
     var i = U64(0)
     while i < BlockSize and written < size:
       blockBuf[i] = src[written]
       inc i
       inc written
-    if serviceBlockWrite(U64(node.startBlock) + blk, addr blockBuf[0]) < 0:
+    if serviceBlockWrite(U64(superBlock.nodes[idx].startBlock + blk), addr blockBuf[0]) < 0:
       return -1
     inc blk
+
+  superBlock.nodes[idx].size = U32(size)
   0
 
 
-## Reads node bytes.
-proc readNodeBytes(node: FsNode, dst: pointer, capacity: U64): int =
-  if dst == nil:
+## Updates a byte range in one rootfs file, growing and zero-filling holes as needed.
+proc writeFileRangeBytes(idx: int, data: pointer, offset, size: U64): int =
+  if data == nil and size > U64(0):
     return -1
-  if U64(node.size) > capacity:
+  if offset + size < offset:
     return -1
 
-  let outBuf = cast[ptr UncheckedArray[U8]](dst)
-  var done = U64(0)
-  while done < U64(node.size):
-    let blockIndex = done div BlockSize
-    let inBlock = done mod BlockSize
-    if serviceBlockRead(U64(node.startBlock) + blockIndex, addr blockBuf[0]) < 0:
+  let endOffset = offset + size
+  if dataBlocksForSize(endOffset) > U32(FsDataBlockCount):
+    return -1
+  if resizeFileExtent(idx, dataBlocksForSize(endOffset), true) < 0:
+    return -1
+
+  let oldSize = U64(superBlock.nodes[idx].size)
+  var cursor =
+    if offset > oldSize:
+      oldSize
+    else:
+      offset
+  while cursor < offset:
+    let blk = U32(cursor div BlockSize)
+    let inBlk = cursor mod BlockSize
+    if serviceBlockRead(U64(superBlock.nodes[idx].startBlock + blk), addr blockBuf[0]) < 0:
       return -1
-
-    var chunk = BlockSize - inBlock
-    if chunk > U64(node.size) - done:
-      chunk = U64(node.size) - done
-
+    var chunk = BlockSize - inBlk
+    if chunk > offset - cursor:
+      chunk = offset - cursor
     var i = U64(0)
     while i < chunk:
-      outBuf[done + i] = blockBuf[inBlock + i]
+      blockBuf[inBlk + i] = U8(0)
       inc i
-    done += chunk
+    if serviceBlockWrite(U64(superBlock.nodes[idx].startBlock + blk), addr blockBuf[0]) < 0:
+      return -1
+    cursor += chunk
 
-  int(node.size)
+  let src = cast[ptr UncheckedArray[U8]](data)
+  cursor = U64(0)
+  while cursor < size:
+    let position = offset + cursor
+    let blk = U32(position div BlockSize)
+    let inBlk = position mod BlockSize
+    if serviceBlockRead(U64(superBlock.nodes[idx].startBlock + blk), addr blockBuf[0]) < 0:
+      return -1
+    var chunk = BlockSize - inBlk
+    if chunk > size - cursor:
+      chunk = size - cursor
+    var i = U64(0)
+    while i < chunk:
+      blockBuf[inBlk + i] = src[cursor + i]
+      inc i
+    if serviceBlockWrite(U64(superBlock.nodes[idx].startBlock + blk), addr blockBuf[0]) < 0:
+      return -1
+    cursor += chunk
 
-
+  if endOffset > oldSize:
+    superBlock.nodes[idx].size = U32(endOffset)
+  0

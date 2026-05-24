@@ -386,6 +386,8 @@ def abnormal_tests() -> list[TestCase]:
                 "writecheck: append missing denied ok",
                 "writecheck: create append ok",
                 "writecheck: invalid flags denied ok",
+                "writecheck: large rootfs write ok",
+                "writecheck: released blocks reused ok",
                 "writecheck: ok",
             ],
             timeout=12.0,

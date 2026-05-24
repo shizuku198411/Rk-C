@@ -12,16 +12,17 @@ import ../lib/path
 import ../syscall/blk/block_service_ops
 
 const
-  FsMagic = U32(0x4e465332) # NFS2
-  FsMaxNodes* = 40
+  FsMagic = U32(0x4e465333) # NFS3
+  FsMaxNodes* = 128
   FsNameMax* = 16
-  FsMetaBlocks = U64(4)
-  FsMetaBytes = 2048
-  FsFileBlocks = U64(8)
-  FsDataStartBlock = U64(8)
   AppfsMagic = U32(0x41504653) # APFS
   AppfsStartBlock = U64(4096)
   AppfsMaxEntries = 64
+  FsMetaBlocks = U64(16)
+  FsMetaBytes = 8192
+  FsDataStartBlock = FsMetaBlocks
+  FsDataBlockCount = int(AppfsStartBlock - FsDataStartBlock)
+  FsDataBitmapBytes = (FsDataBlockCount + 7) div 8
 
   FsTypeFile = U32(1)
   FsTypeDir = U32(2)
@@ -47,19 +48,6 @@ type
     magic: U32
     count: U32
 
-  FsOldNode {.packed.} = object
-    used: U32
-    typ: U32
-    parent: U32
-    size: U32
-    startBlock: U32
-    name: array[FsNameMax, char]
-
-  FsOldSuper {.packed.} = object
-    magic: U32
-    count: U32
-    nodes: array[FsMaxNodes, FsOldNode]
-
   VfsBackend = enum
     vfsRootfs,
     vfsTmpfs
@@ -76,6 +64,7 @@ type
     parent: U32
     size: U32
     startBlock: U32
+    blockCount: U32
     name: array[FsNameMax, char]
     uid: U32
     gid: U32
@@ -85,12 +74,12 @@ type
     magic: U32
     count: U32
     nodes: array[FsMaxNodes, FsNode]
+    dataBitmap: array[FsDataBitmapBytes, U8]
 
 var
   superBlock: FsSuper
   superRawBuf: array[FsMetaBytes, U8]
   blockBuf: array[512, U8]
-  fsWriteBuf: array[SysFsDataMax, U8]
   fsReady: bool
   mounts: array[VfsMaxMounts, VfsMount]
   mountCount: int
@@ -110,6 +99,8 @@ let devEntryNames = [
 proc fsWriteFile*(path: cstring, data: pointer, size: U64): int
 ## Implements the fs write file with flags kernel helper.
 proc fsWriteFileWithFlags*(path: cstring, data: pointer, size: U64, flags: U32): int
+## Implements range writes used by descriptor-based streaming I/O.
+proc fsWriteFileRange*(path: cstring, data: pointer, offset, size: U64): int
 ## Implements the fs rename kernel helper.
 proc fsRename*(oldPath, newPath: cstring): int
 ## Implements the fs chmod kernel helper.

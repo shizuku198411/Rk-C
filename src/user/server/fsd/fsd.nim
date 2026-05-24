@@ -296,6 +296,21 @@ proc handleWriteFile() =
     resp.result = -1
 
 
+## Forwards a chunked file write while preserving the requested file offset.
+proc handleWriteRange() =
+  rawReq = SysFsRequest()
+  rawReq.size = req.size
+  rawReq.capacity = req.capacity
+  copyPathToFsRequest(rawReq, reqPath())
+
+  var i = U64(0)
+  while i < req.size and i < SysFsDataMax:
+    rawReq.data[i] = req.data[i]
+    inc i
+
+  resp.result = sysRawWriteRange(addr rawReq)
+
+
 proc handleRename() =
   if isProcPath(reqPath()) or isProcPath(reqDataPath()):
     resp.result = -1
@@ -345,6 +360,8 @@ proc handleRequest() =
     handleFileSize()
   elif req.op == SysFsOpReadRange:
     handleReadRange()
+  elif req.op == SysFsOpWriteRange:
+    handleWriteRange()
   else:
     resp.result = -1
 

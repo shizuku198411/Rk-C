@@ -39,6 +39,8 @@ proc tmpfsWriteText*(path: cstring, data: cstring): int
 proc tmpfsWriteBytes*(path: cstring, data: pointer, size: U64): int
 ## Implements the tmpfs write bytes with flags kernel helper.
 proc tmpfsWriteBytesWithFlags*(path: cstring, data: pointer, size: U64, flags: U32): int
+## Implements the tmpfs range write kernel helper.
+proc tmpfsWriteRange*(path: cstring, data: pointer, offset, size: U64): int
 
 
 ## Implements the default node mode kernel helper.

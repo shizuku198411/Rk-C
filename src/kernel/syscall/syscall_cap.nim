@@ -188,7 +188,7 @@ proc canSyscallByNumber*(num: U64): bool =
     canSyscallFsServiceReply()
   of SysRawLs, SysRawMkdir, SysRawUnlink, SysRawRmdir, SysRawReadFile,
       SysRawWriteFile, SysRawFileSize, SysRawReadRange, SysRawRename,
-      SysRawChmod, SysRawChown:
+      SysRawWriteRange, SysRawChmod, SysRawChown:
     canSyscallRawFs()
   of SysBlockServiceRegister:
     canSyscallBlockServiceRegister()

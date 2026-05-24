@@ -262,6 +262,26 @@ proc serviceWriteFile*(path: cstring, data: pointer, size: U64, flags: U32 = Sys
   outValue
 
 
+## Implements a mediated file range write for streaming descriptor output.
+proc serviceWriteFileRange*(path: cstring, data: pointer, offset, size: U64): U64 =
+  let req = queueFsRequest(SysFsOpWriteRange, path, data, size, offset)
+  if req == nil:
+    if not canFallbackToRawFs():
+      return U64(-1'i64)
+
+    return U64(rawWriteFileRangeKernel(path, data, offset, size))
+
+  let resp = waitFsResponse(req)
+  let outValue =
+    if resp == nil:
+      U64(-1'i64)
+    else:
+      U64(resp.result)
+
+  finishPending(req)
+  outValue
+
+
 ## Implements the service rename kernel helper.
 proc serviceRename*(oldPath, newPath: cstring): U64 =
   if not copyCString(renamePathBuf, newPath):
@@ -329,5 +349,4 @@ proc serviceChown*(path: cstring, uid, gid: U32): U64 =
 
   finishPending(req)
   outValue
-
 
