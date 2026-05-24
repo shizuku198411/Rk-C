@@ -31,7 +31,6 @@ const
   OsReleaseContent = cstring"""NAME="Rk-C"
 VERSION="0.1.1"
 VERSION_ID="0.1.1"
-VERSION="0.1.1"
 ID=rk-c
 ID_LIKE=rk-c
 HOME_URL="https://shizuku198411.github.io/Rk-C-Doc"
