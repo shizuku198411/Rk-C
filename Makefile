@@ -44,7 +44,7 @@ USER_SHELL_RKX := $(BIN_DIR)/shell.rkx
 USER_APP_NAMES := \
 	login ls cat mkdir ps rm rmdir date edit ipc kill svc ping nslookup tcpcheck \
 	curl stracectl dmesg rkxinfo echo touch cp mv df wc paniclog id chmod chown passwd \
-	whoami sudo shutdown
+	whoami sudo shutdown which
 
 USER_SERVER_NAMES := svcmgtd procmgtd fsd blockd procfsd netd userd
 

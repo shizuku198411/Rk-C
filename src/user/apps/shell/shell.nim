@@ -105,8 +105,6 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
       if cstringEq(cmdCString(), "sudo"):
         saveHistory()
 
-      let path = buildBinPath(cmdCString())
-      if path == nil:
-        write("command path too long\n")
-      else:
+      let path = resolveExecPath(cmdCString(), pathBuf, pathBufCap)
+      if path != nil:
         runApp(path, copyArgToExecArgBuffer(), background)

@@ -5,7 +5,7 @@ from .model import TestCase
 def shell_tests() -> list[TestCase]:
     """Returns shell built-in, path navigation, and application help tests."""
     tests = [
-        TestCase("shell help", "help", ["available commands:", "curl", "stracectl", "dmesg"]),
+        TestCase("shell help", "help", ["available commands:", "curl", "stracectl", "dmesg", "which"]),
         TestCase("shell ticks", "ticks", regex=[r"\d+"]),
         TestCase("shell traps", "traps", ["trap count:", "supervisor timer"]),
         TestCase("shell bitmap", "bitmap", ["bitmap:", "free"]),
@@ -55,6 +55,7 @@ def shell_tests() -> list[TestCase]:
         "writecheck": "usage: writecheck",
         "heapcheck": "usage: heapcheck",
         "orccheck": "usage: orccheck",
+        "which": "usage: which",
         "login": "cannnot execute /bin/login directly from shell.",
     }
     for app, expected in help_cases.items():
