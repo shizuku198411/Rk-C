@@ -7,7 +7,7 @@ import ../../lib/core/syscall
 
 const
   BufferMax = 4096
-  ScreenRows = 15'u64
+  ScreenRows = 22'u64
   ScreenCols = 80'u64
   HeaderRow = 1'u64
   EditStartRow = HeaderRow + 1
