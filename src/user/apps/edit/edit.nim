@@ -147,6 +147,12 @@ proc renderHelp(path: cstring) =
   esc("\x1b[0m")
 
 
+## Renders static rows that do not need to be redrawn on every key press.
+proc renderStaticFrame(path: cstring) =
+  renderHeader()
+  renderHelp(path)
+
+
 ## Renders the bottom status message row.
 proc renderStatus(status: cstring) =
   gotoPos(StatusRow, 1)
@@ -154,31 +160,67 @@ proc renderStatus(status: cstring) =
   write(status)
 
 
-## Redraws the editor viewport and restores the terminal cursor.
-proc renderBuffer(len, cursor, topLine: U64, path, status: cstring) =
-  renderHeader()
+## Renders one visible editor row.
+proc renderEditorRow(row: U64, len, topLine: U64) =
+  gotoPos(EditStartRow + row, 1)
+  clearLine()
 
+  let start = findLineStart(topLine + row, len)
+  let finish = lineEndAt(start, len)
+
+  var p = start
+  var col = 0'u64
+  while p < finish and col < ScreenCols:
+    writeChar(buffer[p])
+    inc p
+    inc col
+
+
+## Redraws only the editor viewport.
+proc renderViewport(len, topLine: U64) =
   var row = 0'u64
   while row < EditRows:
-    gotoPos(EditStartRow + row, 1)
-    clearLine()
-
-    let start = findLineStart(topLine + row, len)
-    let finish = lineEndAt(start, len)
-    var p = start
-    var col = 0'u64
-    while p < finish and col < ScreenCols:
-      writeChar(buffer[p])
-      inc p
-      inc col
-
+    renderEditorRow(row, len, topLine)
     inc row
 
-  renderHelp(path)
-  renderStatus(status)
 
-  let visibleLine = EditStartRow + lineOf(cursor) - topLine
-  gotoPos(visibleLine, cursorColumn(cursor))
+## Renders the line currently containing the cursor, if visible.
+proc renderCursorLine(len, cursor, topLine: U64) =
+  let cursorLine = lineOf(cursor)
+
+  if cursorLine < topLine:
+    return
+
+  let row = cursorLine - topLine
+  if row >= EditRows:
+    return
+
+  renderEditorRow(row, len, topLine)
+
+
+## Restores the terminal cursor to the editor cursor position.
+proc renderCursor(cursor, topLine: U64) =
+  let cursorLine = lineOf(cursor)
+
+  if cursorLine < topLine:
+    gotoPos(EditStartRow, 1)
+    return
+
+  let row = cursorLine - topLine
+  if row >= EditRows:
+    gotoPos(EditStartRow + EditRows - 1, 1)
+    return
+
+  gotoPos(EditStartRow + row, cursorColumn(cursor))
+
+
+## Renders the initial full editor screen.
+proc renderInitialScreen(len, cursor, topLine: U64, path, status: cstring) =
+  clearScreen()
+  renderStaticFrame(path)
+  renderViewport(len, topLine)
+  renderStatus(status)
+  renderCursor(cursor, topLine)
 
 
 ## Inserts one printable character at the cursor.
@@ -198,9 +240,13 @@ proc insertChar(ch: char, len, cursor: var U64): cstring =
 
 
 ## Deletes the character before the cursor.
-proc backspace(len, cursor: var U64) =
+##
+## Returns true if the deletion may affect multiple visible lines.
+proc backspace(len, cursor: var U64): bool =
   if cursor == 0:
-    return
+    return false
+
+  let removed = buffer[cursor - 1]
 
   var p = cursor - 1
   while p + 1 < len:
@@ -210,24 +256,31 @@ proc backspace(len, cursor: var U64) =
   dec cursor
   dec len
 
+  removed == '\n'
+
 
 ## Moves the editor cursor one byte left.
-proc moveLeft(cursor: var U64) =
+proc moveLeft(cursor: var U64): bool =
   if cursor > 0:
     dec cursor
+    return true
+  false
 
 
 ## Moves the editor cursor one byte right.
-proc moveRight(cursor: var U64, len: U64) =
+proc moveRight(cursor: var U64, len: U64): bool =
   if cursor < len:
     inc cursor
+    return true
+  false
 
 
 ## Moves the editor cursor to the previous line.
-proc moveUp(cursor: var U64) =
+proc moveUp(cursor: var U64): bool =
+  let original = cursor
   let currentStart = lineStartAt(cursor)
   if currentStart == 0:
-    return
+    return false
 
   let desiredCol = cursor - currentStart
   let previousEnd = currentStart - 1
@@ -239,13 +292,16 @@ proc moveUp(cursor: var U64) =
   else:
     cursor = previousEnd
 
+  cursor != original
+
 
 ## Moves the editor cursor to the next line.
-proc moveDown(cursor: var U64, len: U64) =
+proc moveDown(cursor: var U64, len: U64): bool =
+  let original = cursor
   let currentStart = lineStartAt(cursor)
   let currentEnd = lineEndAt(currentStart, len)
   if currentEnd >= len:
-    return
+    return false
 
   let desiredCol = cursor - currentStart
   let nextStart = currentEnd + 1
@@ -257,22 +313,61 @@ proc moveDown(cursor: var U64, len: U64) =
   else:
     cursor = nextEnd
 
+  cursor != original
+
 
 ## Handles an ANSI escape sequence for arrow key movement.
-proc handleEscape(cursor: var U64, len: U64) =
+##
+## Returns true when the editor cursor moved.
+proc handleEscape(cursor: var U64, len: U64): bool =
   let marker = readChar()
   if marker != '[':
-    return
+    return false
 
   let code = readChar()
   if code == 'A':
-    moveUp(cursor)
+    return moveUp(cursor)
   elif code == 'B':
-    moveDown(cursor, len)
+    return moveDown(cursor, len)
   elif code == 'C':
-    moveRight(cursor, len)
+    return moveRight(cursor, len)
   elif code == 'D':
-    moveLeft(cursor)
+    return moveLeft(cursor)
+
+  false
+
+
+## Applies the cheapest redraw strategy after a cursor-only movement.
+proc redrawAfterCursorMove(
+  cursor: U64,
+  oldTopLine: U64,
+  topLine: var U64,
+  len: U64
+) =
+  ensureCursorVisible(cursor, topLine)
+
+  if topLine != oldTopLine:
+    renderViewport(len, topLine)
+
+  renderCursor(cursor, topLine)
+
+
+## Applies redraw after a content change.
+proc redrawAfterContentChange(
+  cursor: U64,
+  oldTopLine: U64,
+  topLine: var U64,
+  len: U64,
+  redrawWholeViewport: bool
+) =
+  ensureCursorVisible(cursor, topLine)
+
+  if redrawWholeViewport or topLine != oldTopLine:
+    renderViewport(len, topLine)
+  else:
+    renderCursorLine(len, cursor, topLine)
+
+  renderCursor(cursor, topLine)
 
 
 ## Runs the editor input loop until save or exit.
@@ -283,48 +378,84 @@ proc editorLoop(path: cstring, len: var U64) =
   var status: cstring = ""
 
   ensureCursorVisible(cursor, topLine)
-  clearScreen()
-  renderBuffer(len, cursor, topLine, path, status)
+  renderInitialScreen(len, cursor, topLine, path, status)
 
   while true:
     let ch = readChar()
 
     if prefixed:
       prefixed = false
+
       if ch == CtrlS:
         if save(path, len):
           status = "[op] Saved"
         else:
           status = "[op] Save failed"
+
+        renderStatus(status)
+        renderCursor(cursor, topLine)
+        continue
+
       elif ch == CtrlC:
         gotoPos(StatusRow, 1)
         clearLine()
         write("[op] Exit\n")
         clearScreen()
         sysExit(0)
+
       else:
         status = "[op] Unknown Ctrl-X command"
-
-      ensureCursorVisible(cursor, topLine)
-      renderBuffer(len, cursor, topLine, path, status)
-      continue
+        renderStatus(status)
+        renderCursor(cursor, topLine)
+        continue
 
     if ch == CtrlX:
       prefixed = true
       status = "[op] Ctrl-X"
+      renderStatus(status)
+      renderCursor(cursor, topLine)
+
     elif ch == Esc:
-      handleEscape(cursor, len)
-      status = ""
+      let oldTopLine = topLine
+      discard handleEscape(cursor, len)
+
+      if status[0] != '\0':
+        status = ""
+        renderStatus(status)
+
+      redrawAfterCursorMove(cursor, oldTopLine, topLine, len)
+
     elif ch == '\r' or ch == '\n':
+      let oldTopLine = topLine
       status = insertChar('\n', len, cursor)
+
+      if status[0] != '\0':
+        renderStatus(status)
+      else:
+        renderStatus(status)
+
+      redrawAfterContentChange(cursor, oldTopLine, topLine, len, true)
+
     elif ch == '\b' or ch == char(127):
-      backspace(len, cursor)
-      status = ""
+      let oldTopLine = topLine
+      let mergedLines = backspace(len, cursor)
+
+      if status[0] != '\0':
+        status = ""
+        renderStatus(status)
+
+      redrawAfterContentChange(cursor, oldTopLine, topLine, len, mergedLines)
+
     elif ch >= ' ' and ch <= '~':
+      let oldTopLine = topLine
       status = insertChar(ch, len, cursor)
 
-    ensureCursorVisible(cursor, topLine)
-    renderBuffer(len, cursor, topLine, path, status)
+      if status[0] != '\0':
+        renderStatus(status)
+      else:
+        renderStatus(status)
+
+      redrawAfterContentChange(cursor, oldTopLine, topLine, len, false)
 
 
 ## Parses the file path, loads content, and starts the editor.
