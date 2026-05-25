@@ -16,8 +16,14 @@ import ../service/registry
 const
   ServiceWaitTimeoutTicks = U64(250)
   ToolchainInstallerPath = "/bin/rkcstdlib"
-  ToolchainHeaderPath = "/usr/include/rkc.h"
-  ToolchainLibraryPath = "/usr/lib/librkc.rko"
+  ToolchainStdioHeaderPath = "/usr/include/rkc_stdio.h"
+  ToolchainStdlibHeaderPath = "/usr/include/rkc_stdlib.h"
+  ToolchainStringHeaderPath = "/usr/include/rkc_string.h"
+  ToolchainUnistdHeaderPath = "/usr/include/rkc_unistd.h"
+  ToolchainStdioLibraryPath = "/usr/lib/rkc_stdio.rko"
+  ToolchainStdlibLibraryPath = "/usr/lib/rkc_stdlib.rko"
+  ToolchainStringLibraryPath = "/usr/lib/rkc_string.rko"
+  ToolchainUnistdLibraryPath = "/usr/lib/rkc_unistd.rko"
   ToolchainInstallArgs = "--install"
 
 
@@ -117,13 +123,24 @@ proc waitForSetupProcess(pid: int32): U64 =
   status
 
 
+## Tests whether every split optional toolchain library artifact is installed.
+proc toolchainStdlibInstalled(): bool =
+  fsFileSize(cstring(ToolchainStdioHeaderPath)) >= 0 and
+    fsFileSize(cstring(ToolchainStdlibHeaderPath)) >= 0 and
+    fsFileSize(cstring(ToolchainStringHeaderPath)) >= 0 and
+    fsFileSize(cstring(ToolchainUnistdHeaderPath)) >= 0 and
+    fsFileSize(cstring(ToolchainStdioLibraryPath)) >= 0 and
+    fsFileSize(cstring(ToolchainStdlibLibraryPath)) >= 0 and
+    fsFileSize(cstring(ToolchainStringLibraryPath)) >= 0 and
+    fsFileSize(cstring(ToolchainUnistdLibraryPath)) >= 0
+
+
 ## Installs optional hosted toolchain library files before login when absent.
 proc maybeInstallToolchainStdlib() =
   if fsFileSize(cstring(ToolchainInstallerPath)) < 0:
     return
   printBootMsg(" optional toolchain is installed.\n")
-  if fsFileSize(cstring(ToolchainHeaderPath)) >= 0 and
-      fsFileSize(cstring(ToolchainLibraryPath)) >= 0:
+  if toolchainStdlibInstalled():
     printBootMsg(" standard library already installed.\n")
     return
 

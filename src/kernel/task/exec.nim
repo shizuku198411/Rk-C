@@ -16,7 +16,7 @@ const
   ShellStackTop* = VAddr(0x01100000)
   AppBase* = VAddr(0x01200000)
   AppStackTop* = VAddr(0x01300000)
-  UserArgMax = U64(128)
+  UserArgMax = U64(256)
 
   QemuUart0Base = PAddr(0x10000000)
   QemuMmioSize = U64(0x00010000)
