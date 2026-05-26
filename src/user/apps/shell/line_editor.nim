@@ -1,5 +1,6 @@
 ## Provides editable shell input with cursor movement and history browsing.
 import ../../lib/core/io
+import ./command_completion
 import ./history
 import ./state
 
@@ -140,6 +141,11 @@ proc readLine*(): cstring =
           moveCursorLeft()
           dec back
 
+      continue
+
+    if ch == '\t':
+      discard completeCommandAtCursor(len, cursor)
+      historyView = historyPos
       continue
 
     if ch < ' ' or ch > '~':
