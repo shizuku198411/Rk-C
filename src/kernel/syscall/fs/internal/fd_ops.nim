@@ -155,8 +155,16 @@ proc syscallClose*(fdVal: U64): U64 =
   if not validFd(I32(fdVal)):
     return U64(-1'i64)
 
-  releaseFdEntry(currentProc.files.entries[U32(fdVal)])
-  currentProc.files.entries[U32(fdVal)] = FdEntry()
+  let fd = U32(fdVal)
+  let entry = addr currentProc.files.entries[fd]
+
+  if entry.used and entry.kind == SysFdKindFile and
+      (entry.flags and SysOpenWrite) != U32(0):
+    if fsFlushMetadata() < 0:
+      return U64(-1'i64)
+
+  releaseFdEntry(entry[])
+  currentProc.files.entries[fd] = FdEntry()
   0
 
 

@@ -99,7 +99,8 @@ proc fsWriteFileRange*(path: cstring, data: pointer, offset, size: U64): int =
   if writeFileRangeBytes(idx, data, offset, size) < 0:
     return -1
 
-  writeSuper()
+  markSuperDirty()
+  0
 
 
 ## Implements the fs unlink kernel helper.

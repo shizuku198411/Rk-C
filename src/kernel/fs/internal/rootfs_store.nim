@@ -52,6 +52,31 @@ proc writeSuper(): int =
   0
 
 
+## Marks rootfs metadata as dirty without immediately writing it to disk.
+##
+## This is used by streaming/range writes so multiple small writes can be
+## coalesced into one metadata flush on close or shutdown.
+proc markSuperDirty() =
+  fsMetaDirty = true
+  inc fsMetaDeferredWrites
+
+
+## Flushes dirty rootfs metadata if needed.
+##
+## Data blocks are still written immediately by the file write path.  This only
+## defers the superblock/node/bitmap metadata update.
+proc fsFlushMetadata*(): int =
+  if not fsMetaDirty:
+    return 0
+
+  if writeSuper() < 0:
+    return -1
+
+  fsMetaDirty = false
+  fsMetaDeferredWrites = U64(0)
+  0
+
+
 ## Reads super.
 proc readSuper(): int =
   var copied = U64(0)
