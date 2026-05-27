@@ -198,10 +198,9 @@ proc appendHex32Value(value: U32) =
 
 ## Flushes the ORC-owned output buffer to stdout.
 proc flushRenderedText() =
-  var i = 0
-  while i < renderedText.len:
-    writeChar(renderedText[i])
-    inc i
+  if renderedText.len == 0:
+    return
+  discard sysWriteFd(1, addr renderedText[0], U64(renderedText.len))
 
 
 ## Appends one decimal RKX header field.

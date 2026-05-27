@@ -10,6 +10,9 @@ import ../../task/process
 proc syscallConsoleWrite*(buf: U64, len: U64): U64 =
   if len == 0:
     return 0
+  if buf == 0:
+    return U64(-1'i64)
+
   if not validateUserRange(buf, len, false):
     return U64(-1'i64)
 

@@ -9,6 +9,7 @@ const
   BufferMax = 4096
   ScreenRows = 22'u64
   ScreenCols = 80'u64
+  ScreenColsInt = 80
   HeaderRow = 1'u64
   EditStartRow = HeaderRow + 1
   HelpRow = ScreenRows - 1
@@ -19,8 +20,10 @@ const
   CtrlX = char(24)
   Esc = char(27)
 
-var buffer: array[BufferMax, char]
-var parsedArgs: UserArgs
+var
+  buffer: array[BufferMax, char]
+  parsedArgs: UserArgs
+  renderRowBuf: array[ScreenColsInt, char]
 
 
 ## Prints edit usage information.
@@ -161,6 +164,7 @@ proc renderStatus(status: cstring) =
 
 
 ## Renders one visible editor row.
+## Renders one visible editor row.
 proc renderEditorRow(row: U64, len, topLine: U64) =
   gotoPos(EditStartRow + row, 1)
   clearLine()
@@ -169,11 +173,15 @@ proc renderEditorRow(row: U64, len, topLine: U64) =
   let finish = lineEndAt(start, len)
 
   var p = start
-  var col = 0'u64
-  while p < finish and col < ScreenCols:
-    writeChar(buffer[p])
+  var col = 0
+
+  while p < finish and col < ScreenColsInt:
+    renderRowBuf[col] = buffer[p]
     inc p
     inc col
+
+  if col > 0:
+    writeBuffer(addr renderRowBuf[0], U64(col))
 
 
 ## Redraws only the editor viewport.

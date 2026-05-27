@@ -48,10 +48,12 @@ proc isHiddenEntry(entry: ptr DirEntry): bool =
 
 ## Prints one directory entry with permissions, owner, size, and name.
 proc printLongEntry(entry: ptr DirEntry) =
+  var modeBuf: array[10, char]
+
   if entry.typ == DirEntryTypeDir or entry.typ == DirEntryTypeMount:
-    write("d")
+    modeBuf[0] = 'd'
   else:
-    write("-")
+    modeBuf[0] = '-'
 
   let bits = [
     U32(256), U32(128), U32(64),
@@ -59,18 +61,21 @@ proc printLongEntry(entry: ptr DirEntry) =
     U32(4), U32(2), U32(1),
   ]
   let chars = ['r', 'w', 'x', 'r', 'w', 'x', 'r', 'w', 'x']
+
   var bitIndex = 0
+  while bitIndex < 9:
+    if (entry.mode and bits[bitIndex]) != U32(0):
+      modeBuf[bitIndex + 1] = chars[bitIndex]
+    else:
+      modeBuf[bitIndex + 1] = '-'
+    inc bitIndex
+
+  writeBuffer(addr modeBuf[0], 10)
+
+  write("\t")
   var
     userEntry: PasswdEntry
     groupEntry: GroupEntry
-  while bitIndex < 9:
-    if (entry.mode and bits[bitIndex]) != U32(0):
-      writeChar(chars[bitIndex])
-    else:
-      writeChar('-')
-    inc bitIndex
-
-  write("\t")
   if resolveUid(entry.uid, userEntry):
     write(cast[cstring](addr userEntry.name[0]))
   else:
