@@ -81,11 +81,14 @@ var
   superRawBuf: array[FsMetaBytes, U8]
   blockBuf: array[512, U8]
   fsReady: bool
+  fsMetaDirty: bool
+  fsMetaDeferredWrites: U64
   mounts: array[VfsMaxMounts, VfsMount]
   mountCount: int
   appfsEntries: array[AppfsMaxEntries, AppfsEntry]
   appfsEntryCount: U32
   appfsReady: bool
+
 
 let devEntryNames = [
   cstring("stdin"),

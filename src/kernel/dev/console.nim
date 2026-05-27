@@ -6,13 +6,13 @@ import ./klog
 const
   Uart0Base = U64(0x10000000)
   UartRbr = U64(0)
+  UartThr = U64(0)
   UartLsr = U64(5)
   UartLsrDataReady = U8(1 shl 0)
+  UartLsrThrEmpty = U8(1 shl 5)
   InputBufCap = U64(128)
 
 
-## Imports the SBI putchar routine.
-proc sbiPutchar(ch: char) {.importc: "sbi_putchar", cdecl.}
 ## Imports the SBI getchar routine.
 proc sbiGetchar(): clong {.importc: "sbi_getchar", cdecl.}
 
@@ -71,9 +71,20 @@ proc pollInput*(): bool =
   pushed
 
 
+## Writes one byte directly to the emulated 16550 UART.
+## On QEMU virt this avoids one SBI ecall per character.
+proc uartPutChar*(ch: char) = 
+  let uart = cast[ptr UncheckedArray[U8]](Uart0Base)
+
+  while (uart[UartLsr] and UartLsrThrEmpty) == 0:
+    discard
+
+  uart[UartThr] = U8(ord(ch) and 0xff)
+
+
 ## Implements the put char kernel helper.
 proc putChar*(ch: char) =
-  sbiPutchar(ch)
+  uartPutChar(ch)
 
 
 ## Prints char.
