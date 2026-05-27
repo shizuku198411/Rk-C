@@ -11,6 +11,11 @@ var
   passwordBuf: array[LoginLineMax, char]
 
 
+## Clears the current terminal line.
+proc clearScreen() =
+  write("\x1b[2J\x1b[H")
+
+
 ## Starts a shell process with the authenticated user's identity and home cwd.
 proc runShell(entry: PasswdEntry) =
   discard sysSetCwd(cast[cstring](addr entry.home[0]))
@@ -40,6 +45,7 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
       write("\n")
       runShell(entry)
       write("\n")
+      clearScreen()
       continue
 
     if not isEmpty(username):

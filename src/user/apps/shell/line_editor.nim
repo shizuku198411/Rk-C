@@ -5,6 +5,11 @@ import ./history
 import ./state
 
 
+const
+  CtrlL = char(12)
+  CtrlU = char(21)
+
+
 ## Moves the terminal cursor one cell to the left.
 proc moveCursorLeft() =
   write("\x1b[D")
@@ -59,6 +64,11 @@ proc loadHistoryLine(
     inc i
 
 
+## Clears the current terminal line.
+proc clearScreen() =
+  write("\x1b[2J\x1b[H")
+
+
 ## Reads one editable command line with arrows, backspace, and history keys.
 proc readLine*(): cstring =
   if lineBuf == nil:
@@ -79,29 +89,28 @@ proc readLine*(): cstring =
       write("\n")
       return lineCString()
 
+    if ch == CtrlL:
+      clearScreen()
+      lineBuf[len] = '\0'
+      return lineCString()
+
+    if ch == CtrlU:
+      clearCurrentLine(len, cursor)
+      continue
+
     if ch == char(27):
       let ch1 = readChar()
       let ch2 = readChar()
 
       if ch1 == '[':
         case ch2
-        of 'D':
-          if cursor > 0:
-            dec cursor
-            moveCursorLeft()
-
-        of 'C':
-          if cursor < len:
-            inc cursor
-            moveCursorRight()
-
-        of 'A':
+        of 'A':   # up
           if historyPos > 0:
             if historyView > 0:
               dec historyView
               loadHistoryLine(historyView, len, cursor)
 
-        of 'B':
+        of 'B':   # down
           if historyView < historyPos:
             inc historyView
             if historyView < historyPos:
@@ -109,6 +118,64 @@ proc readLine*(): cstring =
             else:
               clearCurrentLine(len, cursor)
               lineBuf[0] = '\0'
+
+        of 'C':   # right
+          if cursor < len:
+            inc cursor
+            moveCursorRight()
+
+        of 'D':   # left
+          if cursor > 0:
+            dec cursor
+            moveCursorLeft()
+        
+        of 'H':   # home
+          while cursor > 0:
+            dec cursor
+            moveCursorLeft()
+        
+        of 'F':   # end
+          while cursor < len:
+            inc cursor
+            moveCursorRight()
+
+        of '1':   # Home: ESC [ 1 ~
+          let tail = readChar()
+          if tail == '~':
+            while cursor > 0:
+              dec cursor
+              moveCursorLeft()
+
+        of '4':   # End: ESC [ 4 ~
+          let tail = readChar()
+          if tail == '~':
+            while cursor < len:
+              inc cursor
+              moveCursorRight()
+
+        of '3':   # Delete: ESC [ 3 ~
+          let tail = readChar()
+          if tail == '~':
+            if cursor < len:
+              var i = cursor
+              while i + 1 < len:
+                lineBuf[i] = lineBuf[i + 1]
+                inc i
+
+              dec len
+              lineBuf[len] = '\0'
+
+              i = cursor
+              while i < len:
+                writeChar(lineBuf[i])
+                inc i
+
+              writeChar(' ')
+
+              var back = len - cursor + 1
+              while back > 0:
+                moveCursorLeft()
+                dec back
 
         else:
           discard
