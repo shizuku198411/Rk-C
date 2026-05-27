@@ -11,6 +11,19 @@ proc processBootstrap*() =
   panic("zombie process resumed")
 
 
+## Returns the effective root page table for a process.
+proc effectiveRootPageTable(p: ptr Process): PageTable =
+  if p != nil and p.rootPageTable != nil:
+    return p.rootPageTable
+
+  kernelPageTable
+
+
+## Returns true when the process can continue running without a context switch.
+proc canContinueRunning(p: ptr Process): bool =
+  p != nil and (p.state == procRunning or p.state == procRunnable)
+
+
 ## Selects the next runnable process and switches to it.
 proc schedule*() =
   let prev = currentProc
@@ -20,7 +33,8 @@ proc schedule*() =
   reapDetachedZombies()
 
   if currentProc != nil:
-    let currentIndex = (cast[U64](currentProc) - cast[U64](addr procs[0])) div U64(sizeof(Process))
+    let currentIndex =
+      (cast[U64](currentProc) - cast[U64](addr procs[0])) div U64(sizeof(Process))
     start = int((currentIndex + 1'u64) mod U64(MaxProcs))
 
   var i = 0
@@ -39,29 +53,47 @@ proc schedule*() =
     next = idleProc
 
   if next == nil:
-    if prev != nil and (prev.state == procRunning or prev.state == procRunnable):
+    if canContinueRunning(prev):
       prev.state = procRunning
       currentProc = prev
       return
 
     panic("no runnable process")
 
+  ##
+  ## Fast path:
+  ## If the scheduler selected the currently running process again, there is no
+  ## context switch and no address-space switch.  Avoid rewriting satp and
+  ## flushing the TLB.
+  ##
+  ## This matters when timer interrupts request reschedule but no other process
+  ## is runnable, or when scheduling returns to the same task.
+  ##
+  if prev == next:
+    next.state = procRunning
+    currentProc = next
+    needResched = false
+    return
+
+  let prevRoot = effectiveRootPageTable(prev)
+  let nextRoot = effectiveRootPageTable(next)
+
   next.state = procRunning
   currentProc = next
-  let nextRoot =
-    if next.rootPageTable != nil:
-      next.rootPageTable
-    else:
-      kernelPageTable
+  needResched = false
 
-  if nextRoot != nil:
+  ##
+  ## Only switch address spaces when the effective root page table actually
+  ## changes.
+  ##
+  ## Kernel processes normally share kernelPageTable, so kernel->kernel switches
+  ## can avoid satp writes and TLB flushes.
+  ##
+  if nextRoot != nil and nextRoot != prevRoot:
     arch.writeSatp(makeSatp(cast[PAddr](nextRoot)))
     paging.flushTlb()
 
   arch.writeSscratch(next.kernelStack + KernelStackPages * PageSize)
-
-  if prev == next:
-    return
 
   if prev == nil:
     var dummy = Context()
