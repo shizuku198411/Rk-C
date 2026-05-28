@@ -1,0 +1,7 @@
+name: rkc-base
+version: "0.1.0"
+summary: Rk-C development toolchain
+description: |
+  Provides the toolchain and runtime dependencies needed to build,
+  test, and run Rk-C inside a Workshop environment.
+license: MIT

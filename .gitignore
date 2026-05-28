@@ -1,5 +1,4 @@
 .vscode/
-aqua_core/
 bin/
 build/
 map/
@@ -9,3 +8,4 @@ docs/roadmap
 __pycache__/
 opensbi/
 rkc_doc/
+.workshop.lock

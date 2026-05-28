@@ -1,0 +1,45 @@
+name: rkcdev
+base: ubuntu@24.04
+
+sdks:
+  - name: project-rkc-base
+    slots:
+      gdb:
+        interface: tunnel
+        endpoint: localhost:1234    # QEMU gdb server inside workshop
+  - name: system
+    plugs:
+      gdb:
+        interface: tunnel
+        endpoint: localhost:1234    # host side port
+
+actions:
+  build: |
+    set -eux
+    cd /project
+    make build
+
+  build-bins: |
+    set -eux
+    cd /project
+    make build-bins
+
+  test: |
+    set -eux
+    cd /project
+    make test-apps TEST_APPS_ARGS="--boot-timeout 60 --command-recover-timeout 30 --qemu-net user --skip-network-smoke"
+
+  run: |
+    set -eux
+    cd /project
+    make run
+
+  debug: |
+    set -eux
+    cd /project
+    make qemu-debug
+
+  clean: |
+    set -eux
+    cd /project
+    make clean
