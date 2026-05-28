@@ -3,10 +3,6 @@ base: ubuntu@24.04
 
 sdks:
   - name: project-rkc-base
-    slots:
-      gdb:
-        interface: tunnel
-        endpoint: localhost:1234    # QEMU gdb server inside workshop
   - name: system
     plugs:
       gdb:

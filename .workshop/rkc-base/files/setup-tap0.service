@@ -1,0 +1,12 @@
+[Unit]
+Description=Set up tap0 for Rk-C QEMU networking
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/setup-tap0
+RemainAfterExit=yes
+
+[Install]
+WantedBy=default.target

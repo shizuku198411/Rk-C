@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 set -euxo pipefail
 
-# == create tap interface ==
-sudo ip tuntap add dev tap0 mode tap user "$USER"
-sudo ip link set tap0 up
-sudo ip addr add 10.0.1.1/24 dev tap0
-sudo sysctl -w net.ipv4.ip_forward=1
-sudo iptables -t nat -A POSTROUTING -s 10.0.1.0/24 -j MASQUERADE
+# == enabel tap service ==
+install -D --mode=755 "$SDK/files/setup-tap0" \
+  "$HOME/.local/bin/setup-tap0"
+
+install -D --mode=644 "$SDK/files/setup-tap0.service" \
+  "$HOME/.config/systemd/user/setup-tap0.service"
+
+systemctl --user daemon-reload
+systemctl --user enable --now setup-tap0.service

@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euxo pipefail
+
+if ip link show tap0 >/dev/null 2>&1; then
+  sudo ip link del tap0
+fi
+sudo ip tuntap add dev tap0 mode tap user "$(id -u)"
+sudo ip addr replace 10.0.1.1/24 dev tap0
+sudo ip link set tap0 up
+
+sudo sysctl -w net.ipv4.ip_forward=1
+sudo iptables -t nat -A POSTROUTING -s 10.0.1.0/24 -j MASQUERADE

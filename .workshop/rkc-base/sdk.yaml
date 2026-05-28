@@ -5,3 +5,8 @@ description: |
   Provides the toolchain and runtime dependencies needed to build,
   test, and run Rk-C inside a Workshop environment.
 license: MIT
+
+slots:
+  gdb:
+    interface: tunnel
+    endpoint: localhost:1234
