@@ -4,105 +4,72 @@
 
 [Official Documentations is here!](https://shizuku198411.github.io/Rk-C-Doc/)
 
-Rk-C is an experimental RISC-V 64-bit microkernel-style operating system written
-mainly in Nim.
+Rk-C is an experimental RISC-V 64-bit microkernel prototype written mainly in
+Nim.
 
-The kernel keeps the privileged core small: boot, traps, scheduling, virtual
-memory, user process execution, IPC, and the minimal hardware-facing syscalls.
-System policy and device-facing subsystems are moved into U-mode servers, so the
-running system is built from cooperating services such as `svcmgtd`,
-`procmgtd`, `fsd`, `blockd`, `procfsd`, `netd`, and `userd`.
+The project keeps the S-mode kernel minimal, delegating policy and device-facing
+functionality to isolated U-mode services. It combines a small privileged core
+with a userland service model that includes process management, filesystem,
+networking, and account services.
 
-Rk-C currently boots on QEMU `virt` through OpenSBI, runs protected U-mode
-programs, supports a shell-driven userland, and includes enough filesystem,
-process, service, account, and networking features to exercise the
-microkernel design end-to-end.
+Rk-C currently boots on QEMU `virt` with OpenSBI, runs protected U-mode
+processes, offers a shell-driven user environment, and includes enough
+filesystem, service, and networking behavior to demonstrate the microkernel
+architecture end-to-end.
 
-![ss](./assets/terminal.png)
+![ss](./assets/terminal_overview.png)
 
 ## Highlights
 
-Kernel and architecture:
+Rk-C is an experimental Nim-based RISC-V microkernel prototype that keeps the privileged kernel small and pushes policy into cooperating U-mode services.
 
-- RISC-V 64-bit S-mode kernel for QEMU `virt`
-- OpenSBI `fw_jump` boot flow into `kernel.elf`
-- Sv39 paging with per-process address spaces
-- Timer-driven preemptive scheduling and process lifecycle management
-- U-mode execution with trap/syscall dispatch and fault reporting
-- RKX user executable loader with text, rodata, data, bss, and stack mappings
-- W^X user mappings and non-executable user stacks
-- User pointer validation and hardened usercopy helpers
-- File descriptors, standard streams, pipes, `dup2`, and pollable events
-- Entropy syscall used by TLS client code
-- Syscall tracing with global, per-PID, and per-command modes
-
-Microkernel and service model:
-
-- Structured IPC packets and request/reply helpers
-- Service registry with ready ACKs, restart/degraded state, status, and logs
-- Root-only service control through RKX metadata and IPC sender credentials
-- Userland service manager: `svcmgtd`
-- Userland process manager: `procmgtd`
-- Userland block server: `blockd`
-- Userland filesystem server: `fsd`
-- Userland procfs server: `procfsd`
-- Userland network server: `netd`
-- Userland account database server: `userd`
-
-Filesystem and accounts:
-
-- Disk-backed root filesystem plus appfs-packed command images
-- tmpfs mount for `/tmp`
-- procfs mount for `/proc`
-- Device-like files under `/dev` for standard I/O
-- Unix-like file ownership and mode checks
-- `/etc/passwd`, `/etc/group`, and PBKDF2-HMAC-SHA256 `/etc/shadow`
-- Login flow that starts a shell under the authenticated UID/GID
-
-Networking:
-
-- VirtIO MMIO network device support
-- MAC address discovery and RX/TX queue handling
-- ARP, IPv4, ICMP, UDP, DNS, TCP, and HTTP client support
-- Experimental TLS 1.3 HTTPS client path
-- TAP networking by default, with QEMU user networking as an option
-
-Userland:
-
-- Interactive shell with cwd-aware prompt, history, background jobs, pipes, and
-  output redirection
-- Core commands such as `ls`, `cat`, `mkdir`, `rm`, `rmdir`, `cp`, `mv`, `df`,
-  `ps`, `kill`, `svc`, `id`, `chmod`, `chown`, `edit`, `stracectl`, and `dmesg`
-- Network tools such as `ping`, `nslookup`, `tcpcheck`, and `curl`
-- RKX metadata inspection with `rkxinfo`
-- QEMU smoke tests for apps, services, permissions, faults, IPC, pipes, and
-  network paths
+- Core kernel features include booting on QEMU `virt` via OpenSBI, Sv39 virtual memory, preemptive scheduling, trap/syscall dispatch, and a user-mode process execution model.
+- The system is organized as a microkernel plus userland servers, with a service registry, IPC-based request/reply transport, and userland managers for processes, services, storage, networking, and accounts.
+- The user environment provides a shell-centric userland, disk-backed root filesystem with `/tmp` and `/proc`, Unix-like permissions/accounts, command binaries, and basic networking tools.
+- Networking support includes VirtIO MMIO networking, TAP/QEMU user networking, IPv4 stack components, DNS, TCP, HTTP client support, and an experimental TLS 1.3 path.
+- The project includes tooling for building RKX executables, packaging app images, and running smoke tests to verify kernel, IPC, filesystem, service, and networking behavior.
 
 ## Architecture
 
 ```text
-OpenSBI
-  |
-  v
-kernel.elf
-  |
-  +-- trap/syscall dispatch
-  +-- scheduler and process table
-  +-- memory manager and Sv39 paging
-  +-- RKX loader
-  +-- IPC transport and service registry
-  +-- low-level VirtIO MMIO access
-  |
-  +-- /bin/svcmgtd
-        |
-        +-- /bin/procmgtd
-        +-- /bin/blockd
-        +-- /bin/fsd
-        +-- /bin/procfsd
-        +-- /bin/netd
-        |
-        +-- /bin/shell
+          +----------------------------------------+
+          |            OpenSBI / Boot loader       |
+          +----------------------------------------+
+                           |
+                           v
+          +----------------------------------------+
+          |              Kernel (S-mode)           |
+          |                                        |
+          |  - Exception / trap entry              |
+          |  - Syscall dispatch                    |
+          |  - Scheduler & process table           |
+          |  - Sv39 virtual memory manager         |
+          |  - RKX executable loader               |
+          |  - IPC transport & service registry    |
+          |  - VirtIO MMIO device support          |
+          +----------------------------------------+
+                           |
+          +----------------+----------------+----------------+
+          |                |                |                |
+          v                v                v                v
+ +----------------+ +----------------+ +----------------+ +----------------+
+ | User process   | | User process   | | Userland       | | Userland       |
+ | (U-mode)       | | (U-mode)       | | server         | | server         |
+ | - RKX image    | | - RKX image    | | - svcmgtd      | | - procmgtd     |
+ | - syscall      | | - IPC client   | | - fsd / blockd | | - netd / userd |
+ |   interface    | | - threads      | | - procfsd      | | - shell        |
+ +----------------+ +----------------+ +----------------+ +----------------+
+          ^                ^                ^                ^
+          |                |                |                |
+          +----------------+----------------+----------------+
+                           |
+             IPC request/reply + shared service registry
 ```
+
+- The kernel runs in S-mode and keeps privileged functionality small.
+- User workloads and services run in U-mode as isolated processes with separate address spaces.
+- Syscalls and traps are dispatched by the kernel, which also manages paging, scheduling, and IPC transport.
+- U-mode services cooperate through a registry-based IPC model, and can be restarted or monitored from the service manager.
 
 Design details live under [docs/design](docs/design/README.md).
 
@@ -124,32 +91,149 @@ scripts/
 docs/
   design/              Subsystem design notes
   review/              Review notes and follow-up checklists
+.workshop/
+  rkc-base/            Canonical Workshop SDK for the Rk-C dev environment
 ```
 
-## Requirements
+## Recommended Development Environment
 
-- QEMU with RISC-V system emulation
-- OpenSBI
-- Nim 2.2.10
-- clang / lld / LLVM tools
-- Python 3
-- GNU make
-- RISC-V GNU toolchain for building OpenSBI
+Rk-C can be built, tested, and run inside a Canonical [Workshop](https://ubuntu.com/workshop) sandbox.
+
+This is the recommended setup because the project depends on several tools that
+often differ between host environments:
+
+* Nim 2.2.10
+* clang / lld / LLVM tools
+* QEMU RISC-V system emulation
+* OpenSBI
+* RISC-V GNU toolchain for building OpenSBI
+* Python 3 and GNU make
+
+The Workshop SDK prepares these dependencies inside the sandbox and builds the
+OpenSBI firmware expected by the Makefile.
+
+### install lxd and Workshop
+
+Install lxd and workshop using `snap`
+```bash
+sudo snap install --channel=6/stable lxd
+sudo snap install --classic workshop
+```
+
+### Launch the Workshop environment
+
+From the repository root:
+
+```bash
+workshop launch
+```
+
+after launch is completed, check the workshop status.
+```bash
+workshop list
+
+# Result
+#  WORKSHOP  STATUS  NOTES
+#  rkcdev    Ready   -
+```
+
+### Run
+
+```bash
+workshop run -- run
+```
+
+Initial user accounts:
+
+```text
+[1] username: root, password: root
+[2] username: rkc, password: rkc
+```
+
+### Test
+
+```bash
+workshop run -- test
+```
+
+The Workshop test action runs the QEMU app smoke test suite with QEMU user networking.
+
+### Debug
+
+Start QEMU paused with a GDB server:
+
+```bash
+workshop run -- debug
+```
+
+The default GDB port is controlled by the Makefile.
+
+### Clean
+
+```bash
+workshop run -- clean
+```
+
+## Workshop Notes
+
+The repository contains a project-local Workshop SDK under `.workshop/`.
+
+The SDK is responsible for preparing the development environment, including:
+
+* installing Ubuntu packages
+* selecting the correct Nim binary for the container architecture
+* cloning OpenSBI
+* building `fw_jump.bin`
+
+The generated Workshop lock file should not be committed:
+
+```text
+.workshop.lock
+```
+
+If the Workshop definition or SDK changes, refresh the environment:
+
+```bash
+workshop refresh
+```
+
+<details><summary>If you run Rk-C on Host, check here</summary>
+
+## Manual Host Setup
+
+The following sections describe how to build and run Rk-C directly on the host
+without Workshop.
+
+This is useful if you do not want to use a sandbox, or if you need custom host
+networking such as TAP.
+
+## Manual Requirements
+
+* QEMU with RISC-V system emulation
+* OpenSBI
+* Nim 2.2.10
+* clang / lld / LLVM tools
+* Python 3
+* GNU make
+* RISC-V GNU toolchain for building OpenSBI
 
 On Ubuntu-like systems:
 
 ```bash
 sudo apt install -y \
   qemu-system-misc \
+  qemu-utils \
   make \
   clang \
   lld \
   llvm \
   python3 \
-  gcc-riscv64-linux-gnu
+  gcc-riscv64-linux-gnu \
+  binutils-riscv64-linux-gnu \
+  device-tree-compiler
 ```
 
-## Nim
+## Manual Nim Setup
 
 The current Makefile expects Nim at:
 
@@ -159,7 +243,7 @@ The current Makefile expects Nim at:
 
 If your Nim binary is somewhere else, update `NIM` in `Makefile`.
 
-For a local install:
+For a local x86_64 install:
 
 ```bash
 cd ~
@@ -168,7 +252,16 @@ tar Jxf nim-2.2.10-linux_x64.tar.xz
 ~/nim-2.2.10/bin/nim --version
 ```
 
-## OpenSBI
+For a local arm64 install:
+
+```bash
+cd ~
+wget https://nim-lang.org/download/nim-2.2.10-linux_arm64.tar.xz
+tar Jxf nim-2.2.10-linux_arm64.tar.xz
+~/nim-2.2.10/bin/nim --version
+```
+
+## Manual OpenSBI Setup
 
 The QEMU run target expects:
 
@@ -186,18 +279,11 @@ export CROSS_COMPILE=riscv64-linux-gnu-
 make PLATFORM=generic
 ```
 
-## Build
+## Manual Build
 
 ```bash
 make build
 ```
-
-This builds:
-
-- `bin/kernel.elf`
-- user applications and servers as freestanding RISC-V ELF files
-- user applications and servers as `bin/*.rkx`
-- `bin/disk.img` with packed `/bin` contents
 
 Useful variants:
 
@@ -206,17 +292,16 @@ make build-bins
 make build-test-bins
 ```
 
-## Run
+## Manual Run
 
 ```bash
 make run
 ```
 
-initial user account:
+Run with QEMU user networking:
 
-```text
-[1] username: root, password: root
-[2] username: rkc, password: rkc
+```bash
+make run QEMU_NET=user
 ```
 
 Run without a VirtIO network device to test degraded optional-service boot:
@@ -237,12 +322,18 @@ Override the GDB port with:
 make qemu-debug GDB_PORT=1235
 ```
 
-## Tests
+## Manual Tests
 
 Run the QEMU app smoke test suite:
 
 ```bash
 make test-apps
+```
+
+Run tests with QEMU user networking:
+
+```bash
+make test-apps QEMU_NET=user
 ```
 
 Useful variants:
@@ -257,7 +348,7 @@ python3 scripts/test_apps.py --tap-if tap0 --host-ip 10.0.1.1
 The test runner uses `bin/test-disk.img` and removes it after completion unless
 `--keep-test-disk` is passed.
 
-## Networking
+## Manual Networking
 
 `make run` defaults to TAP networking:
 
@@ -297,6 +388,8 @@ Print the current networking notes:
 make net-host-help
 ```
 
+</details>
+
 ## Shell Examples
 
 ```text
@@ -314,13 +407,21 @@ Rk-C:/$ shutdown
 
 ## Clean
 
+Inside Workshop:
+
+```bash
+workshop run -- clean
+```
+
+On the host:
+
 ```bash
 make clean
 ```
 
 ## Notes
 
-- This is a learning and research kernel, not a production OS.
-- The ABI and internal service protocols are still evolving.
-- The HTTPS/TLS path does not validate certificates yet.
-- The network stack is intentionally small and experimental.
+* This is a learning and research kernel, not a production OS.
+* The ABI and internal service protocols are still evolving.
+* The HTTPS/TLS path does not validate certificates yet.
+* The network stack is intentionally small and experimental.
