@@ -2,6 +2,7 @@ name: App Smoke Tests
 
 on:
   pull_request:
+  workflow_dispatch:
 
 jobs:
   test-apps:
@@ -12,12 +13,40 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-      
+
+      - name: Check WORKSHOP_TOKEN
+        shell: bash
+        run: |
+          if [ -z "${WORKSHOP_TOKEN}" ]; then
+            echo "WORKSHOP_TOKEN is empty"
+            exit 1
+          fi
+          echo "WORKSHOP_TOKEN is set"
+        env:
+          WORKSHOP_TOKEN: ${{ secrets.WORKSHOP_TOKEN }}
+
+      - name: Check token access to canonical/workshop
+        shell: bash
+        run: |
+          status="$(
+            curl -sS -o /tmp/workshop-repo.json -w '%{http_code}' \
+              -H "Authorization: Bearer ${WORKSHOP_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              https://api.github.com/repos/canonical/workshop
+          )"
+          echo "GitHub API status: ${status}"
+          if [ "${status}" != "200" ]; then
+            cat /tmp/workshop-repo.json
+            exit 1
+          fi
+        env:
+          WORKSHOP_TOKEN: ${{ secrets.WORKSHOP_TOKEN }}
+
       - name: Workshop Checkout
         uses: canonical/launch-workshop@v0
         with:
           token: ${{ secrets.WORKSHOP_TOKEN }}
-      
+
       - name: Test on Workshop
         run: workshop run -- test
 
