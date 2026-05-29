@@ -2,7 +2,11 @@ name: rkcdev
 base: ubuntu@24.04
 
 sdks:
+  - name: nim-toolchain
+    channel: latest/stable
+  
   - name: project-rkc-base
+  
   - name: system
     plugs:
       gdb:

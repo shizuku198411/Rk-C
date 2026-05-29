@@ -120,7 +120,10 @@ proc resetVirtQueue*(q: var VirtQueue, vqNum, vqBytes, vqAlign: U64): bool =
     return false
 
   if q.mem == NilPAddr:
-    q.mem = palloc(vqBytes div PageSize)
+    #q.mem = palloc(vqBytes div PageSize)
+    # The virtqueue memory is expicitly cleared just below.
+    # Avoid the extra zero-fill done by palloc().
+    q.mem = pallocNoZero(vqBytes div PageSize)
     if q.mem == NilPAddr:
       return false
 

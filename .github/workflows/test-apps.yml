@@ -2,6 +2,7 @@ name: App Smoke Tests
 
 on:
   pull_request:
+  workflow_dispatch:
 
 jobs:
   test-apps:
@@ -11,43 +12,43 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
-      - name: Install system packages
+      - name: Check WORKSHOP_TOKEN
+        shell: bash
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            clang \
-            curl \
-            lld \
-            llvm \
-            make \
-            opensbi \
-            python3 \
-            qemu-system-misc
-
-      - name: Install Nim 2.2.10
-        run: |
-          curl -L https://nim-lang.org/download/nim-2.2.10-linux_x64.tar.xz -o /tmp/nim.tar.xz
-          tar -xf /tmp/nim.tar.xz -C "$HOME"
-          "$HOME/nim-2.2.10/bin/nim" --version
-
-      - name: Locate OpenSBI firmware
-        id: opensbi
-        run: |
-          fw="$(find /usr -path '*opensbi*generic*fw_jump.bin' -type f | head -n 1)"
-          if [ -z "$fw" ]; then
-            echo "OpenSBI fw_jump.bin not found" >&2
+          if [ -z "${WORKSHOP_TOKEN}" ]; then
+            echo "WORKSHOP_TOKEN is empty"
             exit 1
           fi
-          echo "fw=$fw" >> "$GITHUB_OUTPUT"
-          echo "Using OpenSBI firmware: $fw"
+          echo "WORKSHOP_TOKEN is set"
+        env:
+          WORKSHOP_TOKEN: ${{ secrets.WORKSHOP_TOKEN }}
 
-      - name: Run app smoke tests
+      - name: Check token access to canonical/workshop
+        shell: bash
         run: |
-          make test-apps \
-            OPENSBI_FW="${{ steps.opensbi.outputs.fw }}" \
-            TEST_APPS_ARGS="--boot-timeout 60 --command-recover-timeout 30 --qemu-net user --skip-network-smoke --allowed-failures 4"
+          status="$(
+            curl -sS -o /tmp/workshop-repo.json -w '%{http_code}' \
+              -H "Authorization: Bearer ${WORKSHOP_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              https://api.github.com/repos/canonical/workshop
+          )"
+          echo "GitHub API status: ${status}"
+          if [ "${status}" != "200" ]; then
+            cat /tmp/workshop-repo.json
+            exit 1
+          fi
+        env:
+          WORKSHOP_TOKEN: ${{ secrets.WORKSHOP_TOKEN }}
+
+      - name: Workshop Checkout
+        uses: canonical/launch-workshop@v0
+        with:
+          token: ${{ secrets.WORKSHOP_TOKEN }}
+
+      - name: Test on Workshop
+        run: workshop run -- test
 
       - name: Upload QEMU log
         if: always()
