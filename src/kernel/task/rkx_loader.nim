@@ -237,12 +237,11 @@ proc mapRkxSegment(
   var page = U64(0)
 
   while page < pages:
-    let pagePa = palloc(1.U64)
+    let pagePa = palloc(U64(1))
     if pagePa == NilPAddr:
       discard unmapRangeFree(root, va, page)
       return -1
 
-    # palloc() 側で zeroMem 済みだけど、segment tail / bss 相当の明示のためにそのまま使う。
     let segOff = page * PageSize
 
     if segOff < fileSize:
