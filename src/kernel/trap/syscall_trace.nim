@@ -102,6 +102,9 @@ proc syscallName*(num: U64): cstring =
   of SysPipe: cstring("pipe")
   of SysDup2: cstring("dup2")
   of SysSignalPoll: cstring("signal_poll")
+  of SysBrk: cstring("brk")
+  of SysSbrk: cstring("sbrk")
+  of SysFdList: cstring("fd_list")
   else: cstring("unknown")
 
 
