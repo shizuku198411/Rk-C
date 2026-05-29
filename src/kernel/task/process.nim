@@ -144,6 +144,10 @@ var
   kernelPageTable: PageTable
   pipes: array[SysPipeMax, PipeState]
 
+  # Cached timer/poll sleep state
+  timerWaiterCount: U64
+  nextTimerWakeTick: U64
+
 
 ## Imports the assembly context switch routine.
 proc contextSwitch(prev: ptr Context, next: ptr Context) {.importc: "context_switch", cdecl.}
