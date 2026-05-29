@@ -11,43 +11,15 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install system packages
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            clang \
-            curl \
-            lld \
-            llvm \
-            make \
-            opensbi \
-            python3 \
-            qemu-system-misc
-
-      - name: Install Nim 2.2.10
-        run: |
-          curl -L https://nim-lang.org/download/nim-2.2.10-linux_x64.tar.xz -o /tmp/nim.tar.xz
-          tar -xf /tmp/nim.tar.xz -C "$HOME"
-          "$HOME/nim-2.2.10/bin/nim" --version
-
-      - name: Locate OpenSBI firmware
-        id: opensbi
-        run: |
-          fw="$(find /usr -path '*opensbi*generic*fw_jump.bin' -type f | head -n 1)"
-          if [ -z "$fw" ]; then
-            echo "OpenSBI fw_jump.bin not found" >&2
-            exit 1
-          fi
-          echo "fw=$fw" >> "$GITHUB_OUTPUT"
-          echo "Using OpenSBI firmware: $fw"
-
-      - name: Run app smoke tests
-        run: |
-          make test-apps \
-            OPENSBI_FW="${{ steps.opensbi.outputs.fw }}" \
-            TEST_APPS_ARGS="--boot-timeout 60 --command-recover-timeout 30 --qemu-net user --skip-network-smoke --allowed-failures 4"
+        uses: actions/checkout@v6
+      
+      - name: Workshop Checkout
+        uses: canonical/launch-workshop@v0
+        with:
+          token: ${{ secrets.WORKSHOP_TOKEN }}
+      
+      - name: Test on Workshop
+        run: workshop run -- test
 
       - name: Upload QEMU log
         if: always()
