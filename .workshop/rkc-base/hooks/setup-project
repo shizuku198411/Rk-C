@@ -1,6 +1,59 @@
 #!/usr/bin/env bash
 set -euxo pipefail
 
+# == install nim ==
+NIM_VERSION="2.2.10"
+NIM_ARCH="$(uname -m)"
+
+case "$NIM_ARCH" in
+  x86_64|amd64)
+    NIM_PLATFORM="linux_x64"
+    ;;
+  aarch64|arm64)
+    NIM_PLATFORM="linux_arm64"
+    ;;
+  *)
+    echo "unsupported architecture for Nim binary: ${NIM_ARCH}" >&2
+    exit 1
+    ;;
+esac
+
+NIM_DIR="$HOME/nim-${NIM_VERSION}"
+NIM_TARBALL="nim-${NIM_VERSION}-${NIM_PLATFORM}.tar.xz"
+NIM_URL="https://nim-lang.org/download/${NIM_TARBALL}"
+
+if [ ! -x "${NIM_DIR}/bin/nim" ]; then
+  cd "$HOME"
+  curl -L "$NIM_URL" -o "$NIM_TARBALL"
+  tar -xf "$NIM_TARBALL"
+fi
+
+cd /project
+
+## == clone and build opensbi ==
+OPENSBI_VERSION="v1.8.1"
+OPENSBI_URL="https://github.com/riscv-software-src/opensbi.git"
+
+echo "[rkc-toolchain] OpenSBI version: ${OPENSBI_VERSION}"
+echo "[rkc-toolchain] OpenSBI url: ${OPENSBI_URL}"
+
+if [ ! -d opensbi ]; then
+  git clone \
+    --depth=1 \
+    --branch="${OPENSBI_VERSION}" \
+    --single-branch \
+    "${OPENSBI_URL}" \
+    opensbi
+fi
+
+if [ ! -f opensbi/build/platform/generic/firmware/fw_jump.bin ]; then
+  export CROSS_COMPILE=riscv64-linux-gnu-
+  make -C opensbi PLATFORM=generic
+fi
+
+## == verify versions ==
+"${NIM_DIR}/bin/nim" --version
+
 # == enabel tap service ==
 install -D --mode=755 "$SDK/files/setup-tap0" \
   "$HOME/.local/bin/setup-tap0"
