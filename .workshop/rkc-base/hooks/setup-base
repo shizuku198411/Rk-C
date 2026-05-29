@@ -6,13 +6,7 @@ cd /project
 # == install required packages ==
 sudo apt-get update
 sudo apt-get install -y \
-  ca-certificates \
-  curl \
-  git \
   make \
-  python3 \
-  clang \
-  lld \
   llvm \
   qemu-system-misc \
   qemu-utils \
