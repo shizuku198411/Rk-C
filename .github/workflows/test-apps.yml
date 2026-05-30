@@ -15,6 +15,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Check WORKSHOP_TOKEN
+        if: ${{ !env.ACT }}
         shell: bash
         run: |
           if [ -z "${WORKSHOP_TOKEN}" ]; then
@@ -26,6 +27,7 @@ jobs:
           WORKSHOP_TOKEN: ${{ secrets.WORKSHOP_TOKEN }}
 
       - name: Check token access to canonical/workshop
+        if: ${{ !env.ACT }}
         shell: bash
         run: |
           status="$(
@@ -43,15 +45,26 @@ jobs:
           WORKSHOP_TOKEN: ${{ secrets.WORKSHOP_TOKEN }}
 
       - name: Workshop Checkout
+        if: ${{ !env.ACT }}
         uses: canonical/launch-workshop@v0
         with:
           token: ${{ secrets.WORKSHOP_TOKEN }}
 
       - name: Test on Workshop
-        run: workshop run -- test
+        if: ${{ !env.ACT }}
+        run: workshop run rkcdev -- test
+
+      - name: Skip Workshop test in local act
+        if: ${{ env.ACT }}
+        shell: bash
+        run: |
+          set -eux
+          echo "Skipping Workshop-based QEMU smoke test under local act."
+          echo "This local act run validates the workflow wiring only."
+          echo "Run the actual test with: workshop run rkcdev -- test"
 
       - name: Upload QEMU log
-        if: always()
+        if: ${{ !env.ACT }}
         uses: actions/upload-artifact@v4
         with:
           name: qemu-test-log

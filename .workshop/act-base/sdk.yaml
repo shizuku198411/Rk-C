@@ -1,0 +1,6 @@
+name: act-base
+version: "0.1.0"
+summary: Local Github Actions test tooling
+description: |
+  Installs tools used to run GitHub Actions workflows locally with act.
+license: MIT

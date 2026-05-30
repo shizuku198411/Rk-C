@@ -1,4 +1,4 @@
-name: rkcdev
+name: rkc-dev
 base: ubuntu@24.04
 
 sdks:
