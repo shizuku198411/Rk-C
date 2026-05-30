@@ -2,11 +2,13 @@
   <img src="./assets/Rk-C_logo.png" alt="Rk-C Logo" width="250">
 </p>
 
-[Official documentation](https://shizuku198411.github.io/Rk-C-Doc/)
-
 Rk-C is an experimental RISC-V 64-bit microkernel prototype written mainly in Nim.
 
 It keeps the S-mode kernel small and moves policy and device-facing behavior into isolated U-mode services. The system currently boots on QEMU `virt` with OpenSBI, runs protected U-mode processes, provides a shell-driven userland, and includes filesystem, service, process, account, and networking components.
+
+<!-- RKC_VERSION_START -->
+Current version: `0.1.2`
+<!-- RKC_VERSION_END -->
 
 ![Terminal overview](./assets/terminal_overview.png)
 

@@ -5,6 +5,7 @@ import ../../lib/mem
 import ../../lib/syscall_types
 import ../../lib/types
 import ../../lib/user_ids
+import ../../generated/version
 import ../dev/console
 import ../fs/dirent
 import ../fs/tmpfs
@@ -29,14 +30,15 @@ const
   FsTypeMount = U32(3)
   VfsMaxMounts = 4
   DevEntryCount = 4
-  OsReleaseContent = cstring"""NAME="Rk-C"
-VERSION="0.1.1"
-VERSION_ID="0.1.1"
-ID=rk-c
-ID_LIKE=rk-c
-HOME_URL="https://shizuku198411.github.io/Rk-C-Doc"
-GITHUB_URL="https://github.com/shizuku198411/Rk-C"
-"""
+  OsReleaseContent = cstring(
+    "NAME=\"Rk-C\"\n" &
+    "VERSION=\"" & RkcVersion & "\"\n" &
+    "VERSION_ID=\"" & RkcVersionId & "\"\n" &
+    "ID=rk-c\n" &
+    "ID_LIKE=rk-c\n" &
+    "HOME_URL=\"https://shizuku198411.github.io/Rk-C-Doc\"\n" &
+    "GITHUB_URL=\"https://github.com/shizuku198411/Rk-C\"\n"
+  )
 
 type
   AppfsEntry {.packed.} = object

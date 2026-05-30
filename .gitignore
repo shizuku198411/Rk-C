@@ -8,4 +8,5 @@ docs/roadmap
 __pycache__/
 opensbi/
 rkc_doc/
+src/generated/
 .workshop.lock

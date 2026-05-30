@@ -18,6 +18,10 @@ MAP_DIR := map
 NIMCACHE_DIR := $(BUILD_DIR)/nimcache
 USER_NIMCACHE_DIR := $(BUILD_DIR)/user_nimcache
 SHARED_LIB_SRCS := $(shell find $(SRC_DIR)/lib -type f -name '*.nim' | sort)
+VERSION_FILE := VERSION
+GENERATED_DIR := $(SRC_DIR)/generated
+GENERATED_VERSION := $(GENERATED_DIR)/version.nim
+VERSION_GENERATOR := scripts/generate_version.py
 
 KERNEL_NIM := $(SRC_DIR)/kernel.nim
 NIM_SRCS := $(shell find $(SRC_DIR) -type f -name '*.nim' | sort)
@@ -196,17 +200,22 @@ QEMU_DEBUG_ARGS := \
 	-S \
 	-gdb tcp::$(GDB_PORT)
 
-.PHONY: all build build-bins build-test-bins appfs clean disasm run qemu-run qemu-run-built degraded-run qemu-debug test-apps net-host-help
+.PHONY: all build build-bins build-test-bins generate-version appfs clean disasm run qemu-run qemu-run-built degraded-run qemu-debug test-apps net-host-help
 
 all: build
 
-build: $(KERNEL_ELF) appfs
+build: generate-version $(KERNEL_ELF) appfs
 
-build-bins: $(KERNEL_ELF) $(USER_SHELL_RKX) $(USER_APP_RKXS) $(USER_SERVER_RKXS) $(OPTIONAL_APP_RKXS)
+build-bins: generate-version $(KERNEL_ELF) $(USER_SHELL_RKX) $(USER_APP_RKXS) $(USER_SERVER_RKXS) $(OPTIONAL_APP_RKXS)
 
 build-test-bins: build-bins $(TEST_APP_RKXS) $(OPTIONAL_TEST_APP_RKXS)
 
-$(KERNEL_ELF): $(NIM_SRCS) $(ASM_OBJS) $(LINKER_SCRIPT) | $(BIN_DIR) $(MAP_DIR) $(NIMCACHE_DIR)
+generate-version: $(GENERATED_VERSION)
+
+$(GENERATED_VERSION): $(VERSION_FILE) $(VERSION_GENERATOR) README.md | $(GENERATED_DIR)
+	python3 $(VERSION_GENERATOR) --version-file $(VERSION_FILE) --nim-out $(GENERATED_VERSION) --readme README.md
+
+$(KERNEL_ELF): $(NIM_SRCS) $(GENERATED_VERSION) $(ASM_OBJS) $(LINKER_SCRIPT) | $(BIN_DIR) $(MAP_DIR) $(NIMCACHE_DIR)
 	$(NIM) c $(NIMFLAGS) $(foreach obj,$(ASM_OBJS),--passL:"$(obj)") -o:$@ $(KERNEL_NIM)
 
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.S
@@ -257,7 +266,7 @@ endef
 
 $(foreach server,$(USER_SERVER_NAMES),$(eval $(call USER_SERVER_template,$(server))))
 
-$(OBJ_DIR) $(BIN_DIR) $(MAP_DIR) $(NIMCACHE_DIR):
+$(OBJ_DIR) $(BIN_DIR) $(MAP_DIR) $(NIMCACHE_DIR) $(GENERATED_DIR):
 	mkdir -p $@
 
 $(DISK_IMG): | $(BIN_DIR)
@@ -304,4 +313,4 @@ net-host-help:
 	@echo "  make run QEMU_TAP_IF=tap0"
 
 clean:
-	rm -rf $(BUILD_DIR) $(BIN_DIR) $(MAP_DIR)
+	rm -rf $(BUILD_DIR) $(BIN_DIR) $(MAP_DIR) $(GENERATED_DIR)
