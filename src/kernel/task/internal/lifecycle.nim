@@ -8,6 +8,49 @@ proc clearUserState(p: ptr Process) =
   p.user = UserState()
 
 
+## Returns the process table slot index for a process pointer.
+proc processSlotIndex(p: ptr Process): int =
+  if p == nil:
+    return -1
+
+  let base = cast[U64](addr procs[0])
+  let current = cast[U64](p)
+  if current < base:
+    return -1
+
+  let offset = current - base
+  if offset mod U64(sizeof(Process)) != U64(0):
+    return -1
+
+  let idx = int(offset div U64(sizeof(Process)))
+  if idx < 0 or idx >= MaxProcs:
+    return -1
+
+  idx
+
+
+## Returns the wait mask bit for a process table slot.
+proc processSlotBit(idx: int): U64 =
+  if idx < 0 or idx >= MaxProcs:
+    return U64(0)
+
+  U64(1) shl idx
+
+
+## Returns the index of the lowest set bit in a wait mask.
+proc lowestSetWaitIndex(mask: U64): int =
+  if mask == U64(0):
+    return -1
+
+  var shifted = mask
+  var idx = 0
+  while (shifted and U64(1)) == U64(0):
+    shifted = shifted shr 1
+    inc idx
+
+  idx
+
+
 ## Returns the mapped heap page count for a user state.
 proc heapPageCount*(user: UserState): U64 =
   if user.heapEnd <= user.heapStart:
@@ -16,11 +59,76 @@ proc heapPageCount*(user: UserState): U64 =
   alignUp(user.heapEnd - user.heapStart, PageSize) div PageSize
 
 
+## Returns true when a wait kind is driven by timer deadlines.
+proc isTimerDeadlineWait(kind: WaitKind): bool =
+  kind == waitTimer or kind == waitPoll
+
+
+## Returns the bitmask of timer-deadline based waiters.
+proc timerDeadlineMask(): U64 =
+  waitKindMasks[waitTimer] or waitKindMasks[waitPoll]
+
+
+## Recomputes cached timer/poll waiter state from deadline wait masks.
+proc recomputeTimerDeadlineWaiters() =
+  nextTimerWakeTick = U64(0)
+
+  var mask = timerDeadlineMask()
+  while mask != U64(0):
+    let idx = lowestSetWaitIndex(mask)
+    let bit = processSlotBit(idx)
+    mask = mask and not bit
+
+    if idx >= 0:
+      let p = addr procs[idx]
+      if p.state == procSleeping and isTimerDeadlineWait(p.wait.kind):
+        let deadline = p.wait.value
+        if nextTimerWakeTick == U64(0) or deadline < nextTimerWakeTick:
+          nextTimerWakeTick = deadline
+
+
+## Registers a process in the wait-kind cache.
+proc registerWaiter(p: ptr Process) =
+  let idx = processSlotIndex(p)
+  if idx < 0 or p.wait.kind == waitNone:
+    return
+
+  let bit = processSlotBit(idx)
+  waitKindMasks[p.wait.kind] = waitKindMasks[p.wait.kind] or bit
+
+  if isTimerDeadlineWait(p.wait.kind):
+    if nextTimerWakeTick == U64(0) or p.wait.value < nextTimerWakeTick:
+      nextTimerWakeTick = p.wait.value
+
+
+## Unregisters a process from the wait-kind cache.
+proc unregisterWaiter(p: ptr Process, updateTimerDeadline: bool) =
+  let idx = processSlotIndex(p)
+  if idx < 0 or p.wait.kind == waitNone:
+    return
+
+  let kind = p.wait.kind
+  waitKindMasks[kind] = waitKindMasks[kind] and not processSlotBit(idx)
+
+  if updateTimerDeadline and isTimerDeadlineWait(kind) and p.wait.value <= nextTimerWakeTick:
+    recomputeTimerDeadlineWaiters()
+
+
+## Clears wait state without forcing a timer deadline recompute.
+proc clearWaitNoTimerRecompute(p: ptr Process) =
+  if p == nil:
+    return
+
+  unregisterWaiter(p, false)
+  p.wait = WaitTarget()
+
+
 ## Clears wait.
 proc clearWait*(p: ptr Process) =
   if p == nil:
     return
 
+  unregisterWaiter(p, true)
   p.wait = WaitTarget()
 
 
@@ -32,21 +140,25 @@ proc sleepCurrentFor(kind: WaitKind, value: U64) =
   currentProc.wait.kind = kind
   currentProc.wait.value = value
   currentProc.state = procSleeping
+  registerWaiter(currentProc)
   schedule()
   deliverCurrentSignals()
 
 
 ## Wakes processes waiting for waiters.
 proc wakeWaiters(kind: WaitKind, value: U64, wakeAll: bool) =
-  var i = 0
-  while i < MaxProcs:
-    if procs[i].state == procSleeping and procs[i].wait.kind == kind and
-        procs[i].wait.value == value:
-      clearWait(addr procs[i])
-      procs[i].state = procRunnable
+  var mask = waitKindMasks[kind]
+  while mask != U64(0):
+    let idx = lowestSetWaitIndex(mask)
+    let bit = processSlotBit(idx)
+    mask = mask and not bit
+
+    if idx >= 0 and procs[idx].state == procSleeping and procs[idx].wait.kind == kind and
+        procs[idx].wait.value == value:
+      clearWait(addr procs[idx])
+      procs[idx].state = procRunnable
       if not wakeAll:
         return
-    inc i
 
 
 ## Finds unused proc.
@@ -180,6 +292,12 @@ proc processInit*() =
   needResched = false
   idleProc = nil
   kernelPageTable = nil
+  var waitKindIndex = int(low(WaitKind))
+  while waitKindIndex <= int(high(WaitKind)):
+    waitKindMasks[WaitKind(waitKindIndex)] = U64(0)
+    inc waitKindIndex
+  nextTimerWakeTick = U64(0)
+
   var pipeIdx = U32(0)
   while pipeIdx < SysPipeMax:
     pipes[pipeIdx] = PipeState()
@@ -385,5 +503,3 @@ proc hasRunnableProcess*(): bool =
       return true
     inc i
   false
-
-
