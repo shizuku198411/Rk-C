@@ -78,6 +78,8 @@ const
   SysIpcOpUserAuthResponse* = U32(41)
   SysIpcOpUserSetPasswordRequest* = U32(42)
   SysIpcOpUserSetPasswordResponse* = U32(43)
+  SysIpcOpProcFsSizeRequest* = U32(44)
+  SysIpcOpProcFsSizeResponse* = U32(45)
 
   SysFdMax* = U32(8)
   SysFdPathMax* = U32(128)

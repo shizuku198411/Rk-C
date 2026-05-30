@@ -1,6 +1,7 @@
 import ../../lib/core/io
 import ../../lib/core/syscall
 import ../../lib/ipc/service_client
+import ../../../lib/mem
 import ../lib/service_ready
 
 
@@ -81,6 +82,8 @@ proc requestProcFs(op: U32, path: cstring, capacity: U64, offset: U64 = 0): I32 
         return I32(procResp.arg0)
       if op == SysIpcOpProcFsLsRequest and procResp.op == SysIpcOpProcFsLsResponse:
         return I32(procResp.arg0)
+      if op == SysIpcOpProcFsSizeRequest and procResp.op == SysIpcOpProcFsSizeResponse:
+        return I32(procResp.arg0)
 
 
 proc writeDirEntry(entry: ptr DirEntry, name: cstring, typ: U32) =
@@ -134,11 +137,8 @@ proc handleProcLs() =
       if total * entrySize + copySize > SysFsDataMax:
         copySize = SysFsDataMax - total * entrySize
 
-      var i = U64(0)
       let dstBase = total * entrySize
-      while i < copySize:
-        resp.data[dstBase + i] = U8(procResp.data[i])
-        inc i
+      discard copyMem(addr resp.data[dstBase], addr procResp.data[0], copySize)
 
       total += U64(count)
       if U64(count) < chunkEntries:
@@ -206,27 +206,13 @@ proc handleRmdir() =
   resp.result = sysRawRmdir(reqPath())
 
 
+## Handles a chunked file read from a byte offset.
+proc handleReadRange()
+
+
 proc handleReadFile() =
   if isProcPath(reqPath()):
-    let n = requestProcFs(SysIpcOpProcFsReadRequest, reqPath(), req.capacity)
-    if n < 0:
-      resp.result = -1
-      return
-
-    var copySize = U64(n)
-    if copySize > req.capacity:
-      copySize = req.capacity
-    if copySize > SysFsDataMax:
-      copySize = SysFsDataMax
-
-    resp.result = I32(copySize)
-    resp.size = copySize
-
-    var i = U64(0)
-    while i < copySize:
-      resp.data[i] = U8(procResp.data[i])
-      inc i
-
+    handleReadRange()
     return
 
   resp.result = sysRawReadFile(reqPath(), addr resp.data[0], req.capacity)
@@ -236,7 +222,7 @@ proc handleReadFile() =
 
 proc handleFileSize() =
   if isProcPath(reqPath()):
-    resp.result = requestProcFs(SysIpcOpProcFsReadRequest, reqPath(), SysFsDataMax)
+    resp.result = requestProcFs(SysIpcOpProcFsSizeRequest, reqPath(), U64(0))
     return
 
   resp.result = sysRawFileSize(reqPath())
@@ -244,32 +230,48 @@ proc handleFileSize() =
 
 proc handleReadRange() =
   if isProcPath(reqPath()):
-    var requestCapacity = req.size + req.capacity
-    if requestCapacity > SysFsDataMax:
-      requestCapacity = SysFsDataMax
+    var remaining = req.capacity
+    if remaining > SysFsDataMax:
+      remaining = SysFsDataMax
 
-    let n = requestProcFs(SysIpcOpProcFsReadRequest, reqPath(), requestCapacity)
-    if n < 0:
-      resp.result = -1
-      return
-    if req.size >= U64(n):
-      resp.result = 0
-      resp.size = 0
-      return
+    var
+      copied = U64(0)
+      totalSize = U64(0)
+      reachedEof = false
 
-    var copySize = U64(n) - req.size
-    if copySize > req.capacity:
-      copySize = req.capacity
-    if copySize > SysFsDataMax:
-      copySize = SysFsDataMax
+    while copied < remaining and not reachedEof:
+      var chunkCapacity = remaining - copied
+      if chunkCapacity > U64(SysIpcMessageMax):
+        chunkCapacity = U64(SysIpcMessageMax)
 
-    resp.result = I32(copySize)
-    resp.size = copySize
+      let n = requestProcFs(SysIpcOpProcFsReadRequest, reqPath(), chunkCapacity, req.size + copied)
+      if n < 0:
+        resp.result = -1
+        resp.size = 0
+        return
 
-    var i = U64(0)
-    while i < copySize:
-      resp.data[i] = U8(procResp.data[req.size + i])
-      inc i
+      totalSize = U64(n)
+      if req.size + copied >= totalSize:
+        reachedEof = true
+      else:
+        var copySize = U64(procResp.len)
+        let available = totalSize - (req.size + copied)
+        if copySize > available:
+          copySize = available
+        if copySize > chunkCapacity:
+          copySize = chunkCapacity
+
+        if copySize == U64(0):
+          reachedEof = true
+        else:
+          discard copyMem(addr resp.data[copied], addr procResp.data[0], copySize)
+          copied += copySize
+
+          if copySize < chunkCapacity:
+            reachedEof = true
+
+    resp.result = I32(copied)
+    resp.size = copied
 
     return
 
@@ -282,10 +284,10 @@ proc handleReadRange() =
   if resp.result > 0:
     resp.size = U64(resp.result)
 
-    var i = U64(0)
-    while i < resp.size and i < SysFsDataMax:
-      resp.data[i] = rawReq.data[i]
-      inc i
+    var copySize = resp.size
+    if copySize > SysFsDataMax:
+      copySize = SysFsDataMax
+    discard copyMem(addr resp.data[0], addr rawReq.data[0], copySize)
 
 
 proc handleWriteFile() =
@@ -303,10 +305,10 @@ proc handleWriteRange() =
   rawReq.capacity = req.capacity
   copyPathToFsRequest(rawReq, reqPath())
 
-  var i = U64(0)
-  while i < req.size and i < SysFsDataMax:
-    rawReq.data[i] = req.data[i]
-    inc i
+  var copySize = req.size
+  if copySize > SysFsDataMax:
+    copySize = SysFsDataMax
+  discard copyMem(addr rawReq.data[0], addr req.data[0], copySize)
 
   resp.result = sysRawWriteRange(addr rawReq)
 

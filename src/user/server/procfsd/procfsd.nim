@@ -8,12 +8,14 @@ import ../../lib/core/strutils
 import ../../lib/core/passwd
 import ../../lib/core/group
 import ../../lib/core/userdb
+import ../../../lib/mem
 import ../../../lib/syscall_caps
 import ../lib/service_ready
 
 
 const
-  ProcFsBufSize = U32(SysIpcMessageMax)
+  ProcFsChunkMax = U32(SysIpcMessageMax)
+  ProcFsBufSize = U32(SysKmsgMax)
   ProcFsEntryCount = 8
   ProcFsPageSize = U64(4096)
   ProcFsTickMillis = U64(20)
@@ -41,6 +43,10 @@ var
   cpuInfo: SysCpuInfo
   fsInfos: seq[SysFsInfoEntry] = @[]
   fdInfos: seq[SysFdInfo] = @[]
+  measuringOutput = false
+  renderOffset = U32(0)
+  renderCapacity = U32(SysIpcMessageMax)
+  renderLen = U32(0)
 
 
 ## Allocates stable ORC-owned workspaces used while generating procfs replies.
@@ -127,24 +133,54 @@ proc renderRead(path: cstring): U32 =
   U32(0)
 
 
-## Copies the request-local managed text builder into the fixed IPC response ABI.
-proc copyOutToResponse(size: U32) =
-  response.len = size
+## Measures one procfs regular file without producing IPC payload bytes.
+proc measureRead(path: cstring): U32 =
+  measuringOutput = true
+  renderOffset = U32(0)
+  renderCapacity = U32(0)
+  renderLen = U32(0)
 
-  var i = U32(0)
-  while i < size and i < SysIpcMessageMax:
-    response.data[i] = renderedText[int(i)]
-    inc i
+  let size = renderRead(path)
+
+  measuringOutput = false
+  clearOut()
+  size
+
+
+## Configures fixed-size chunk output for the current procfs read request.
+proc prepareChunkOutput() =
+  measuringOutput = false
+  renderOffset =
+    if packet.arg1 > U64(high(U32)):
+      high(U32)
+    else:
+      U32(packet.arg1)
+  renderCapacity =
+    if packet.arg0 > U64(ProcFsChunkMax):
+      ProcFsChunkMax
+    else:
+      U32(packet.arg0)
+  renderLen = U32(0)
+
+
+## Copies the rendered procfs chunk into the fixed IPC response buffer.
+proc copyRenderedChunkToResponse() =
+  response.len = renderLen
+  if renderLen == U32(0):
+    return
+
+  discard copyMem(addr response.data[0], cast[pointer](renderedText.cstring), U64(renderLen))
 
 
 ## Dispatches one procfs request and replies with fixed-format IPC payload data.
 proc handlePacket() =
   response = SysIpcPacket()
-  response.op =
-    if packet.op == SysIpcOpProcFsLsRequest:
-      SysIpcOpProcFsLsResponse
-    else:
-      SysIpcOpProcFsReadResponse
+  if packet.op == SysIpcOpProcFsLsRequest:
+    response.op = SysIpcOpProcFsLsResponse
+  elif packet.op == SysIpcOpProcFsSizeRequest:
+    response.op = SysIpcOpProcFsSizeResponse
+  else:
+    response.op = SysIpcOpProcFsReadResponse
   response.arg0 = U64(-1'i64)
 
   var size = U32(0)
@@ -153,13 +189,17 @@ proc handlePacket() =
     if count >= 0:
       response.arg0 = U64(count)
   
+  elif packet.op == SysIpcOpProcFsSizeRequest:
+    size = measureRead(reqPath())
+    response.arg0 = U64(size)
+
   elif packet.op == SysIpcOpProcFsReadRequest:
+    prepareChunkOutput()
     size = renderRead(reqPath())
-    if size > U32(0):
-      response.arg0 = U64(size)
+    response.arg0 = U64(size)
   
   if response.arg0 != U64(-1'i64) and packet.op == SysIpcOpProcFsReadRequest:
-    copyOutToResponse(size)
+    copyRenderedChunkToResponse()
   
   discard sysIpcSendPacket(packet.senderPid, addr response)
   renderedText = ""
