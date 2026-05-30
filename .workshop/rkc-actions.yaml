@@ -1,0 +1,19 @@
+name: rkc-actions
+base: ubuntu@24.04
+
+sdks:
+  - name: docker-ce
+    channel: latest/stable
+  
+  - name: project-act-base
+
+actions:
+  list: |
+    set -eux
+    cd /project
+    act -l
+
+  check-workflow: |
+    set -eux
+    cd /project
+    act pull_request -j test-apps
