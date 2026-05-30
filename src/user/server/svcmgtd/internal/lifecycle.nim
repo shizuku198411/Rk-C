@@ -15,22 +15,37 @@ proc processState(pid: I32, state: var U32): bool =
   false
 
 
+## Refreshes the kernel service registry snapshot once for one monitor pass.
+proc refreshServiceSnapshot(): bool =
+  kernelServiceCount = sysServiceList(addr kernelServices[0], U64(8))
+  if kernelServiceCount < 0:
+    kernelServiceCount = -1
+    return false
+
+  true
+
+
+## Returns whether the cached kernel registry still marks this service alive.
+proc serviceAliveInSnapshot(entry: ptr ServiceEntry): bool =
+  if entry == nil or entry.pid <= 0 or kernelServiceCount < 0:
+    return false
+
+  var i = I32(0)
+  while i < kernelServiceCount:
+    if kernelServices[i].kind == entry.kind and kernelServices[i].pid == entry.pid:
+      return kernelServices[i].available != U32(0)
+    inc i
+
+  false
+
+
+## Returns whether the service process is alive using the cheapest source.
 proc serviceAlive(entry: ptr ServiceEntry): bool =
-  if entry.pid <= 0:
+  if entry == nil or entry.pid <= 0:
     return false
 
   if entry.state == srvRunning:
-    let count = sysServiceList(addr kernelServices[0], U64(8))
-    if count < 0:
-      return false
-
-    var i = I32(0)
-    while i < count:
-      if kernelServices[i].kind == entry.kind and kernelServices[i].pid == entry.pid:
-        return kernelServices[i].available != U32(0)
-      inc i
-
-    return false
+    return serviceAliveInSnapshot(entry)
 
   var state = U32(0)
   if not processState(entry.pid, state):
@@ -184,10 +199,10 @@ proc handleServiceProcessExit(entry: ptr ServiceEntry, reason: cstring) =
 proc handleExitedServiceSignals() =
   while sysSignalPoll(addr pendingSignal) == 0 and pendingSignal != SysSignalNone:
     if pendingSignal == SysSignalChildExited:
+      discard refreshServiceSnapshot()
+
       var i = 0
       while i < len(services):
         if services[i].pid > 0 and not serviceAlive(addr services[i]):
           handleServiceProcessExit(addr services[i], cstring("process_exit"))
         inc i
-
-
