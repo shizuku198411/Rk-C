@@ -17,7 +17,7 @@ proc processState(pid: I32, state: var U32): bool =
 
 ## Refreshes the kernel service registry snapshot once for one monitor pass.
 proc refreshServiceSnapshot(): bool =
-  kernelServiceCount = sysServiceList(addr kernelServices[0], U64(8))
+  kernelServiceCount = sysServiceList(addr kernelServices[0], U64(SysServiceRegistryCount))
   if kernelServiceCount < 0:
     kernelServiceCount = -1
     return false

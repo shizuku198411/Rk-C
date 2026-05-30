@@ -13,7 +13,7 @@ proc appendChar(pos: var U32, ch: char) =
       inc pos
     return
 
-  if pos >= renderOffset and renderLen < renderCapacity and renderLen < ProcFsChunkMax:
+  if pos >= renderOffset and renderLen < renderCapacity:
     renderedText.add(ch)
     inc renderLen
 

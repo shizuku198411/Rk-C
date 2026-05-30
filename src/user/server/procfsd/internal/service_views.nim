@@ -11,7 +11,7 @@ proc renderServices(): U32 =
   clearOut()
   var pos = U32(0)
 
-  let count = sysServiceList(addr services[0], U64(8))
+  let count = sysServiceList(addr services[0], U64(SysServiceRegistryCount))
   if count < 0:
     appendStr(pos, cstring("error\n"))
     return pos
@@ -120,4 +120,3 @@ proc renderFsinfo(): U32 =
     inc i
 
   pos
-

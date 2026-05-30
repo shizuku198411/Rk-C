@@ -1,8 +1,9 @@
 ## Provides userland service lookup helpers.
+import ../../../lib/service_catalog
 import ../core/syscall
 
 const
-  ServiceClientCap = 8
+  ServiceClientCap = SysServiceRegistryCount
 
 var serviceInfos: array[ServiceClientCap, SysServiceInfo]
 

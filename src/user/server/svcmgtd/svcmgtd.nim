@@ -38,7 +38,7 @@ type
 var
   services: array[SysManagedServiceCount, ServiceEntry]
   processes: array[ProcessCap, SysProcessInfo]
-  kernelServices: array[8, SysServiceInfo]
+  kernelServices: array[SysServiceRegistryCount, SysServiceInfo]
   kernelServiceCount: I32 = -1
   controlPacket: SysIpcPacket
   replyPacket: SysIpcPacket

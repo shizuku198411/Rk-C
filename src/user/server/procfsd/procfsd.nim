@@ -9,6 +9,7 @@ import ../../lib/core/passwd
 import ../../lib/core/group
 import ../../lib/core/userdb
 import ../../../lib/mem
+import ../../../lib/service_catalog
 import ../../../lib/syscall_caps
 import ../lib/service_ready
 
@@ -36,6 +37,14 @@ var
   packet: SysIpcPacket
   response: SysIpcPacket
   renderedText: string = ""
+  readCacheText: string = ""
+  readCachePath: array[SysIpcMessageMax, char]
+  readCacheValid = false
+  readCacheSize = U32(0)
+  sizeCachePath: array[SysIpcMessageMax, char]
+  sizeCacheValid = false
+  sizeCacheSize = U32(0)
+  sizeCacheTick = U64(0)
   procInfos: seq[SysProcessInfo] = @[]
   services: seq[SysServiceInfo] = @[]
   traps: SysTrapCount
@@ -52,12 +61,12 @@ var
 ## Allocates stable ORC-owned workspaces used while generating procfs replies.
 proc initManagedStorage(): bool =
   procInfos = newSeq[SysProcessInfo](int(SysProcessMaxSlots))
-  services = newSeq[SysServiceInfo](8)
+  services = newSeq[SysServiceInfo](SysServiceRegistryCount)
   fsInfos = newSeq[SysFsInfoEntry](int(SysFsInfoMaxEntries))
   fdInfos = newSeq[SysFdInfo](int(SysFdMax))
 
   procInfos.len == int(SysProcessMaxSlots) and
-    services.len == 8 and
+    services.len == SysServiceRegistryCount and
     fsInfos.len == int(SysFsInfoMaxEntries) and
     fdInfos.len == int(SysFdMax)
 
@@ -69,6 +78,28 @@ include ./internal/formatting
 ## Returns the pathname contained in the current procfs IPC request packet.
 proc reqPath(): cstring =
   cast[cstring](addr packet.data[0])
+
+
+## Copies a procfs request path into a cache key buffer.
+proc copyCachePath(dst: var array[SysIpcMessageMax, char], path: cstring) =
+  var i = U32(0)
+  while i + U32(1) < U32(SysIpcMessageMax) and path[i] != '\0':
+    dst[i] = path[i]
+    inc i
+
+  dst[i] = '\0'
+
+
+## Returns whether a cache key buffer matches a procfs request path.
+proc cachePathMatches(src: var array[SysIpcMessageMax, char], path: cstring): bool =
+  cstringEq(cast[cstring](addr src[0]), path)
+
+
+## Drops the cached chunk-read rendering state.
+proc invalidateReadCache() =
+  readCacheText = ""
+  readCacheValid = false
+  readCacheSize = U32(0)
 
 
 ## Includes renders procfs host and process-list information files.
@@ -135,6 +166,13 @@ proc renderRead(path: cstring): U32 =
 
 ## Measures one procfs regular file without producing IPC payload bytes.
 proc measureRead(path: cstring): U32 =
+  if readCacheValid and cachePathMatches(readCachePath, path):
+    return readCacheSize
+
+  let now = sysTicks()
+  if sizeCacheValid and sizeCacheTick == now and cachePathMatches(sizeCachePath, path):
+    return sizeCacheSize
+
   measuringOutput = true
   renderOffset = U32(0)
   renderCapacity = U32(0)
@@ -144,32 +182,69 @@ proc measureRead(path: cstring): U32 =
 
   measuringOutput = false
   clearOut()
+  sizeCacheSize = size
+  sizeCacheTick = now
+  copyCachePath(sizeCachePath, path)
+  sizeCacheValid = true
   size
 
 
-## Configures fixed-size chunk output for the current procfs read request.
-proc prepareChunkOutput() =
+## Renders one procfs file into the read cache for chunked transfer.
+proc renderReadCache(path: cstring): bool =
+  if readCacheValid and cachePathMatches(readCachePath, path):
+    return true
+
+  invalidateReadCache()
+
   measuringOutput = false
-  renderOffset =
-    if packet.arg1 > U64(high(U32)):
-      high(U32)
-    else:
-      U32(packet.arg1)
-  renderCapacity =
-    if packet.arg0 > U64(ProcFsChunkMax):
-      ProcFsChunkMax
-    else:
-      U32(packet.arg0)
+  renderOffset = U32(0)
+  renderCapacity = ProcFsBufSize - U32(1)
   renderLen = U32(0)
 
+  let size = renderRead(path)
+  readCacheText = renderedText
+  readCacheSize = size
+  copyCachePath(readCachePath, path)
+  readCacheValid = true
 
-## Copies the rendered procfs chunk into the fixed IPC response buffer.
-proc copyRenderedChunkToResponse() =
-  response.len = renderLen
-  if renderLen == U32(0):
+  sizeCacheSize = size
+  sizeCacheTick = sysTicks()
+  copyCachePath(sizeCachePath, path)
+  sizeCacheValid = true
+
+  renderedText = ""
+  renderLen = U32(0)
+  true
+
+
+## Copies a requested read-cache range into the fixed IPC response buffer.
+proc copyReadCacheRangeToResponse(offset, capacity: U64) =
+  response.arg0 = U64(readCacheSize)
+  response.len = U32(0)
+
+  if offset >= U64(readCacheSize):
+    invalidateReadCache()
     return
 
-  discard copyMem(addr response.data[0], cast[pointer](renderedText.cstring), U64(renderLen))
+  var copySize = U64(readCacheSize) - offset
+  if copySize > capacity:
+    copySize = capacity
+  if copySize > U64(ProcFsChunkMax):
+    copySize = U64(ProcFsChunkMax)
+
+  let cachedLen = U64(readCacheText.len)
+  if offset >= cachedLen:
+    invalidateReadCache()
+    return
+  if copySize > cachedLen - offset:
+    copySize = cachedLen - offset
+
+  if copySize > U64(0):
+    discard copyMem(addr response.data[0], addr readCacheText[int(offset)], copySize)
+    response.len = U32(copySize)
+
+  if offset + copySize >= U64(readCacheSize):
+    invalidateReadCache()
 
 
 ## Dispatches one procfs request and replies with fixed-format IPC payload data.
@@ -194,12 +269,8 @@ proc handlePacket() =
     response.arg0 = U64(size)
 
   elif packet.op == SysIpcOpProcFsReadRequest:
-    prepareChunkOutput()
-    size = renderRead(reqPath())
-    response.arg0 = U64(size)
-  
-  if response.arg0 != U64(-1'i64) and packet.op == SysIpcOpProcFsReadRequest:
-    copyRenderedChunkToResponse()
+    if renderReadCache(reqPath()):
+      copyReadCacheRangeToResponse(packet.arg1, packet.arg0)
   
   discard sysIpcSendPacket(packet.senderPid, addr response)
   renderedText = ""
