@@ -49,10 +49,11 @@ jobs:
         uses: canonical/launch-workshop@v0
         with:
           token: ${{ secrets.WORKSHOP_TOKEN }}
+          workshop: rkc-dev
 
       - name: Test on Workshop
         if: ${{ !env.ACT }}
-        run: workshop run rkcdev -- test
+        run: workshop run rkc-dev -- test
 
       - name: Skip Workshop test in local act
         if: ${{ env.ACT }}
@@ -61,7 +62,7 @@ jobs:
           set -eux
           echo "Skipping Workshop-based QEMU smoke test under local act."
           echo "This local act run validates the workflow wiring only."
-          echo "Run the actual test with: workshop run rkcdev -- test"
+          echo "Run the actual test with: workshop run rkc-dev -- test"
 
       - name: Upload QEMU log
         if: ${{ !env.ACT }}
