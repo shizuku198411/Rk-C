@@ -144,8 +144,8 @@ var
   kernelPageTable: PageTable
   pipes: array[SysPipeMax, PipeState]
 
-  # Cached timer/poll sleep state
-  timerWaiterCount: U64
+  # Cached wait state
+  waitKindMasks: array[WaitKind, U64]
   nextTimerWakeTick: U64
 
 

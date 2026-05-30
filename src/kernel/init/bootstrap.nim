@@ -4,6 +4,7 @@ import ../../lib/calc
 import ../../lib/mem
 import ../../lib/types
 import ../../lib/user_ids
+import ../../generated/version
 import ../dev/console
 import ../dev/timer
 import ../fs/fs
@@ -77,6 +78,19 @@ proc enableSv39(memInfo: MemoryInfo) =
 
 
 ## Implements the kernel banner kernel helper.
+proc printBannerVersionLine() =
+  printConsoleOnly("║   version: ")
+  printConsoleOnly(cstring(RkcVersion))
+
+  var spaces = 40 - 12 - RkcVersion.len
+  while spaces > 0:
+    putChar(' ')
+    dec spaces
+
+  printlnConsoleOnly("║")
+
+
+## Implements the kernel banner kernel helper.
 proc kernelBanner() =
   putChar('\n')
   printlnConsoleOnly("╔════════════════════════════════════════╗")
@@ -88,7 +102,7 @@ proc kernelBanner() =
   printlnConsoleOnly("║     ╚═╝  ╚═╝ ╚═╝  ╚═╝       ╚═════╝    ║")
   printlnConsoleOnly("╠════════════════════════════════════════╣")
   printlnConsoleOnly("║   microkernel-style system on RISC-V   ║")
-  printlnConsoleOnly("║   version: 0.1.1                       ║")
+  printBannerVersionLine()
   printlnConsoleOnly("╚════════════════════════════════════════╝\n")
 
 

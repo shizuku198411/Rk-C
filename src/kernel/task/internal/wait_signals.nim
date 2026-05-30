@@ -1,39 +1,10 @@
 ## Coordinates sleeping, waking, exit delivery, signals, and reschedule requests.
 
-## Returns true when a wait kind is driven by timer deadlines.
-proc isTimerDeadlineWait(kind: WaitKind): bool =
-  kind == waitTimer or kind == waitPoll
-
-
-## Registers a timer/poll waiter deadline in the cached timer wake state.
-proc registerTimerDeadlineWait(deadlineTick: U64) =
-  inc timerWaiterCount
-
-  if timerWaiterCount == U64(1) or deadlineTick < nextTimerWakeTick:
-    nextTimerWakeTick = deadlineTick
-
-
-## Recomputes cached timer/poll waiter state from the process slot.
-proc recomputeTimerDeadlineWaiters() =
-  timerWaiterCount = U64(0)
-  nextTimerWakeTick = U64(0)
-
-  var i = 0
-  while i < MaxProcs:
-    if procs[i].state == procSleeping and isTimerDeadlineWait(procs[i].wait.kind):
-      let deadline = procs[i].wait.value
-
-      if timerWaiterCount == U64(0) or deadline < nextTimerWakeTick:
-        nextTimerWakeTick = deadline
-      inc timerWaiterCount
-    inc i
-
-
 ## Marks a timer/poll waiter as woken.
 proc wakeTimerDeadlineProcess(p: ptr Process) =
   if p == nil:
     return
-  clearWait(p)
+  clearWaitNoTimerRecompute(p)
   p.state = procRunnable
 
 
@@ -84,7 +55,6 @@ proc sleepCurrentForPid*(pid: int32) =
 
 ## Puts the current process to sleep for current until tick.
 proc sleepCurrentUntilTick*(tick: U64) =
-  registerTimerDeadlineWait(tick)
   sleepCurrentFor(waitTimer, tick)
 
 
@@ -100,18 +70,20 @@ proc sleepCurrentForPipeWrite*(pipeId: I32) =
 
 ## Puts the current process to sleep for current for poll.
 proc sleepCurrentForPoll*(deadlineTick: U64) =
-  registerTimerDeadlineWait(deadlineTick)
   sleepCurrentFor(waitPoll, deadlineTick)
 
 
 ## Wakes processes waiting for poll waiters.
 proc wakePollWaiters*() =
-  var i = 0
-  while i < MaxProcs:
-    if procs[i].state == procSleeping and procs[i].wait.kind == waitPoll:
-      clearWait(addr procs[i])
-      procs[i].state = procRunnable
-    inc i
+  var mask = waitKindMasks[waitPoll]
+  while mask != U64(0):
+    let idx = lowestSetWaitIndex(mask)
+    let bit = processSlotBit(idx)
+    mask = mask and not bit
+
+    if idx >= 0 and procs[idx].state == procSleeping and procs[idx].wait.kind == waitPoll:
+      clearWait(addr procs[idx])
+      procs[idx].state = procRunnable
 
 
 ## Wakes processes waiting for input waiters.
@@ -122,14 +94,18 @@ proc wakeInputWaiters*() =
 
 ## Wakes processes waiting for ipc waiter.
 proc wakeIpcWaiter*(pid: int32) =
-  var i = 0
-  while i < MaxProcs:
-    if procs[i].state == procSleeping and procs[i].pid == pid and procs[i].wait.kind == waitIpc:
-      clearWait(addr procs[i])
-      procs[i].state = procRunnable
+  var mask = waitKindMasks[waitIpc]
+  while mask != U64(0):
+    let idx = lowestSetWaitIndex(mask)
+    let bit = processSlotBit(idx)
+    mask = mask and not bit
+
+    if idx >= 0 and procs[idx].state == procSleeping and procs[idx].pid == pid and
+        procs[idx].wait.kind == waitIpc:
+      clearWait(addr procs[idx])
+      procs[idx].state = procRunnable
       wakePollWaiters()
       return
-    inc i
 
   wakePollWaiters()
 
@@ -155,24 +131,25 @@ proc wakeTimerWaiters*(tick: U64) =
   # Fast path:
   # Most ticks do not have an expired sleep/poll deadline.
   # Avoid scanning the whole process slot until earliest known deadline is reached.
-  if timerWaiterCount == U64(0):
+  if timerDeadlineMask() == U64(0):
     return
   if tick < nextTimerWakeTick:
     return
   # Slow path:
   # At least one timer/poll deadline may have expired.
-  # Scan the process slot, wake expired sleepers,
+  # Scan only timer/poll waiters, wake expired sleepers,
   # then rebuild the cached earliest deadline.
-  var i = 0
-  while i < MaxProcs:
-    if procs[i].state == procSleeping and
-        #(procs[i].wait.kind == waitTimer or procs[i].wait.kind == waitPoll) and
-        isTimerDeadlineWait(procs[i].wait.kind) and
-        procs[i].wait.value <= tick:
-      #clearWait(addr procs[i])
-      #procs[i].state = procRunnable
-      wakeTimerDeadlineProcess(addr procs[i])
-    inc i
+  var mask = timerDeadlineMask()
+  while mask != U64(0):
+    let idx = lowestSetWaitIndex(mask)
+    let bit = processSlotBit(idx)
+    mask = mask and not bit
+
+    if idx >= 0 and procs[idx].state == procSleeping and
+        isTimerDeadlineWait(procs[idx].wait.kind) and
+        procs[idx].wait.value <= tick:
+      wakeTimerDeadlineProcess(addr procs[idx])
+
   recomputeTimerDeadlineWaiters()
 
 
@@ -329,5 +306,3 @@ proc killCurrentUserProcess*(status: U64) =
   if currentProc != nil and currentProc.user.active:
     markProcessZombie(currentProc, status)
     schedule()
-
-

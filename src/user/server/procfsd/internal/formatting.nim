@@ -3,12 +3,21 @@
 ## Releases prior rendered text before constructing the current virtual file.
 proc clearOut() =
   renderedText = ""
+  renderLen = U32(0)
 
 
 ## Appends one character to the capped ORC-managed response builder.
 proc appendChar(pos: var U32, ch: char) =
-  if pos + U32(1) < ProcFsBufSize:
+  if measuringOutput:
+    if pos < high(U32):
+      inc pos
+    return
+
+  if pos >= renderOffset and renderLen < renderCapacity:
     renderedText.add(ch)
+    inc renderLen
+
+  if pos < high(U32):
     inc pos
 
 
@@ -252,4 +261,3 @@ proc writePidDirEntry(entry: ptr DirEntry, pid: I32) =
     inc pos
 
   entry.name[pos] = '\0'
-

@@ -13,6 +13,7 @@ type
 
 const
   SysManagedServiceCount* = 6
+  SysServiceRegistryCount* = SysManagedServiceCount + 1
 
 
 let managedServices*: array[SysManagedServiceCount, SysServiceSpec] = [
