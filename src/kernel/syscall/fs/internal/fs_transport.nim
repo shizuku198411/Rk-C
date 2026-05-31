@@ -10,13 +10,78 @@ proc findPending(id: U64): ptr PendingFsRequest =
   findIpcPending(pending, id)
 
 
+## Returns whether a fixed-size C string contains a terminator.
+proc fixedCStringHasNul(buf: ptr UncheckedArray[char], capacity: U64): bool =
+  if buf == nil or capacity == U64(0):
+    return false
+
+  var i = U64(0)
+  while i < capacity:
+    if buf[i] == '\0':
+      return true
+    inc i
+
+  false
+
+
+## Returns whether a filesystem request shape is valid for its operation.
+proc validFsRequestShape(op: U32, path: cstring, data: pointer, size, capacity: U64): bool =
+  if path == nil:
+    return false
+
+  case op
+  of SysFsOpLs:
+    capacity <= SysFsDataMax and capacity mod U64(sizeof(FsDirEntry)) == U64(0)
+  of SysFsOpMkdir, SysFsOpUnlink, SysFsOpRmdir, SysFsOpFileSize:
+    data == nil and size == U64(0) and capacity == U64(0)
+  of SysFsOpReadFile:
+    data == nil and size == U64(0) and capacity <= SysFsDataMax
+  of SysFsOpReadRange:
+    data == nil and capacity <= SysFsDataMax
+  of SysFsOpWriteFile:
+    data != nil and size <= SysFsDataMax and (capacity and U64(not SysFsWriteKnownFlags)) == U64(0)
+  of SysFsOpWriteRange:
+    data != nil and size <= SysFsDataMax
+  of SysFsOpRename:
+    data != nil and size > U64(0) and size <= SysFsPathMax and capacity == U64(0)
+  of SysFsOpChmod:
+    data == nil and capacity == U64(0)
+  of SysFsOpChown:
+    data == nil
+  else:
+    false
+
+
+## Returns whether a filesystem response is bounded by its original request.
+proc validFsResponseShape(req: ptr SysFsRequest, resp: ptr SysFsResponse): bool =
+  if req == nil or resp == nil:
+    return false
+  if resp.size > SysFsDataMax:
+    return false
+  if resp.result < 0:
+    return true
+
+  let resultValue = U64(resp.result)
+  case req.op
+  of SysFsOpLs:
+    let maxEntries = req.capacity div U64(sizeof(FsDirEntry))
+    resultValue <= maxEntries and resultValue * U64(sizeof(FsDirEntry)) <= SysFsDataMax
+  of SysFsOpReadFile, SysFsOpReadRange:
+    resultValue <= req.capacity and resultValue <= SysFsDataMax
+  of SysFsOpFileSize:
+    true
+  of SysFsOpMkdir, SysFsOpUnlink, SysFsOpRmdir, SysFsOpWriteFile,
+      SysFsOpWriteRange, SysFsOpRename, SysFsOpChmod, SysFsOpChown:
+    resultValue <= U64(high(I32))
+  else:
+    false
+
+
 ## Queues fs request.
 proc queueFsRequest(op: U32, path: cstring, data: pointer, size, capacity: U64): ptr PendingFsRequest =
   if not fsServiceAvailable() or currentIsFsService():
     return nil
-  if op != SysFsOpWriteRange and capacity > SysFsDataMax:
-    return nil
-  if data != nil and size > SysFsDataMax:
+  if not validFsRequestShape(op, path, data, size, capacity):
     return nil
 
   let p = allocPending()
@@ -42,6 +107,8 @@ proc queueFsRequest(op: U32, path: cstring, data: pointer, size, capacity: U64):
 ## Waits for fs response.
 proc waitFsResponse(p: ptr PendingFsRequest): ptr SysFsResponse =
   if not waitIpcReply(addr p.ipc, serviceFs, waitFsReq):
+    return nil
+  if not validFsResponseShape(addr p.request, addr p.response):
     return nil
 
   addr p.response
@@ -184,6 +251,8 @@ proc syscallFsServiceReply*(respVal: U64): U64 =
 
   let p = findPending(resp.id)
   if p == nil:
+    return U64(-1'i64)
+  if not validFsResponseShape(addr p.request, addr resp):
     return U64(-1'i64)
 
   p.response = resp

@@ -16,6 +16,8 @@ const
   SysPathMax = U64(128)
   SysDirEntryMax = U64(32)
   SysFileIoMax = U64(4096)
+  KnownOpenFlags = SysOpenRead or SysOpenWrite or SysOpenCreate or
+    SysOpenTrunc or SysOpenAppend
   KnownPollEvents = SysPollFdRead or SysPollFdWrite or SysPollIpcRead or
     SysPollPidExit or SysPollTimer
 

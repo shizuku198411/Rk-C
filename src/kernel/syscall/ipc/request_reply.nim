@@ -4,10 +4,17 @@ import ../../service/registry
 import ../../task/process
 
 type
+  IpcWaitResult* = enum
+    ipcWaitOk,
+    ipcWaitInvalid,
+    ipcWaitServiceUnavailable,
+    ipcWaitUnsupportedKind
+
   IpcPending* = object
     used*: bool
     completed*: bool
     id*: U64
+    waitResult*: IpcWaitResult
 
   IpcRequestDomain* = object
     nextId*: U64
@@ -67,14 +74,15 @@ proc finishIpcPending*[T](slot: ptr T) =
     slot[] = T()
 
 
-## Waits for ipc reply.
-proc waitIpcReply*(pending: ptr IpcPending, service: ServiceKind, waitKind: WaitKind): bool =
+## Waits for ipc reply and returns the reason if the wait cannot complete.
+proc waitIpcReplyDetailed*(pending: ptr IpcPending, service: ServiceKind, waitKind: WaitKind): IpcWaitResult =
   if pending == nil:
-    return false
+    return ipcWaitInvalid
 
   while pending.used and not pending.completed:
     if not serviceAvailable(service):
-      return false
+      pending.waitResult = ipcWaitServiceUnavailable
+      return pending.waitResult
 
     case waitKind
     of waitFsReq:
@@ -82,6 +90,17 @@ proc waitIpcReply*(pending: ptr IpcPending, service: ServiceKind, waitKind: Wait
     of waitBlockReq:
       sleepCurrentForBlockReq(pending.id)
     else:
-      return false
+      pending.waitResult = ipcWaitUnsupportedKind
+      return pending.waitResult
 
-  pending.used
+  if pending.used:
+    pending.waitResult = ipcWaitOk
+  else:
+    pending.waitResult = ipcWaitInvalid
+
+  pending.waitResult
+
+
+## Waits for ipc reply.
+proc waitIpcReply*(pending: ptr IpcPending, service: ServiceKind, waitKind: WaitKind): bool =
+  waitIpcReplyDetailed(pending, service, waitKind) == ipcWaitOk

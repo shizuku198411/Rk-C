@@ -21,6 +21,8 @@ proc syscallOpen*(pathVal, flagsVal: U64): U64 =
     return U64(-1'i64)
 
   let flags = U32(flagsVal)
+  if (flags and (not KnownOpenFlags)) != U32(0):
+    return U64(-1'i64)
   if (flags and (SysOpenRead or SysOpenWrite)) == 0:
     return U64(-1'i64)
 
@@ -241,21 +243,28 @@ proc syscallLseek*(fdVal, offsetVal, whence: U64): U64 =
 
   discard refreshFdSize(entry[])
 
-  let offset = I64(offsetVal)
+  let offset = cast[I64](offsetVal)
   let base =
     if whence == SysSeekSet:
-      I64(0)
+      U64(0)
     elif whence == SysSeekCur:
-      I64(entry.offset)
+      entry.offset
     elif whence == SysSeekEnd:
-      I64(entry.size)
+      entry.size
     else:
       return U64(-1'i64)
 
-  let next = base + offset
-  if next < 0:
-    return U64(-1'i64)
+  let next =
+    if offset >= I64(0):
+      let addend = U64(offset)
+      if high(U64) - base < addend:
+        return U64(-1'i64)
+      base + addend
+    else:
+      let subtrahend = U64(-(offset + I64(1))) + U64(1)
+      if base < subtrahend:
+        return U64(-1'i64)
+      base - subtrahend
 
-  entry.offset = U64(next)
+  entry.offset = next
   entry.offset
-

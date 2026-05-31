@@ -132,7 +132,7 @@ proc fsInit*() =
   if readSuper() < 0:
     panic("fs super read failed")
 
-  if superBlock.magic != FsMagic:
+  if superBlock.magic != FsMagic or not validateSuperBlock():
     printBootMsg("  formatting disk\n")
     formatFs()
   else:
