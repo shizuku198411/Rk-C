@@ -107,10 +107,7 @@ proc syscallRawReadRange*(reqVal: U64): U64 =
   var req: SysFsRequest
   if copyFromUser(addr req, reqVal, U64(sizeof(SysFsRequest))) != 0:
     return U64(-1'i64)
-  if req.capacity > SysFsDataMax or not fixedCStringHasNul(
-      cast[ptr UncheckedArray[char]](addr req.path[0]),
-      U64(SysFsPathMax),
-    ):
+  if not validateReadRangeRequest(addr req):
     return U64(-1'i64)
 
   let readLen = rawReadFileRangeKernel(
@@ -135,10 +132,7 @@ proc syscallRawWriteRange*(reqVal: U64): U64 =
   var req: SysFsRequest
   if copyFromUser(addr req, reqVal, U64(sizeof(SysFsRequest))) != 0:
     return U64(-1'i64)
-  if req.size > SysFsDataMax or not fixedCStringHasNul(
-      cast[ptr UncheckedArray[char]](addr req.path[0]),
-      U64(SysFsPathMax),
-    ):
+  if not validateWriteRangeRequest(addr req):
     return U64(-1'i64)
 
   U64(rawWriteFileRangeKernel(

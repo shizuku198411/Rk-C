@@ -30,6 +30,10 @@ var
   renamePathBuf: array[SysFsPathMax, char]
 
 
+## Includes shared filesystem service request and response validation helpers.
+include ./internal/fs_request_validation
+
+
 ## Includes manages filesystem service request queues and registration syscalls.
 include ./internal/fs_transport
 

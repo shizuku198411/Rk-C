@@ -29,10 +29,11 @@ proc serviceLs*(path: cstring, entriesVal, maxEntries: U64, offset: U64 = 0): U6
     finishPending(req)
     return U64(-1'i64)
 
-  let bytes = U64(resp.result) * U64(sizeof(FsDirEntry))
-  if bytes > entryBytes or bytes > SysFsDataMax:
+  if not validateDirResponse(resp.result, entryBytes):
     finishPending(req)
     return U64(-1'i64)
+
+  let bytes = U64(resp.result) * U64(sizeof(FsDirEntry))
   if copyToUser(entriesVal, addr resp.data[0], bytes) != 0:
     finishPending(req)
     return U64(-1'i64)
@@ -68,10 +69,11 @@ proc serviceLsToKernel*(path: cstring, dst: ptr FsDirEntry, maxEntries: U64, off
     finishPending(req)
     return -1
 
-  let bytes = U64(resp.result) * U64(sizeof(FsDirEntry))
-  if bytes > entryBytes or bytes > SysFsDataMax:
+  if not validateDirResponse(resp.result, entryBytes):
     finishPending(req)
     return -1
+
+  let bytes = U64(resp.result) * U64(sizeof(FsDirEntry))
 
   discard copyMem(dst, addr resp.data[0], bytes)
   let outValue = resp.result
@@ -163,7 +165,7 @@ proc serviceReadFile*(path: cstring, bufVal, capacity: U64): U64 =
     finishPending(req)
     return U64(-1'i64)
 
-  if U64(resp.result) > capacity or U64(resp.result) > SysFsDataMax:
+  if not validateReadResponse(resp.result, capacity):
     finishPending(req)
     return U64(-1'i64)
 
@@ -193,7 +195,7 @@ proc serviceReadFileToKernel*(path: cstring, dst: pointer, capacity: U64): I32 =
     finishPending(req)
     return -1
 
-  if U64(resp.result) > capacity or U64(resp.result) > SysFsDataMax:
+  if not validateReadResponse(resp.result, capacity):
     finishPending(req)
     return -1
 
@@ -240,7 +242,7 @@ proc serviceReadFileRangeToKernel*(path: cstring, dst: pointer, offset, capacity
     finishPending(req)
     return -1
 
-  if U64(resp.result) > capacity or U64(resp.result) > SysFsDataMax:
+  if not validateReadResponse(resp.result, capacity):
     finishPending(req)
     return -1
 
