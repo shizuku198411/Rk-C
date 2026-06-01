@@ -1,6 +1,7 @@
 ## Lists directory entries in compact or long format.
 import ../../lib/core/io
 import ../../lib/core/args
+import ../../lib/core/app
 import ../../lib/core/options
 import ../../lib/core/pathutils
 import ../../lib/core/syscall
@@ -20,12 +21,19 @@ var
   parsedArgs: UserArgs
   parsedOptions: ParsedOptions
 
+
+## Prints ls usage information.
+proc printUsage() =
+  write("usage: ls [-a] [-l] [path]\n")
+  write("  -a    show entries starting with .\n")
+  write("  -l    show entry name and size\n")
+
+
 ## Parses ls options and resolves the optional target path.
 proc parseLsArgs(arg: cstring, longFormat, allEntries: var bool): cstring =
   longFormat = false
   allEntries = false
-  if not parseUserArgs(arg, parsedArgs):
-    return nil
+  parseArgsOrExit(arg, parsedArgs, printUsage)
 
   if not parseOptions(parsedArgs, optionSpecs, parsedOptions):
     return nil
@@ -120,13 +128,6 @@ proc printCompactEntry(entry: ptr DirEntry, col: var int) =
 proc finishCompact(col: int) =
   if col != 0:
     write("\n")
-
-
-## Prints ls usage information.
-proc printUsage() =
-  write("usage: ls [-a] [-l] [path]\n")
-  write("  -a    show entries starting with .\n")
-  write("  -l    show entry name and size\n")
 
 
 ## Lists the requested directory by reading entries in chunks.

@@ -5,6 +5,7 @@ import ../../../lib/syscall_types
 import ../../../lib/types
 import ../../fs/dirent
 import ../../fs/fs
+import ../../lib/user_path
 import ../../mm/usercopy
 import ../../service/registry
 import ../ipc/request_reply
@@ -27,6 +28,10 @@ var
   rawEntries: array[FsRawDirEntryMax, FsDirEntry]
   rawFileBuf: array[SysFsDataMax, U8]
   renamePathBuf: array[SysFsPathMax, char]
+
+
+## Includes shared filesystem service request and response validation helpers.
+include ./internal/fs_request_validation
 
 
 ## Includes manages filesystem service request queues and registration syscalls.

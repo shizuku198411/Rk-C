@@ -2,10 +2,11 @@
 {.warning[UnusedImport]: off.}
 
 import ../../lib/runtime/orc_osalloc
+import ../../lib/core/args
+import ../../lib/core/app
 import ../../lib/core/io
-import ../../lib/core/strutils
 import ../../lib/core/syscall
-import ../../../lib/types
+from ../../../lib/types import CSize
 
 
 type
@@ -13,6 +14,14 @@ type
     value: int
     label: string
     next: ManagedNode
+
+
+var parsedArgs: UserArgs
+
+
+## Prints orccheck usage information.
+proc printUsage() =
+  write("usage: orccheck\n")
 
 
 ## Prints a validation failure and terminates the test process.
@@ -95,9 +104,9 @@ proc validateReferences(): bool =
 
 ## Runs the ORC userland allocation validation application.
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
-  if cstringEq(arg, cstring"--help"):
-    write("usage: orccheck\n")
-    sysExit(0)
+  parseArgsOrExit(arg, parsedArgs, printUsage)
+  exitIfHelp(parsedArgs, printUsage)
+  requireArgc(parsedArgs, U32(0), printUsage)
 
   if not validateAllocatorRelease():
     fail(cstring"allocator release failed")

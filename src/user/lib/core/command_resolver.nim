@@ -1,6 +1,7 @@
 ## Resolves command names to executable paths using the userspace search policy.
 import ./passwd
 import ./pathutils
+import ./path_buffer
 import ./strutils
 import ./syscall
 import ./userdb
@@ -25,59 +26,11 @@ var
   dirEntries: array[ResolverChunkEntries, DirEntry]
 
 
-## Clears one command path buffer.
-proc clearBuffer(buf: ptr UncheckedArray[char], capacity: int) =
-  if buf == nil:
-    return
-
-  var i = 0
-  while i < capacity:
-    buf[i] = '\0'
-    inc i
-
-
-## Copies a C string into a command path buffer.
-proc copyBuffer(dst: ptr UncheckedArray[char], capacity: int, src: cstring): bool =
-  if dst == nil or capacity <= 0 or src == nil:
-    return false
-
-  clearBuffer(dst, capacity)
-  var i = 0
-  while src[i] != '\0':
-    if i + 1 >= capacity:
-      return false
-
-    dst[i] = src[i]
-    inc i
-
-  dst[i] = '\0'
-  true
-
-
-## Appends a C string to a command path buffer.
-proc appendBuffer(dst: ptr UncheckedArray[char], capacity: int, pos: var int,
-                  src: cstring): bool =
-  if dst == nil or src == nil:
-    return false
-
-  var i = 0
-  while src[i] != '\0':
-    if pos + 1 >= capacity:
-      return false
-
-    dst[pos] = src[i]
-    inc pos
-    inc i
-
-  dst[pos] = '\0'
-  true
-
-
 ## Builds one searched command path from its directory and executable name.
 proc buildCandidate(directory, command: cstring): bool =
   clearBuffer(cast[ptr UncheckedArray[char]](addr candidatePath[0]), PathMax)
   var pos = 0
-  if not appendBuffer(
+  if not appendCString(
     cast[ptr UncheckedArray[char]](addr candidatePath[0]),
     PathMax,
     pos,
@@ -86,7 +39,7 @@ proc buildCandidate(directory, command: cstring): bool =
     return false
 
   if pos == 0 or candidatePath[pos - 1] != '/':
-    if not appendBuffer(
+    if not appendCString(
       cast[ptr UncheckedArray[char]](addr candidatePath[0]),
       PathMax,
       pos,
@@ -94,7 +47,7 @@ proc buildCandidate(directory, command: cstring): bool =
     ):
       return false
 
-  appendBuffer(
+  appendCString(
     cast[ptr UncheckedArray[char]](addr candidatePath[0]),
     PathMax,
     pos,
@@ -184,7 +137,7 @@ proc candidateExists(path: cstring): bool =
 
 ## Copies a found candidate into the caller-provided stable path buffer.
 proc returnCandidate(outBuf: ptr UncheckedArray[char], outCap: int): CommandResolveStatus =
-  if not copyBuffer(outBuf, outCap, cast[cstring](addr candidatePath[0])):
+  if not copyCStringInto(outBuf, outCap, cast[cstring](addr candidatePath[0])):
     return CommandPathTooLong
 
   CommandResolved
@@ -200,7 +153,7 @@ proc resolveCommandInto*(command: cstring, outBuf: ptr UncheckedArray[char],
 
   if hasSlash(command):
     let path = resolvePathInto(command, normalizedPath)
-    if path == nil or not copyBuffer(
+    if path == nil or not copyCStringInto(
       cast[ptr UncheckedArray[char]](addr candidatePath[0]),
       PathMax,
       path,
@@ -210,7 +163,7 @@ proc resolveCommandInto*(command: cstring, outBuf: ptr UncheckedArray[char],
     if candidateExists(cast[cstring](addr candidatePath[0])):
       return returnCandidate(outBuf, outCap)
 
-    if not copyBuffer(outBuf, outCap, cast[cstring](addr candidatePath[0])):
+    if not copyCStringInto(outBuf, outCap, cast[cstring](addr candidatePath[0])):
       return CommandPathTooLong
 
     return CommandNotFound
@@ -219,17 +172,17 @@ proc resolveCommandInto*(command: cstring, outBuf: ptr UncheckedArray[char],
   if resolveUid(sysGetUid(), user):
     clearBuffer(cast[ptr UncheckedArray[char]](addr normalizedPath[0]), PathMax)
     var pos = 0
-    if appendBuffer(
+    if appendCString(
       cast[ptr UncheckedArray[char]](addr normalizedPath[0]),
       PathMax,
       pos,
       cstring"/home/",
-    ) and appendBuffer(
+    ) and appendCString(
       cast[ptr UncheckedArray[char]](addr normalizedPath[0]),
       PathMax,
       pos,
       cast[cstring](addr user.name[0]),
-    ) and appendBuffer(
+    ) and appendCString(
       cast[ptr UncheckedArray[char]](addr normalizedPath[0]),
       PathMax,
       pos,
@@ -250,7 +203,7 @@ proc resolveCommandInto*(command: cstring, outBuf: ptr UncheckedArray[char],
   if candidateExists(cast[cstring](addr candidatePath[0])):
     return returnCandidate(outBuf, outCap)
 
-  if not copyBuffer(outBuf, outCap, cast[cstring](addr candidatePath[0])):
+  if not copyCStringInto(outBuf, outCap, cast[cstring](addr candidatePath[0])):
     return CommandPathTooLong
 
   CommandNotFound
@@ -266,7 +219,7 @@ proc resolveExecutableInto*(command: cstring, outBuf: ptr UncheckedArray[char],
     return resolveCommandInto(command, outBuf, outCap)
 
   let path = resolvePathInto(command, normalizedPath)
-  if path == nil or not copyBuffer(outBuf, outCap, path):
+  if path == nil or not copyCStringInto(outBuf, outCap, path):
     return CommandPathTooLong
 
   CommandResolved

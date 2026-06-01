@@ -1,9 +1,9 @@
 ## Counts lines, words, and bytes for one file.
 import ../../lib/core/io
 import ../../lib/core/args
+import ../../lib/core/app
 import ../../lib/core/syscall
 import ../../lib/core/pathutils
-import ../../lib/core/strutils
 
 
 const BufSize = 4096
@@ -48,17 +48,9 @@ proc printFileContents(ln, wc, size: U64, path: cstring) =
 
 ## Reads a file, computes counters, and prints them.
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
-  if not parseUserArgs(arg, parsedArgs):
-    printUsage()
-    sysExit(1)
-  
-  if parsedArgs.argc == 1 and cstringEq(argAt(parsedArgs, 0), "--help"):
-    printUsage()
-    sysExit(0)
-  
-  if parsedArgs.argc == 0:
-    printUsage()
-    sysExit(1)
+  parseArgsOrExit(arg, parsedArgs, printUsage)
+  exitIfHelp(parsedArgs, printUsage)
+  requireArgc(parsedArgs, U32(1), printUsage)
   
   let
     path = resolvePathInto(argAt(parsedArgs, 0), pathBuf)

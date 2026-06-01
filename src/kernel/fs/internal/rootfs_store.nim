@@ -95,6 +95,70 @@ proc readSuper(): int =
   0
 
 
+## Returns whether a fixed rootfs node name contains a terminator.
+proc rootfsNodeNameValid(node: ptr FsNode): bool =
+  if node == nil:
+    return false
+
+  var i = 0
+  while i < FsNameMax:
+    if node.name[i] == '\0':
+      return true
+    inc i
+
+  false
+
+
+## Returns whether a loaded rootfs superblock is structurally valid.
+proc validateSuperBlock(): bool =
+  if superBlock.magic != FsMagic:
+    return false
+  if superBlock.count > U32(FsMaxNodes):
+    return false
+  if superBlock.nodes[0].used == U32(0) or superBlock.nodes[0].typ != FsTypeDir:
+    return false
+  if superBlock.nodes[0].parent != U32(0):
+    return false
+
+  var usedCount = U32(0)
+  var i = 0
+  while i < FsMaxNodes:
+    let node = addr superBlock.nodes[i]
+    if node.used != U32(0):
+      inc usedCount
+
+      if node.used != U32(1):
+        return false
+      if node.typ != FsTypeFile and node.typ != FsTypeDir and node.typ != FsTypeMount:
+        return false
+      if not rootfsNodeNameValid(node):
+        return false
+      if i != 0:
+        if node.parent >= U32(FsMaxNodes):
+          return false
+        if superBlock.nodes[node.parent].used == U32(0):
+          return false
+
+      if node.typ == FsTypeFile:
+        if node.blockCount > U32(FsDataBlockCount):
+          return false
+        if node.startBlock > U32(FsDataBlockCount):
+          return false
+        if node.startBlock + node.blockCount < node.startBlock:
+          return false
+        if node.startBlock + node.blockCount > U32(FsDataBlockCount):
+          return false
+        if node.size > node.blockCount * U32(BlockSize):
+          return false
+      else:
+        if node.size != U32(0) or node.startBlock != U32(0) or node.blockCount != U32(0):
+          return false
+
+    inc i
+
+  usedCount == superBlock.count
+
+
 ## Allocates node.
 proc allocNode(parent: int, name: cstring, typ: U32): int =
   let existing = findChild(parent, name)

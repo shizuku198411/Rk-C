@@ -10,7 +10,7 @@ proc syscallRawLs*(pathVal, entriesVal, maxEntriesVal: U64): U64 =
     return U64(-1'i64)
 
   var pathBuf: array[SysFsPathMax, char]
-  if copyUserCString(addr pathBuf[0], pathVal, U64(SysFsPathMax)) < 0:
+  if not copyUserPath(pathVal, pathBuf):
     return U64(-1'i64)
 
   let countMax =
@@ -35,7 +35,7 @@ proc syscallRawMkdir*(pathVal: U64): U64 =
     return U64(-1'i64)
 
   var pathBuf: array[SysFsPathMax, char]
-  if copyUserCString(addr pathBuf[0], pathVal, U64(SysFsPathMax)) < 0:
+  if not copyUserPath(pathVal, pathBuf):
     return U64(-1'i64)
 
   U64(fsMkdir(cast[cstring](addr pathBuf[0])))
@@ -47,7 +47,7 @@ proc syscallRawUnlink*(pathVal: U64): U64 =
     return U64(-1'i64)
 
   var pathBuf: array[SysFsPathMax, char]
-  if copyUserCString(addr pathBuf[0], pathVal, U64(SysFsPathMax)) < 0:
+  if not copyUserPath(pathVal, pathBuf):
     return U64(-1'i64)
 
   U64(fsUnlink(cast[cstring](addr pathBuf[0])))
@@ -59,7 +59,7 @@ proc syscallRawRmdir*(pathVal: U64): U64 =
     return U64(-1'i64)
 
   var pathBuf: array[SysFsPathMax, char]
-  if copyUserCString(addr pathBuf[0], pathVal, U64(SysFsPathMax)) < 0:
+  if not copyUserPath(pathVal, pathBuf):
     return U64(-1'i64)
 
   U64(fsRmdir(cast[cstring](addr pathBuf[0])))
@@ -71,7 +71,7 @@ proc syscallRawReadFile*(pathVal, bufVal, capacity: U64): U64 =
     return U64(-1'i64)
 
   var pathBuf: array[SysFsPathMax, char]
-  if copyUserCString(addr pathBuf[0], pathVal, U64(SysFsPathMax)) < 0:
+  if not copyUserPath(pathVal, pathBuf):
     return U64(-1'i64)
 
   let readLen = rawReadFileKernel(cast[cstring](addr pathBuf[0]), addr rawFileBuf[0], capacity)
@@ -89,7 +89,7 @@ proc syscallRawFileSize*(pathVal: U64): U64 =
     return U64(-1'i64)
 
   var pathBuf: array[SysFsPathMax, char]
-  if copyUserCString(addr pathBuf[0], pathVal, U64(SysFsPathMax)) < 0:
+  if not copyUserPath(pathVal, pathBuf):
     return U64(-1'i64)
 
   let size = rawFileSizeKernel(cast[cstring](addr pathBuf[0]))
@@ -107,7 +107,7 @@ proc syscallRawReadRange*(reqVal: U64): U64 =
   var req: SysFsRequest
   if copyFromUser(addr req, reqVal, U64(sizeof(SysFsRequest))) != 0:
     return U64(-1'i64)
-  if req.capacity > SysFsDataMax:
+  if not validateReadRangeRequest(addr req):
     return U64(-1'i64)
 
   let readLen = rawReadFileRangeKernel(
@@ -132,7 +132,7 @@ proc syscallRawWriteRange*(reqVal: U64): U64 =
   var req: SysFsRequest
   if copyFromUser(addr req, reqVal, U64(sizeof(SysFsRequest))) != 0:
     return U64(-1'i64)
-  if req.size > SysFsDataMax:
+  if not validateWriteRangeRequest(addr req):
     return U64(-1'i64)
 
   U64(rawWriteFileRangeKernel(
@@ -153,7 +153,7 @@ proc syscallRawWriteFile*(pathVal, bufVal, sizeFlags: U64): U64 =
     return U64(-1'i64)
 
   var pathBuf: array[SysFsPathMax, char]
-  if copyUserCString(addr pathBuf[0], pathVal, U64(SysFsPathMax)) < 0:
+  if not copyUserPath(pathVal, pathBuf):
     return U64(-1'i64)
   if copyFromUser(addr rawFileBuf[0], bufVal, size) != 0:
     return U64(-1'i64)
@@ -168,9 +168,7 @@ proc syscallRawRename*(oldPathVal, newPathVal: U64): U64 =
 
   var oldPathBuf: array[SysFsPathMax, char]
   var newPathBuf: array[SysFsPathMax, char]
-  if copyUserCString(addr oldPathBuf[0], oldPathVal, U64(SysFsPathMax)) < 0:
-    return U64(-1'i64)
-  if copyUserCString(addr newPathBuf[0], newPathVal, U64(SysFsPathMax)) < 0:
+  if not copyUserPathPair(oldPathVal, newPathVal, oldPathBuf, newPathBuf):
     return U64(-1'i64)
 
   U64(rawRenameKernel(cast[cstring](addr oldPathBuf[0]), cast[cstring](addr newPathBuf[0])))
@@ -182,7 +180,7 @@ proc syscallRawChmod*(pathVal, modeVal: U64): U64 =
     return U64(-1'i64)
 
   var pathBuf: array[SysFsPathMax, char]
-  if copyUserCString(addr pathBuf[0], pathVal, U64(SysFsPathMax)) < 0:
+  if not copyUserPath(pathVal, pathBuf):
     return U64(-1'i64)
 
   U64(rawChmodKernel(cast[cstring](addr pathBuf[0]), U32(modeVal)))
@@ -194,7 +192,7 @@ proc syscallRawChown*(pathVal, uidGidVal: U64): U64 =
     return U64(-1'i64)
 
   var pathBuf: array[SysFsPathMax, char]
-  if copyUserCString(addr pathBuf[0], pathVal, U64(SysFsPathMax)) < 0:
+  if not copyUserPath(pathVal, pathBuf):
     return U64(-1'i64)
 
   let uid = U32(uidGidVal and U64(0xffffffff'u64))

@@ -1,6 +1,8 @@
 ## Provides the command execution with root privileges.
 import ../../lib/core/io
 import ../../lib/core/passwd
+import ../../lib/core/app
+import ../../lib/core/path_buffer
 import ../../lib/core/strutils
 import ../../lib/core/syscall
 import ../../lib/core/userdb
@@ -10,13 +12,13 @@ import ../../lib/core/args
 const
   CmdMax = 64
   ArgMax = 192
-  PathMax = 80
+  PathBufMax = 80
 
 var
   cmdBuf: array[CmdMax, char]
   childArgBuf: array[ArgMax, char]
   targetBuf: array[ArgMax, char]
-  pathBuf: array[PathMax, char]
+  pathBuf: array[PathBufMax, char]
   parsedArgs: UserArgs
 
   passwordBuf: array[LoginLineMax, char]
@@ -61,33 +63,17 @@ proc parseCommand(arg: cstring): bool =
   true
 
 
-## Builds a /bin/<command> path for traced command execution.
-proc buildBinPath(): cstring =
-  pathBuf[0] = '/'
-  pathBuf[1] = 'b'
-  pathBuf[2] = 'i'
-  pathBuf[3] = 'n'
-  pathBuf[4] = '/'
-
-  var i = U32(0)
-  while cmdBuf[i] != '\0':
-    if i + 6 >= U32(PathMax):
-      return nil
-
-    pathBuf[i + 5] = cmdBuf[i]
-    inc i
-
-  pathBuf[i + 5] = '\0'
-  cast[cstring](addr pathBuf[0])
-
-
 ## Starts one child command with root privilege.
 proc execCommandAsRoot(arg: cstring): bool =
   if not parseCommand(arg):
     write("invalid command\n")
     return false
 
-  let path = buildBinPath()
+  let path = buildBinPath(
+    cast[cstring](addr cmdBuf[0]),
+    cast[ptr UncheckedArray[char]](addr pathBuf[0]),
+    PathBufMax,
+  )
   if path == nil:
     write("command path too long\n")
     return false
@@ -141,9 +127,8 @@ proc printUsage() =
 
 ## Dispatches trace on, off, pid, or command mode.
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
-  if not parseUserArgs(arg, parsedArgs) or parsedArgs.argc == 0:
-    printUsage()
-    sysExit(1)
+  parseArgsOrExit(arg, parsedArgs, printUsage)
+  requireMinArgc(parsedArgs, U32(1), printUsage)
   
   var pid: U64
   var targetIndex = U32(0)

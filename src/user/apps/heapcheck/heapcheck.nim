@@ -1,8 +1,17 @@
 ## Validates the initial user heap, small allocations, and reset behavior.
+import ../../lib/core/args
+import ../../lib/core/app
 import ../../lib/core/heap
 import ../../lib/core/io
-import ../../lib/core/strutils
 import ../../lib/core/syscall
+
+
+var parsedArgs: UserArgs
+
+
+## Prints heapcheck usage information.
+proc printUsage() =
+  write("usage: heapcheck\n")
 
 
 proc fail(msg: cstring) {.noreturn.} =
@@ -18,9 +27,9 @@ proc resetHeap(initialBreak: U64): bool =
 
 
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
-  if cstringEq(arg, cstring"--help"):
-    write("usage: heapcheck\n")
-    sysExit(0)
+  parseArgsOrExit(arg, parsedArgs, printUsage)
+  exitIfHelp(parsedArgs, printUsage)
+  requireArgc(parsedArgs, U32(0), printUsage)
 
   let initial = sysSbrk(0)
   if initial < 0:

@@ -80,6 +80,20 @@ proc fixedCStringEq*(src: ptr UncheckedArray[char], capacity: int, expected: cst
   expected[capacity] == '\0'
 
 
+## Returns whether a fixed-size C string contains a NUL terminator.
+proc fixedCStringHasNul*(buf: ptr UncheckedArray[char], capacity: U64): bool =
+  if buf == nil or capacity == U64(0):
+    return false
+
+  var i = U64(0)
+  while i < capacity:
+    if buf[i] == '\0':
+      return true
+    inc i
+
+  false
+
+
 ## Implements the cstrlen helper.
 proc cstrlen*(s: cstring): U64 =
   if s == nil:

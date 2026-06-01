@@ -14,9 +14,7 @@ proc findPending(id: U64): ptr PendingFsRequest =
 proc queueFsRequest(op: U32, path: cstring, data: pointer, size, capacity: U64): ptr PendingFsRequest =
   if not fsServiceAvailable() or currentIsFsService():
     return nil
-  if op != SysFsOpWriteRange and capacity > SysFsDataMax:
-    return nil
-  if data != nil and size > SysFsDataMax:
+  if not validateFsRequestShape(op, path, data, size, capacity):
     return nil
 
   let p = allocPending()
@@ -42,6 +40,8 @@ proc queueFsRequest(op: U32, path: cstring, data: pointer, size, capacity: U64):
 ## Waits for fs response.
 proc waitFsResponse(p: ptr PendingFsRequest): ptr SysFsResponse =
   if not waitIpcReply(addr p.ipc, serviceFs, waitFsReq):
+    return nil
+  if not validateFsResponseShape(addr p.request, addr p.response):
     return nil
 
   addr p.response
@@ -184,6 +184,8 @@ proc syscallFsServiceReply*(respVal: U64): U64 =
 
   let p = findPending(resp.id)
   if p == nil:
+    return U64(-1'i64)
+  if not validateFsResponseShape(addr p.request, addr resp):
     return U64(-1'i64)
 
   p.response = resp

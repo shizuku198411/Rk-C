@@ -1,8 +1,8 @@
 ## Removes one or more empty directories from command-line paths.
 import ../../lib/core/io
 import ../../lib/core/args
+import ../../lib/core/app
 import ../../lib/core/pathutils
-import ../../lib/core/strutils
 import ../../lib/core/syscall
 
 var parsedArgs: UserArgs
@@ -15,17 +15,9 @@ proc printUsage() =
 
 ## Parses arguments and removes each requested directory.
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
-  if not parseUserArgs(arg, parsedArgs):
-    printUsage()
-    sysExit(1)
-
-  if parsedArgs.argc == 1 and cstringEq(argAt(parsedArgs, 0), "--help"):
-    printUsage()
-    sysExit(0)
-
-  if parsedArgs.argc == 0:
-    printUsage()
-    sysExit(1)
+  parseArgsOrExit(arg, parsedArgs, printUsage)
+  exitIfHelp(parsedArgs, printUsage)
+  requireMinArgc(parsedArgs, U32(1), printUsage)
 
   var i = U32(0)
   while i < parsedArgs.argc:

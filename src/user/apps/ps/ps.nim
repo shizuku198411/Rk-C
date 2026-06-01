@@ -7,6 +7,7 @@ import ../../lib/ipc/packet_data
 import ../../lib/ipc/ipc_request
 import ../../lib/ipc/service_client
 import ../../lib/core/args
+import ../../lib/core/app
 import ../../lib/core/options
 import ../../lib/core/syscall
 import ../../lib/core/passwd
@@ -46,9 +47,7 @@ proc printUsage() =
 
 ## Parses ps options, requests process data, and prints the table.
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
-  if not parseUserArgs(arg, parsedArgs):
-    printUsage()
-    sysExit(1)
+  parseArgsOrExit(arg, parsedArgs, printUsage)
 
   if not parseOptions(parsedArgs, optionSpecs, parsedOptions):
     printUsage()

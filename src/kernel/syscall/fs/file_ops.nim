@@ -7,6 +7,7 @@ import ../../../lib/user_ids
 import ../../dev/timer
 import ../../fs/fs
 import ../../lib/fd_helpers
+import ../../lib/user_path
 import ../../syscall/fs/fs_service_ops
 import ../../syscall/io/console_io
 import ../../mm/usercopy
@@ -16,6 +17,8 @@ const
   SysPathMax = U64(128)
   SysDirEntryMax = U64(32)
   SysFileIoMax = U64(4096)
+  KnownOpenFlags = SysOpenRead or SysOpenWrite or SysOpenCreate or
+    SysOpenTrunc or SysOpenAppend
   KnownPollEvents = SysPollFdRead or SysPollFdWrite or SysPollIpcRead or
     SysPollPidExit or SysPollTimer
 

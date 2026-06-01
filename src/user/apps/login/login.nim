@@ -1,4 +1,6 @@
 ## Provides the login loop that authenticates users and starts their shell.
+import ../../lib/core/args
+import ../../lib/core/app
 import ../../lib/core/io
 import ../../lib/core/passwd
 import ../../lib/core/strutils
@@ -7,6 +9,7 @@ import ../../lib/core/userdb
 
 
 var
+  parsedArgs: UserArgs
   usernameBuf: array[LoginLineMax, char]
   passwordBuf: array[LoginLineMax, char]
 
@@ -14,6 +17,11 @@ var
 ## Clears the current terminal line.
 proc clearScreen() =
   write("\x1b[2J\x1b[H")
+
+
+## Prints login usage information.
+proc printUsage() =
+  write("usage: login\n")
 
 
 ## Starts a shell process with the authenticated user's identity and home cwd.
@@ -30,9 +38,9 @@ proc runShell(entry: PasswdEntry) =
 
 ## Runs the login prompt forever and respawns a shell after logout.
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
-  if cstringEq(arg, cstring"--help"):
-    write("usage: login\n")
-    sysExit(0)
+  parseArgsOrExit(arg, parsedArgs, printUsage)
+  exitIfHelp(parsedArgs, printUsage)
+  requireArgc(parsedArgs, U32(0), printUsage)
 
   while true:
     write("login: ")

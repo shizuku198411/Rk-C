@@ -1,7 +1,7 @@
 ## Prints kernel message log contents.
 import ../../lib/core/args
+import ../../lib/core/app
 import ../../lib/core/io
-import ../../lib/core/strutils
 import ../../lib/core/syscall
 
 const
@@ -19,15 +19,9 @@ proc printUsage() =
 
 ## Reads the kernel log buffer and writes it to stdout.
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
-  discard parseUserArgs(arg, parsedArgs)
-
-  if parsedArgs.argc == 1 and cstringEq(argAt(parsedArgs, 0), "--help"):
-    printUsage()
-    sysExit(0)
-
-  if parsedArgs.argc != 0:
-    printUsage()
-    sysExit(1)
+  parseArgsOrExit(arg, parsedArgs, printUsage)
+  exitIfHelp(parsedArgs, printUsage)
+  requireArgc(parsedArgs, U32(0), printUsage)
 
   let n = sysKmsg(addr buffer[0], U64(SysKmsgMax))
   if n < 0:

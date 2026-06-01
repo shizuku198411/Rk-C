@@ -1,8 +1,8 @@
 ## Concatenates a file or stdin to stdout.
 import ../../lib/core/io
 import ../../lib/core/args
+import ../../lib/core/app
 import ../../lib/core/pathutils
-import ../../lib/core/strutils
 import ../../lib/core/syscall
 
 const
@@ -32,19 +32,14 @@ proc catStdin() =
 
 ## Parses arguments and prints stdin or one resolved file path.
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
-  discard parseUserArgs(arg, parsedArgs)
-
-  if parsedArgs.argc == 1 and cstringEq(argAt(parsedArgs, 0), "--help"):
-    printUsage()
-    sysExit(0)
+  parseArgsOrExit(arg, parsedArgs, printUsage)
+  exitIfHelp(parsedArgs, printUsage)
 
   if parsedArgs.argc == 0:
     catStdin()
     sysExit(0)
 
-  if parsedArgs.argc != 1:
-    printUsage()
-    sysExit(1)
+  requireArgc(parsedArgs, U32(1), printUsage)
 
   let path = resolvePath(argAt(parsedArgs, 0))
   if path == nil:

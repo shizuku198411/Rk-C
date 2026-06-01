@@ -1,9 +1,9 @@
 ## Changes file ownership by username or numeric uid:gid.
 import ../../lib/core/args
+import ../../lib/core/app
 import ../../lib/core/io
 import ../../lib/core/passwd
 import ../../lib/core/pathutils
-import ../../lib/core/strutils
 import ../../lib/core/syscall
 import ../../lib/core/userdb
 
@@ -90,17 +90,9 @@ proc printError() =
 
 ## Parses arguments, resolves the path, and applies ownership.
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
-  if not parseUserArgs(arg, parsedArgs):
-    printUsage()
-    sysExit(1)
-
-  if parsedArgs.argc == 1 and cstringEq(argAt(parsedArgs, 0), "--help"):
-    printUsage()
-    sysExit(0)
-
-  if parsedArgs.argc != 2:
-    printUsage()
-    sysExit(1)
+  parseArgsOrExit(arg, parsedArgs, printUsage)
+  exitIfHelp(parsedArgs, printUsage)
+  requireArgc(parsedArgs, U32(2), printUsage)
 
   var uid: U32
   var gid: U32

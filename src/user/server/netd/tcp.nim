@@ -4,6 +4,7 @@ import config
 import ipv4
 import packet
 import state
+import tcp/socket_table
 import udp
 
 const
@@ -20,27 +21,6 @@ proc tcpHeaderLenFor(flags: U8): int =
     TcpSynHeaderLen
   else:
     TcpHeaderLen
-
-
-proc nextTcpHandle(net: var NetdState): U32 =
-  if net.tcpNextHandle == 0:
-    net.tcpNextHandle = 1
-
-  let handle = net.tcpNextHandle
-  inc net.tcpNextHandle
-  handle
-
-
-proc nextTcpPort(net: var NetdState): U16 =
-  if net.tcpNextPort < TcpInitialSourcePort:
-    net.tcpNextPort = TcpInitialSourcePort
-
-  let port = net.tcpNextPort
-  inc net.tcpNextPort
-  if net.tcpNextPort < TcpInitialSourcePort:
-    net.tcpNextPort = TcpInitialSourcePort
-
-  port
 
 
 proc tcpChecksum(buf: ptr array[SysNetPacketMax, U8], tcpOff: int, tcpLen: int,
@@ -65,46 +45,6 @@ proc tcpChecksum(buf: ptr array[SysNetPacketMax, U8], tcpOff: int, tcpLen: int,
     sum = (sum and 0xffff'u32) + (sum shr 16)
 
   U16(not sum and 0xffff'u32)
-
-
-proc findTcpByHandle(net: var NetdState, handle: U32): ptr TcpConnection =
-  var i = 0
-  while i < TcpMaxConnections:
-    if net.tcpConnections[i].used and net.tcpConnections[i].handle == handle:
-      return addr net.tcpConnections[i]
-    inc i
-
-  nil
-
-
-proc findTcpByPacket(net: var NetdState, srcIp: U32, srcPort, dstPort: U16): ptr TcpConnection =
-  var i = 0
-  while i < TcpMaxConnections:
-    let conn = addr net.tcpConnections[i]
-    if conn.used and conn.remoteIp == srcIp and conn.remotePort == srcPort and
-        conn.localPort == dstPort:
-      return conn
-    inc i
-
-  nil
-
-
-proc allocTcpConnection(net: var NetdState): ptr TcpConnection =
-  var i = 0
-  while i < TcpMaxConnections:
-    if not net.tcpConnections[i].used:
-      net.tcpConnections[i] = TcpConnection()
-      net.tcpConnections[i].used = true
-      net.tcpConnections[i].handle = nextTcpHandle(net)
-      return addr net.tcpConnections[i]
-    inc i
-
-  nil
-
-
-proc releaseTcpConnection(conn: ptr TcpConnection) =
-  if conn != nil:
-    conn[] = TcpConnection()
 
 
 proc availableRxSpace(conn: ptr TcpConnection): U32 =

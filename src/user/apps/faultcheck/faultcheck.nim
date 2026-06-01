@@ -1,5 +1,6 @@
 ## Exercises fault paths for bad user pointers, text writes, and stack exec.
 import ../../lib/core/args
+import ../../lib/core/app
 import ../../lib/core/io
 import ../../lib/core/strutils
 import ../../lib/core/syscall
@@ -68,17 +69,9 @@ proc execStack() =
 
 ## Dispatches the requested fault scenario.
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
-  if not parseUserArgs(arg, parsedArgs):
-    printUsage()
-    sysExit(1)
-
-  if parsedArgs.argc == 1 and cstringEq(argAt(parsedArgs, 0), "--help"):
-    printUsage()
-    sysExit(0)
-
-  if parsedArgs.argc != 1:
-    printUsage()
-    sysExit(1)
+  parseArgsOrExit(arg, parsedArgs, printUsage)
+  exitIfHelp(parsedArgs, printUsage)
+  requireArgc(parsedArgs, U32(1), printUsage)
 
   let mode = argAt(parsedArgs, 0)
   if cstringEq(mode, "bad-cstring"):
