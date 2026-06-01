@@ -5,6 +5,7 @@ import ../../lib/core/pathutils
 import ../../lib/core/strutils
 import ../../lib/core/syscall
 import ../../lib/core/userdb
+import ./internal/completion_buffers
 import ./prompt
 import ./state
 
@@ -23,16 +24,6 @@ var
   completionMatches: array[CompletionMaxMatches, array[CompletionCandidateMax, char]]
   completionMatchCount: int
   completionOverflow: bool
-
-
-proc clearArray(buf: ptr UncheckedArray[char], cap: int) =
-  if buf == nil:
-    return
-
-  var i = 0
-  while i < cap:
-    buf[i] = '\0'
-    inc i
 
 
 proc clearCompletionMatches() =
@@ -66,91 +57,6 @@ proc cstrFullPath(): cstring =
 
 proc cstrMatch(index: int): cstring =
   cast[cstring](addr completionMatches[index][0])
-
-
-proc copyToArray(dst: ptr UncheckedArray[char], cap: int, src: cstring): bool =
-  if dst == nil or cap <= 0 or src == nil:
-    return false
-
-  clearArray(dst, cap)
-
-  var i = 0
-  while src[i] != '\0':
-    if i + 1 >= cap:
-      return false
-
-    dst[i] = src[i]
-    inc i
-
-  dst[i] = '\0'
-  true
-
-
-proc appendToArray(dst: ptr UncheckedArray[char], cap: int, pos: var int, src: cstring): bool =
-  if dst == nil or cap <= 0 or src == nil:
-    return false
-
-  var i = 0
-  while src[i] != '\0':
-    if pos + 1 >= cap:
-      return false
-
-    dst[pos] = src[i]
-    inc pos
-    inc i
-
-  dst[pos] = '\0'
-  true
-
-
-proc appendCharToArray(dst: ptr UncheckedArray[char], cap: int, pos: var int, ch: char): bool =
-  if dst == nil or cap <= 0:
-    return false
-
-  if pos + 1 >= cap:
-    return false
-
-  dst[pos] = ch
-  inc pos
-  dst[pos] = '\0'
-  true
-
-
-proc cstringLen(s: cstring): int =
-  if s == nil:
-    return 0
-
-  var i = 0
-  while s[i] != '\0':
-    inc i
-
-  i
-
-
-proc startsWithCString(name, prefix: cstring): bool =
-  if name == nil or prefix == nil:
-    return false
-
-  var i = 0
-  while prefix[i] != '\0':
-    if name[i] != prefix[i]:
-      return false
-    inc i
-
-  true
-
-
-proc hasSlash(s: cstring): bool =
-  if s == nil:
-    return false
-
-  var i = 0
-  while s[i] != '\0':
-    if s[i] == '/':
-      return true
-    inc i
-
-  false
 
 
 proc splitPathPrefix(token: cstring): bool =

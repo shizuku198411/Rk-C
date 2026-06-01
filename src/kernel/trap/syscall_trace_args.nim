@@ -1,0 +1,222 @@
+## Formats syscall-specific argument lists for syscall tracing.
+import ../../lib/syscall_ids
+import ../dev/console
+import ../trap/trap_types
+import ./syscall_trace_format
+
+
+## Prints generic register arguments for unknown syscalls.
+proc printDefaultArgs(frame: ptr TrapFrame) =
+  printNamedPtr("a0", frame.a0)
+  print(", ")
+  printNamedPtr("a1", frame.a1)
+  print(", ")
+  printNamedPtr("a2", frame.a2)
+
+
+## Prints syscall-specific arguments from the trap frame.
+proc printSyscallArgs*(frame: ptr TrapFrame, verbose: bool) =
+  case frame.a3
+  of SysWrite:
+    printNamedPtr("buf", frame.a0)
+    print(", ")
+    printNamedU64("len", frame.a1)
+    printBufferPreview(verbose, frame.a0, frame.a1)
+  of SysRead:
+    printNamedPtr("buf", frame.a0)
+    print(", ")
+    printNamedU64("len", frame.a1)
+  of SysExit:
+    printNamedU64("status", frame.a0)
+  of SysLs, SysMkdir, SysUnlink, SysRmdir, SysSetCwd:
+    printNamedCString("path", frame.a0)
+  of SysRename:
+    printNamedCString("old", frame.a0)
+    print(", ")
+    printNamedCString("new", frame.a1)
+  of SysReadFile:
+    printNamedCString("path", frame.a0)
+    print(", ")
+    printNamedPtr("buf", frame.a1)
+    print(", ")
+    printNamedU64("capacity", frame.a2)
+  of SysWriteFile:
+    printNamedCString("path", frame.a0)
+    print(", ")
+    printNamedPtr("buf", frame.a1)
+    print(", ")
+    printNamedU64("size", frame.a2)
+  of SysOpen:
+    printNamedCString("path", frame.a0)
+    print(", ")
+    printNamedU64("flags", frame.a1)
+  of SysReadFd:
+    printNamedI64("fd", frame.a0)
+    print(", ")
+    printNamedPtr("buf", frame.a1)
+    print(", ")
+    printNamedU64("len", frame.a2)
+  of SysWriteFd:
+    printNamedI64("fd", frame.a0)
+    print(", ")
+    printNamedPtr("buf", frame.a1)
+    print(", ")
+    printNamedU64("len", frame.a2)
+    printBufferPreview(verbose, frame.a1, frame.a2)
+  of SysClose:
+    printNamedI64("fd", frame.a0)
+  of SysLseek:
+    printNamedI64("fd", frame.a0)
+    print(", ")
+    printNamedI64("offset", frame.a1)
+    print(", ")
+    printNamedU64("whence", frame.a2)
+  of SysPipe:
+    printNamedPtr("fds", frame.a0)
+  of SysDup2:
+    printNamedI64("oldfd", frame.a0)
+    print(", ")
+    printNamedI64("newfd", frame.a1)
+  of SysPoll:
+    printNamedPtr("events", frame.a0)
+    print(", ")
+    printNamedU64("count", frame.a1)
+    print(", ")
+    printNamedU64("timeout_ticks", frame.a2)
+  of SysExec:
+    printNamedCString("path", frame.a0)
+    print(", ")
+    printNamedCString("arg", frame.a1)
+    print(", ")
+    printNamedBool("detached", frame.a2)
+  of SysExecAs:
+    printNamedCString("path", frame.a0)
+    print(", ")
+    printNamedCString("arg", frame.a1)
+    print(", ")
+    printNamedU64("uid_gid", frame.a2)
+  of SysWait, SysKill:
+    printNamedI64("pid", frame.a0)
+  of SysGetCwd:
+    printNamedPtr("buf", frame.a0)
+    print(", ")
+    printNamedU64("capacity", frame.a1)
+  of SysPs:
+    printNamedPtr("entries", frame.a0)
+    print(", ")
+    printNamedU64("max", frame.a1)
+    print(", ")
+    printNamedU64("flags", frame.a2)
+  of SysTraps:
+    printNamedPtr("out", frame.a0)
+  of SysGetBitMap:
+    printNamedPtr("info", frame.a0)
+  of SysFsInfo:
+    printNamedPtr("entries", frame.a0)
+    print(", ")
+    printNamedU64("max", frame.a1)
+  of SysIpcSend:
+    printNamedI64("pid", frame.a0)
+    print(", ")
+    printNamedCString("msg", frame.a1)
+  of SysIpcReceive, SysIpcTryReceive:
+    printNamedPtr("msg", frame.a0)
+  of SysIpcSendPacket:
+    printNamedI64("pid", frame.a0)
+    print(", ")
+    printNamedPtr("packet", frame.a1)
+  of SysIpcReceivePacket, SysIpcTryReceivePacket:
+    printNamedPtr("packet", frame.a0)
+  of SysFsServiceReceive:
+    printNamedPtr("req", frame.a0)
+  of SysFsServiceReply:
+    printNamedPtr("resp", frame.a0)
+  of SysRawLs:
+    printNamedCString("path", frame.a0)
+    print(", ")
+    printNamedPtr("entries", frame.a1)
+    print(", ")
+    printNamedU64("max", frame.a2)
+  of SysRawRename:
+    printNamedCString("old", frame.a0)
+    print(", ")
+    printNamedCString("new", frame.a1)
+  of SysRawChmod:
+    printNamedCString("path", frame.a0)
+    print(", ")
+    printNamedU64("mode", frame.a1)
+  of SysChmod:
+    printNamedCString("path", frame.a0)
+    print(", ")
+    printNamedU64("mode", frame.a1)
+  of SysRawChown:
+    printNamedCString("path", frame.a0)
+    print(", ")
+    printNamedU64("uid_gid", frame.a1)
+  of SysChown:
+    printNamedCString("path", frame.a0)
+    print(", ")
+    printNamedU64("uid_gid", frame.a1)
+  of SysRawMkdir, SysRawUnlink, SysRawRmdir, SysRawReadFile, SysRawWriteFile,
+      SysRawFileSize:
+    printNamedCString("path", frame.a0)
+    print(", ")
+    printNamedPtr("arg1", frame.a1)
+    print(", ")
+    printNamedU64("arg2", frame.a2)
+  of SysRawReadRange, SysRawWriteRange:
+    printNamedPtr("req", frame.a0)
+  of SysBlockServiceReceive:
+    printNamedPtr("req", frame.a0)
+  of SysBlockServiceReply:
+    printNamedPtr("resp", frame.a0)
+  of SysRawBlockRead:
+    printNamedU64("block", frame.a0)
+    print(", ")
+    printNamedPtr("out", frame.a1)
+  of SysRawBlockWrite:
+    printNamedU64("block", frame.a0)
+    print(", ")
+    printNamedPtr("in", frame.a1)
+  of SysServiceRegister:
+    printNamedU64("kind", frame.a0)
+    print(", ")
+    printNamedI64("pid", frame.a1)
+  of SysServiceUnregister:
+    printNamedU64("kind", frame.a0)
+  of SysSetUser:
+    printNamedU64("uid", frame.a0)
+    print(", ")
+    printNamedU64("gid", frame.a1)
+  of SysServiceList:
+    printNamedPtr("entries", frame.a0)
+    print(", ")
+    printNamedU64("max", frame.a1)
+  of SysSleep:
+    printNamedU64("ticks", frame.a0)
+  of SysCpuInfo:
+    printNamedPtr("info", frame.a0)
+  of SysKmsg:
+    printNamedPtr("buf", frame.a0)
+    print(", ")
+    printNamedU64("capacity", frame.a1)
+  of SysRawNetMac:
+    printNamedPtr("mac", frame.a0)
+  of SysRawNetRecv:
+    printNamedPtr("buf", frame.a0)
+    print(", ")
+    printNamedU64("capacity", frame.a1)
+  of SysRawNetSend:
+    printNamedPtr("buf", frame.a0)
+    print(", ")
+    printNamedU64("size", frame.a1)
+  of SysTraceCtl:
+    printNamedTraceCtlCmd("cmd", frame.a0)
+    print(", ")
+    printNamedU64("value", frame.a1)
+  of SysEntropy:
+    printNamedPtr("buf", frame.a0)
+    print(", ")
+    printNamedU64("size", frame.a1)
+  else:
+    printDefaultArgs(frame)
