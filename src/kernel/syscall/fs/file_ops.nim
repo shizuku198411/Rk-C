@@ -7,6 +7,7 @@ import ../../../lib/user_ids
 import ../../dev/timer
 import ../../fs/fs
 import ../../lib/fd_helpers
+import ../../lib/user_path
 import ../../syscall/fs/fs_service_ops
 import ../../syscall/io/console_io
 import ../../mm/usercopy

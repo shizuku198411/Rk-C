@@ -10,20 +10,6 @@ proc findPending(id: U64): ptr PendingFsRequest =
   findIpcPending(pending, id)
 
 
-## Returns whether a fixed-size C string contains a terminator.
-proc fixedCStringHasNul(buf: ptr UncheckedArray[char], capacity: U64): bool =
-  if buf == nil or capacity == U64(0):
-    return false
-
-  var i = U64(0)
-  while i < capacity:
-    if buf[i] == '\0':
-      return true
-    inc i
-
-  false
-
-
 ## Returns whether a filesystem request shape is valid for its operation.
 proc validFsRequestShape(op: U32, path: cstring, data: pointer, size, capacity: U64): bool =
   if path == nil:

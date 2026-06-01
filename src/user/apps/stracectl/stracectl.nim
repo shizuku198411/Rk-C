@@ -2,19 +2,20 @@
 import ../../lib/core/io
 import ../../lib/core/args
 import ../../lib/core/app
+import ../../lib/core/path_buffer
 import ../../lib/core/strutils
 import ../../lib/core/syscall
 
 const
   CmdMax = 64
   ArgMax = 192
-  PathMax = 80
+  PathBufMax = 80
 
 var
   cmdBuf: array[CmdMax, char]
   childArgBuf: array[ArgMax, char]
   targetBuf: array[ArgMax, char]
-  pathBuf: array[PathMax, char]
+  pathBuf: array[PathBufMax, char]
   parsedArgs: UserArgs
 
 
@@ -57,33 +58,17 @@ proc parseCommand(arg: cstring): bool =
   true
 
 
-## Builds a /bin/<command> path for traced command execution.
-proc buildBinPath(): cstring =
-  pathBuf[0] = '/'
-  pathBuf[1] = 'b'
-  pathBuf[2] = 'i'
-  pathBuf[3] = 'n'
-  pathBuf[4] = '/'
-
-  var i = U32(0)
-  while cmdBuf[i] != '\0':
-    if i + 6 >= U32(PathMax):
-      return nil
-
-    pathBuf[i + 5] = cmdBuf[i]
-    inc i
-
-  pathBuf[i + 5] = '\0'
-  cast[cstring](addr pathBuf[0])
-
-
 ## Starts one child command with tracing enabled until it exits.
 proc traceCommand(arg: cstring, verbose: bool) =
   if not parseCommand(arg):
     write("invalid command\n")
     sysExit(1)
 
-  let path = buildBinPath()
+  let path = buildBinPath(
+    cast[cstring](addr cmdBuf[0]),
+    cast[ptr UncheckedArray[char]](addr pathBuf[0]),
+    PathBufMax,
+  )
   if path == nil:
     write("command path too long\n")
     sysExit(1)

@@ -7,7 +7,7 @@ proc readPath(pathVal: U64, defaultRoot: bool = false): cstring =
       return "/"
     return nil
 
-  if copyUserCString(addr pathBuf[0], pathVal, SysPathMax) < 0:
+  if not copyUserPath(pathVal, pathBuf):
     return nil
 
   cast[cstring](addr pathBuf[0])
@@ -179,7 +179,7 @@ proc syscallRename*(oldPathVal, newPathVal: U64): U64 =
   let oldPath = readPath(oldPathVal)
   if oldPath == nil:
     return U64(-1'i64)
-  if copyUserCString(addr renamePathBuf[0], newPathVal, SysPathMax) < 0:
+  if not copyUserPath(newPathVal, renamePathBuf):
     return U64(-1'i64)
   if not fsCanRemovePath(currentProc.identity.uid, currentProc.identity.gid, oldPath) or
       not canModifyParentPath(cast[cstring](addr renamePathBuf[0])):
@@ -235,5 +235,4 @@ proc syscallChown*(pathVal, uidGidVal: U64): U64 =
 
   clearLastError()
   U64(0)
-
 

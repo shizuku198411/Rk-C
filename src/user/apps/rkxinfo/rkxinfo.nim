@@ -7,6 +7,7 @@ import ../../lib/runtime/orc_osalloc
 import ../../lib/core/args
 import ../../lib/core/app
 import ../../lib/core/io
+import ../../lib/core/path_buffer
 import ../../lib/core/pathutils
 import ../../lib/core/syscall
 
@@ -33,33 +34,6 @@ var
 ## Prints rkxinfo usage information.
 proc printUsage() =
   write("usage: rkxinfo <app|/bin/app>\n")
-
-
-## Clears the syscall path buffer.
-proc clearSyscallPathBuf() =
-  var i = 0
-  while i < RkxInfoPathMax:
-    syscallPathBuf[i] = '\0'
-    inc i
-
-
-## Copies a cstring into the syscall path buffer.
-proc copyToSyscallPathBuf(src: cstring): bool =
-  clearSyscallPathBuf()
-
-  if src == nil:
-    return false
-
-  var i = 0
-  while src[i] != '\0':
-    if i + 1 >= RkxInfoPathMax:
-      return false
-
-    syscallPathBuf[i] = src[i]
-    inc i
-
-  syscallPathBuf[i] = '\0'
-  true
 
 
 ## Returns the syscall-facing path cstring.
@@ -90,7 +64,11 @@ proc setResolvedPath(src: cstring): cstring =
   if not setPathText(src):
     return nil
 
-  if not copyToSyscallPathBuf(src):
+  if not copyCStringInto(
+    cast[ptr UncheckedArray[char]](addr syscallPathBuf[0]),
+    RkxInfoPathMax,
+    src,
+  ):
     return nil
 
   syscallPathCString()
@@ -112,7 +90,11 @@ proc inputPath(arg: cstring): cstring =
     pathText.add(arg[i])
     inc i
 
-  if not copyToSyscallPathBuf(pathText.cstring):
+  if not copyCStringInto(
+    cast[ptr UncheckedArray[char]](addr syscallPathBuf[0]),
+    RkxInfoPathMax,
+    pathText.cstring,
+  ):
     return nil
 
   syscallPathCString()

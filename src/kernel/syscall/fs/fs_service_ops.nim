@@ -5,6 +5,7 @@ import ../../../lib/syscall_types
 import ../../../lib/types
 import ../../fs/dirent
 import ../../fs/fs
+import ../../lib/user_path
 import ../../mm/usercopy
 import ../../service/registry
 import ../ipc/request_reply

@@ -3,6 +3,7 @@ import ../../lib/core/io
 import ../../lib/core/args
 import ../../lib/core/app
 import ../../lib/core/syscall
+import ../../lib/core/path_buffer
 import ../../lib/core/pathutils
 
 const
@@ -23,75 +24,10 @@ proc printUsage() =
   write("usage: mv <src>... <dst>\n")
 
 
-## Clears a path buffer.
-proc clearPath(dst: var array[PathMax, char]) =
-  var i = 0
-  while i < PathMax:
-    dst[i] = '\0'
-    inc i
-
-
-## Appends one character to a path buffer with bounds checking.
-proc copyChar(dst: var array[PathMax, char], pos: var int, ch: char): bool =
-  if pos + 1 >= PathMax:
-    return false
-
-  dst[pos] = ch
-  inc pos
-  dst[pos] = '\0'
-  true
-
-
 ## Returns true when a path can be listed as a directory.
 proc isDir(path: cstring): bool =
   let count = sysLs(path, addr entries[0], U64(MvMaxEntries))
   count >= 0
-
-
-## Returns a C string view of the final path component.
-proc basename(path: cstring): cstring =
-  var endPos = 0
-  while path[endPos] != '\0':
-    inc endPos
-
-  while endPos > 1 and path[endPos - 1] == '/':
-    dec endPos
-
-  var start = endPos
-  while start > 0 and path[start - 1] != '/':
-    dec start
-
-  cast[cstring](addr path[start])
-
-
-## Joins a directory and basename into a destination path buffer.
-proc joinPath(dir, name: cstring, dst: var array[PathMax, char]): cstring =
-  clearPath(dst)
-  var pos = 0
-
-  if dir[0] == '/' and dir[1] == '\0':
-    if not copyChar(dst, pos, '/'):
-      return nil
-  else:
-    var i = 0
-    while dir[i] != '\0':
-      if not copyChar(dst, pos, dir[i]):
-        return nil
-      inc i
-
-    if pos > 0 and dst[pos - 1] != '/':
-      if not copyChar(dst, pos, '/'):
-        return nil
-
-  var i = 0
-  while name[i] != '\0':
-    if name[i] == '/':
-      break
-    if not copyChar(dst, pos, name[i]):
-      return nil
-    inc i
-
-  cast[cstring](addr dst[0])
 
 
 ## Moves one source path to one target path.
@@ -141,7 +77,12 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
 
     let target =
       if dstIsDir:
-        joinPath(dstPath, basename(srcPath), targetPathBuf)
+        joinPath(
+          dstPath,
+          pathBasename(srcPath),
+          cast[ptr UncheckedArray[char]](addr targetPathBuf[0]),
+          PathMax,
+        )
       else:
         dstPath
     if target == nil:
