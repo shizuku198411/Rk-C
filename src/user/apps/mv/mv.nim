@@ -1,9 +1,9 @@
 ## Moves or renames files, with simple copy/unlink fallback.
 import ../../lib/core/io
 import ../../lib/core/args
+import ../../lib/core/app
 import ../../lib/core/syscall
 import ../../lib/core/pathutils
-import ../../lib/core/strutils
 
 const
   MvMaxEntries = 2
@@ -118,17 +118,9 @@ proc moveOne(srcPath, dstPath: cstring): bool =
 
 ## Parses mv arguments and moves each source to the destination.
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
-  if not parseUserArgs(arg, parsedArgs):
-    printUsage()
-    sysExit(1)
-
-  if parsedArgs.argc == 1 and cstringEq(argAt(parsedArgs, 0), "--help"):
-    printUsage()
-    sysExit(0)
-
-  if parsedArgs.argc < 2:
-    printUsage()
-    sysExit(1)
+  parseArgsOrExit(arg, parsedArgs, printUsage)
+  exitIfHelp(parsedArgs, printUsage)
+  requireMinArgc(parsedArgs, U32(2), printUsage)
 
   let dstPath = resolvePathInto(argAt(parsedArgs, parsedArgs.argc - U32(1)), dstPathBuf)
   if dstPath == nil:

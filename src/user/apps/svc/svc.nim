@@ -6,6 +6,7 @@ import ../../lib/core/io
 import ../../lib/ipc/ipc_request
 import ../../lib/ipc/service_client
 import ../../lib/core/args
+import ../../lib/core/app
 import ../../lib/core/strutils
 import ../../lib/core/syscall
 
@@ -234,13 +235,9 @@ proc serviceLogs() =
 
 ## Dispatches svc subcommands.
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
-  if not parseUserArgs(arg, parsedArgs):
-    printUsage()
-    sysExit(1)
+  parseArgsOrExit(arg, parsedArgs, printUsage)
 
-  if parsedArgs.argc == 1 and cstringEq(argAt(parsedArgs, 0), "--help"):
-    printUsage()
-    sysExit(0)
+  exitIfHelp(parsedArgs, printUsage)
 
   if parsedArgs.argc == 1 and cstringEq(argAt(parsedArgs, 0), "list"):
     listServices()

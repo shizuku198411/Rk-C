@@ -3,7 +3,7 @@ import ../../lib/core/io
 import ../../lib/ipc/ipc_request
 import ../../lib/ipc/service_client
 import ../../lib/core/args
-import ../../lib/core/strutils
+import ../../lib/core/app
 import ../../lib/core/syscall
 import ../../lib/net/ipaddr
 
@@ -21,19 +21,11 @@ proc printUsage() =
 
 ## Parses the target IP, requests netd ping, and prints the result.
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
-  if not parseUserArgs(arg, parsedArgs):
-    printUsage()
-    sysExit(1)
-
-  if parsedArgs.argc == 1 and cstringEq(argAt(parsedArgs, 0), "--help"):
-    printUsage()
-    sysExit(0)
+  parseArgsOrExit(arg, parsedArgs, printUsage)
+  exitIfHelp(parsedArgs, printUsage)
+  requireMaxArgc(parsedArgs, U32(1), printUsage)
 
   var ip = U32(0x0a000101'u32)
-  if parsedArgs.argc > 1:
-    printUsage()
-    sysExit(1)
-
   if parsedArgs.argc == 1 and not parseIpv4Addr(argAt(parsedArgs, 0), ip):
     printUsage()
     sysExit(1)

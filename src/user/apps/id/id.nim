@@ -1,9 +1,9 @@
 ## Prints the current uid/gid and resolves their names when available.
 import ../../lib/core/args
+import ../../lib/core/app
 import ../../lib/core/group
 import ../../lib/core/io
 import ../../lib/core/passwd
-import ../../lib/core/strutils
 import ../../lib/core/syscall
 import ../../lib/core/userdb
 
@@ -19,17 +19,9 @@ proc printUsage() =
 
 ## Reads current identity and prints uid/gid with optional names.
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
-  if not parseUserArgs(arg, parsedArgs):
-    printUsage()
-    sysExit(1)
-
-  if parsedArgs.argc == 1 and cstringEq(argAt(parsedArgs, 0), "--help"):
-    printUsage()
-    sysExit(0)
-
-  if parsedArgs.argc != 0:
-    printUsage()
-    sysExit(1)
+  parseArgsOrExit(arg, parsedArgs, printUsage)
+  exitIfHelp(parsedArgs, printUsage)
+  requireArgc(parsedArgs, U32(0), printUsage)
 
   let uid = sysGetUid()
   let gid = sysGetGid()

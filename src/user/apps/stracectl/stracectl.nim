@@ -1,6 +1,7 @@
 ## Enables syscall tracing globally, for a pid, or around one command.
 import ../../lib/core/io
 import ../../lib/core/args
+import ../../lib/core/app
 import ../../lib/core/strutils
 import ../../lib/core/syscall
 
@@ -138,9 +139,8 @@ proc printUsage() =
 
 ## Dispatches trace on, off, pid, or command mode.
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
-  if not parseUserArgs(arg, parsedArgs) or parsedArgs.argc == 0:
-    printUsage()
-    sysExit(1)
+  parseArgsOrExit(arg, parsedArgs, printUsage)
+  requireMinArgc(parsedArgs, U32(1), printUsage)
   
   var pid: U64
   var targetIndex = U32(0)

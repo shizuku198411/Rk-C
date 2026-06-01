@@ -1,6 +1,7 @@
 ## Provides the command execution with root privileges.
 import ../../lib/core/io
 import ../../lib/core/passwd
+import ../../lib/core/app
 import ../../lib/core/strutils
 import ../../lib/core/syscall
 import ../../lib/core/userdb
@@ -141,9 +142,8 @@ proc printUsage() =
 
 ## Dispatches trace on, off, pid, or command mode.
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
-  if not parseUserArgs(arg, parsedArgs) or parsedArgs.argc == 0:
-    printUsage()
-    sysExit(1)
+  parseArgsOrExit(arg, parsedArgs, printUsage)
+  requireMinArgc(parsedArgs, U32(1), printUsage)
   
   var pid: U64
   var targetIndex = U32(0)

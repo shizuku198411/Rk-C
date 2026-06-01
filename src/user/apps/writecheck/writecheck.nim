@@ -1,4 +1,6 @@
 ## Validates write-file modes for create, append, overwrite, and denial cases.
+import ../../lib/core/args
+import ../../lib/core/app
 import ../../lib/core/io
 import ../../lib/core/strutils
 import ../../lib/core/syscall
@@ -13,6 +15,7 @@ const
   LargeChunkCount = 17
 
 var
+  parsedArgs: UserArgs
   buf: array[64, char]
   largeBuf: array[LargeChunkSize, char]
 
@@ -104,9 +107,9 @@ proc requireLargeFileRoundTrip(label: cstring) =
 
 ## Runs the write-mode validation sequence.
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
-  if cstringEq(arg, cstring"--help"):
-    printUsage()
-    sysExit(0)
+  parseArgsOrExit(arg, parsedArgs, printUsage)
+  exitIfHelp(parsedArgs, printUsage)
+  requireArgc(parsedArgs, U32(0), printUsage)
 
   discard sysUnlink(MainPath)
   discard sysUnlink(MissingPath)

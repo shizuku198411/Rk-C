@@ -5,9 +5,9 @@ import ../../../lib/rkx
 import ../../../lib/syscall_caps
 import ../../lib/runtime/orc_osalloc
 import ../../lib/core/args
+import ../../lib/core/app
 import ../../lib/core/io
 import ../../lib/core/pathutils
-import ../../lib/core/strutils
 import ../../lib/core/syscall
 
 const
@@ -377,17 +377,9 @@ proc readHeader(path: cstring) =
 
 ## Parses one target and prints its RKX metadata.
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
-  if not parseUserArgs(arg, parsedArgs):
-    printUsage()
-    sysExit(1)
-
-  if parsedArgs.argc == U32(1) and cstringEq(argAt(parsedArgs, U32(0)), cstring("--help")):
-    printUsage()
-    sysExit(0)
-
-  if parsedArgs.argc != U32(1):
-    printUsage()
-    sysExit(1)
+  parseArgsOrExit(arg, parsedArgs, printUsage)
+  exitIfHelp(parsedArgs, printUsage)
+  requireArgc(parsedArgs, U32(1), printUsage)
 
   let path = inputPath(argAt(parsedArgs, U32(0)))
   if path == nil:

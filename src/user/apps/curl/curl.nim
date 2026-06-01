@@ -4,6 +4,7 @@ import ../../lib/net/net_dns
 import ../../lib/net/net_http
 import ../../lib/net/ipaddr
 import ../../lib/core/args
+import ../../lib/core/app
 import ../../lib/core/options
 import ../../lib/core/syscall
 
@@ -58,8 +59,7 @@ proc headerSepByte(pos: U32): U8 =
 ## Parses curl options and extracts the single URL argument.
 proc parseCurlArgs(arg: cstring, verbose: var bool, includeHeaders: var bool,
                    outTarget: var array[ArgCap, char]): bool =
-  if not parseUserArgs(arg, parsedArgs):
-    return false
+  parseArgsOrExit(arg, parsedArgs, printUsage)
 
   if not parseOptions(parsedArgs, optionSpecs, parsedOptions):
     return false
