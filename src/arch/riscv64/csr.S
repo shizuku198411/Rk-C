@@ -49,14 +49,34 @@ arch_write_stvec:
     csrw stvec, a0
     ret
 
+.global arch_read_stvec
+arch_read_stvec:
+    csrr a0, stvec
+    ret
+
 .global arch_write_sscratch
 arch_write_sscratch:
     csrw sscratch, a0
     ret
 
+.global arch_read_sscratch
+arch_read_sscratch:
+    csrr a0, sscratch
+    ret
+
 .global arch_write_satp
 arch_write_satp:
     csrw satp, a0
+    ret
+
+.global arch_read_satp
+arch_read_satp:
+    csrr a0, satp
+    ret
+
+.global arch_read_scounteren
+arch_read_scounteren:
+    csrr a0, scounteren
     ret
 
 .global arch_rdtime

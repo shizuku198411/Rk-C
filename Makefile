@@ -17,6 +17,8 @@ BIN_DIR := bin
 MAP_DIR := map
 NIMCACHE_DIR := $(BUILD_DIR)/nimcache
 USER_NIMCACHE_DIR := $(BUILD_DIR)/user_nimcache
+MILKV_NIMCACHE_DIR := $(BUILD_DIR)/milkv_nimcache
+MILKV_BUILD_DIR := $(BUILD_DIR)/milkv-duo256m
 SHARED_LIB_SRCS := $(shell find $(SRC_DIR)/lib -type f -name '*.nim' | sort)
 VERSION_FILE := VERSION
 GENERATED_DIR := $(SRC_DIR)/generated
@@ -39,7 +41,12 @@ USER_APP_LINKER_SCRIPT := $(SRC_DIR)/user/app.ld
 ASM_OBJS := $(patsubst $(SRC_DIR)/%.S,$(OBJ_DIR)/%.o,$(ASM_SRCS))
 
 KERNEL_ELF := $(BIN_DIR)/kernel.elf
+MILKV_BIN_DIR := $(BIN_DIR)/milkv-duo256m
+MILKV_KERNEL_ELF := $(MILKV_BIN_DIR)/kernel.elf
+MILKV_KERNEL_BIN := $(MILKV_BIN_DIR)/kernel.bin
+MILKV_FIT := $(MILKV_BIN_DIR)/boot.sd
 KERNEL_MAP := $(MAP_DIR)/kernel.map
+MILKV_KERNEL_MAP := $(MAP_DIR)/milkv-duo256m-kernel.map
 DISK_IMG := $(BIN_DIR)/disk.img
 
 USER_SHELL_ELF := $(BIN_DIR)/shell.elf
@@ -98,6 +105,11 @@ QEMU_USER_NET ?= 10.0.1.0/24
 QEMU_USER_HOST ?= 10.0.1.1
 QEMU_HOSTFWD ?= tcp::10080-:80
 QEMU_TAP_IF ?= tap0
+MILKV_LOAD_ADDR ?= 0x80200000
+MILKV_ELF_LOAD_ADDR ?= 0x82000000
+MILKV_BOOT_SD_SOURCE ?= /tmp/rkc-sd-boot/boot.sd
+MILKV_DTB := $(MILKV_BUILD_DIR)/sg2002_milkv_duo256m.dtb
+MILKV_FIT_ITS := $(SRC_DIR)/platform/milkv-duo256m/rkc_phase0.its
 
 ARCH_FLAGS := \
 	-target $(TARGET) \
@@ -138,6 +150,30 @@ NIMFLAGS := \
 	--passL:"-nostdlib" \
 	--passL:"-Wl,-T,$(LINKER_SCRIPT)" \
 	--passL:"-Wl,-Map,$(KERNEL_MAP)"
+
+MILKV_NIMFLAGS := \
+	--os:standalone \
+	--cpu:riscv64 \
+	--cc:clang \
+	--noMain \
+	--mm:none \
+	--threads:off \
+	--panics:off \
+	-d:danger \
+	-d:platformMilkVDuo256m \
+	-d:milkvBringup \
+	--nimcache:$(MILKV_NIMCACHE_DIR) \
+	--passC:"$(ARCH_FLAGS)" \
+	--passC:"-ffreestanding" \
+	--passC:"-fno-builtin" \
+	--passC:"-fno-stack-protector" \
+	--passC:"-fno-pic" \
+	--passC:"-Isrc/include" \
+	--passL:"$(ARCH_FLAGS)" \
+	--passL:"-fuse-ld=lld" \
+	--passL:"-nostdlib" \
+	--passL:"-Wl,-T,$(LINKER_SCRIPT)" \
+	--passL:"-Wl,-Map,$(MILKV_KERNEL_MAP)"
 
 USER_NIMFLAGS := \
 	--os:standalone \
@@ -200,7 +236,7 @@ QEMU_DEBUG_ARGS := \
 	-S \
 	-gdb tcp::$(GDB_PORT)
 
-.PHONY: all build build-bins build-test-bins generate-version appfs clean disasm run qemu-run qemu-run-built degraded-run qemu-debug test-apps net-host-help
+.PHONY: all build build-bins build-test-bins generate-version appfs clean disasm run qemu-run qemu-run-built degraded-run qemu-debug test-apps net-host-help milkv-bringup milkv-fit milkv-help
 
 all: build
 
@@ -217,6 +253,25 @@ $(GENERATED_VERSION): $(VERSION_FILE) $(VERSION_GENERATOR) README.md | $(GENERAT
 
 $(KERNEL_ELF): $(NIM_SRCS) $(GENERATED_VERSION) $(ASM_OBJS) $(LINKER_SCRIPT) | $(BIN_DIR) $(MAP_DIR) $(NIMCACHE_DIR)
 	$(NIM) c $(NIMFLAGS) $(foreach obj,$(ASM_OBJS),--passL:"$(obj)") -o:$@ $(KERNEL_NIM)
+
+$(MILKV_KERNEL_ELF): $(NIM_SRCS) $(GENERATED_VERSION) $(ASM_OBJS) $(LINKER_SCRIPT) | $(MILKV_BIN_DIR) $(MAP_DIR) $(MILKV_NIMCACHE_DIR)
+	$(NIM) c $(MILKV_NIMFLAGS) $(foreach obj,$(ASM_OBJS),--passL:"$(obj)") -o:$@ $(KERNEL_NIM)
+
+$(MILKV_KERNEL_BIN): $(MILKV_KERNEL_ELF) | $(MILKV_BIN_DIR)
+	$(OBJCOPY) -O binary $< $@
+
+$(MILKV_DTB): | $(MILKV_BUILD_DIR)
+	@if [ -f "$(MILKV_BOOT_SD_SOURCE)" ]; then \
+		dumpimage -T flat_dt -p 1 -o $@ "$(MILKV_BOOT_SD_SOURCE)"; \
+	elif [ -f "$@" ]; then \
+		echo "Using cached Milk-V DTB: $@"; \
+	else \
+		echo "missing Milk-V source FIT: $(MILKV_BOOT_SD_SOURCE)" >&2; \
+		exit 1; \
+	fi
+
+$(MILKV_FIT): $(MILKV_KERNEL_BIN) $(MILKV_DTB) $(MILKV_FIT_ITS) | $(MILKV_BIN_DIR)
+	mkimage -f $(MILKV_FIT_ITS) $@
 
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.S
 	mkdir -p $(dir $@)
@@ -266,7 +321,7 @@ endef
 
 $(foreach server,$(USER_SERVER_NAMES),$(eval $(call USER_SERVER_template,$(server))))
 
-$(OBJ_DIR) $(BIN_DIR) $(MAP_DIR) $(NIMCACHE_DIR) $(GENERATED_DIR):
+$(OBJ_DIR) $(BIN_DIR) $(MILKV_BIN_DIR) $(MAP_DIR) $(NIMCACHE_DIR) $(MILKV_NIMCACHE_DIR) $(MILKV_BUILD_DIR) $(GENERATED_DIR):
 	mkdir -p $@
 
 $(DISK_IMG): | $(BIN_DIR)
@@ -292,6 +347,37 @@ qemu-debug: build
 
 test-apps:
 	RKC_OPTIONAL_TOOLCHAIN_TESTS="$(wildcard $(RKC_TOOLCHAIN_DIR)/tests/app_cases.py)" RKC_OPTIONAL_TOOLCHAIN_TEST_APPS="$(OPTIONAL_TEST_APPFS_NAMES)" python3 scripts/test_apps.py $(TEST_APPS_ARGS) --skip-network-smoke
+
+milkv-bringup: generate-version $(MILKV_KERNEL_BIN)
+	@echo "Milk-V Duo 256M bring-up images:"
+	@echo "  ELF: $(MILKV_KERNEL_ELF)"
+	@echo "  BIN: $(MILKV_KERNEL_BIN)"
+	@echo ""
+	@echo "Suggested U-Boot commands:"
+	@echo "  fatload mmc 0:1 $(MILKV_ELF_LOAD_ADDR) kernel.elf"
+	@echo "  bootelf $(MILKV_ELF_LOAD_ADDR)"
+	@echo ""
+	@echo "  fatload mmc 0:1 $(MILKV_LOAD_ADDR) kernel.bin"
+	@echo "  go $(MILKV_LOAD_ADDR)"
+
+milkv-fit: generate-version $(MILKV_FIT)
+	@echo "Milk-V Duo 256M FIT image:"
+	@echo "  FIT: $(MILKV_FIT)"
+	@echo ""
+	@echo "Source FIT used for FDT extraction:"
+	@echo "  $(MILKV_BOOT_SD_SOURCE)"
+	@echo ""
+	@echo "Copy to SD boot partition as boot.sd to use the existing U-Boot bootcmd."
+
+milkv-help:
+	@echo "Build Milk-V Duo 256M Phase 0 bring-up images:"
+	@echo "  make milkv-bringup"
+	@echo "  make milkv-fit MILKV_BOOT_SD_SOURCE=/tmp/rkc-sd-boot/boot.sd"
+	@echo ""
+	@echo "Copy these files to the SD FAT partition:"
+	@echo "  $(MILKV_KERNEL_ELF) -> kernel.elf"
+	@echo "  $(MILKV_KERNEL_BIN) -> kernel.bin"
+	@echo "  $(MILKV_FIT) -> boot.sd"
 
 net-host-help:
 	@echo "Default TAP network:"

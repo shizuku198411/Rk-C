@@ -17,8 +17,12 @@ proc readSstatus*(): U64 {.importc: "arch_read_sstatus", cdecl.}
 proc writeSstatus*(value: U64) {.importc: "arch_write_sstatus", cdecl.}
 proc writeSepc*(value: U64) {.importc: "arch_write_sepc", cdecl.}
 proc writeStvec*(value: U64) {.importc: "arch_write_stvec", cdecl.}
+proc readStvec*(): U64 {.importc: "arch_read_stvec", cdecl.}
 proc writeSscratch*(value: U64) {.importc: "arch_write_sscratch", cdecl.}
+proc readSscratch*(): U64 {.importc: "arch_read_sscratch", cdecl.}
 proc writeSatp*(value: U64) {.importc: "arch_write_satp", cdecl.}
+proc readSatp*(): U64 {.importc: "arch_read_satp", cdecl.}
+proc readScounteren*(): U64 {.importc: "arch_read_scounteren", cdecl.}
 proc rdtime*(): U64 {.importc: "arch_rdtime", cdecl.}
 proc writeStimecmp*(value: U64) {.importc: "arch_write_stimecmp", cdecl.}
 proc flushTlb*() {.importc: "arch_flush_tlb", cdecl.}
