@@ -9,3 +9,6 @@ const
   MilkvReservedIonStart* = U64(0x8b300000)
   MilkvReservedIonSize* = U64(75 * 1024 * 1024)
   MilkvReservedIonEnd* = MilkvReservedIonStart + MilkvReservedIonSize
+  MilkvUart0Base* = U64(0x04140000)
+  MilkvTimerFrequency* = U64(25_000_000)
+  MilkvTimerInterruptDelta* = MilkvTimerFrequency div U64(2)

@@ -4,11 +4,16 @@ import ../../lib/types
 import ../../lib/syscall_types
 import ../syscall/system/trap_ops
 import ../dev/console
-import ../dev/timer
 import ../fs/fs
 import ../task/process
 import ../trap/syscall
 import ../trap/trap_types
+
+when not defined(milkvBringup):
+  import ../dev/timer
+
+when defined(platformMilkVDuo256m):
+  import ../../platform/milkv_duo256m/memory_layout
 
 const
   UserPanicLogPath = cstring"/var/log/user_panic.log"
@@ -29,6 +34,15 @@ const
   ScauseStoreAMOPageFault               = U64(0x0f)
   ScauseInterruptFlag                   = U64(1) shl 63
   ScauseSupervisorTimer                 = ScauseInterruptFlag or U64(0x05)
+
+when defined(milkvBringup):
+  var
+    milkvTimerInterruptCount* {.volatile.}: U64
+    milkvLastTimerScause* {.volatile.}: U64
+    milkvLastTimerSepc* {.volatile.}: U64
+
+
+  proc sbiSetTimer(value: U64) {.importc: "sbi_set_timer", cdecl.}
 
 
 ## Implements the trap from user kernel helper.
@@ -249,25 +263,32 @@ proc trapHandler*(frame: ptr TrapFrame) {.exportc: "trap_handler", cdecl.} =
     faultOrPanic("Store/AMO Page Fault", scause, stval, userPc, fromUser, frame)
   
   of ScauseSupervisorTimer:
-    inc trapCount.supervisorTimer
-    countUpTimerTick()
-    countCurrentProcessCpuTick()
-    if currentIsIdleProcess():
-      countUpIdleTick()
-    if cpuWindowReady():
-      snapshotProcessCpuWindow(cpuWindowTickCount)
-      snapshotCpuWindow()
-    wakeTimerWaiters(timerTickCount)
+    when defined(milkvBringup):
+      inc trapCount.supervisorTimer
+      inc milkvTimerInterruptCount
+      milkvLastTimerScause = scause
+      milkvLastTimerSepc = userPc
+      sbiSetTimer(arch.rdtime() + MilkvTimerInterruptDelta)
+    else:
+      inc trapCount.supervisorTimer
+      countUpTimerTick()
+      countCurrentProcessCpuTick()
+      if currentIsIdleProcess():
+        countUpIdleTick()
+      if cpuWindowReady():
+        snapshotProcessCpuWindow(cpuWindowTickCount)
+        snapshotCpuWindow()
+      wakeTimerWaiters(timerTickCount)
 
-    if pollInput():
-      wakeInputWaiters()
-    
-    setNextTimer()
+      if pollInput():
+        wakeInputWaiters()
 
-    requestResched()
-    if fromUser:
-      deliverCurrentSignals()
-      maybeYieldOnResched()
+      setNextTimer()
+
+      requestResched()
+      if fromUser:
+        deliverCurrentSignals()
+        maybeYieldOnResched()
   
   else:
     panicMsg("Unexpected Trap", scause, stval, userPc)
