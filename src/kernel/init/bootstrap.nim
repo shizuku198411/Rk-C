@@ -92,31 +92,27 @@ proc enableSv39(memInfo: MemoryInfo) =
 
 ## Implements the kernel banner kernel helper.
 proc printBannerVersionLine() =
-  printConsoleOnly("║   version: ")
+  printConsoleOnly("  |   version: ")
   printConsoleOnly(cstring(RkcVersion))
 
-  var spaces = 40 - 12 - RkcVersion.len
+  var spaces = 40 - 11 - RkcVersion.len
   while spaces > 0:
     putChar(' ')
     dec spaces
 
-  printlnConsoleOnly("║")
+  printlnConsoleOnly("|")
 
 
 ## Implements the kernel banner kernel helper.
 proc kernelBanner() =
   putChar('\n')
-  printlnConsoleOnly("╔════════════════════════════════════════╗")
-  printlnConsoleOnly("║     ██████╗  ██╗  ██╗       ██████╗    ║")
-  printlnConsoleOnly("║     ██╔══██╗ ██║ ██╔╝      ██╔════╝    ║")
-  printlnConsoleOnly("║     ██████╔╝ █████╔╝ █████╗██║         ║")
-  printlnConsoleOnly("║     ██╔══██╗ ██╔═██╗ ╚════╝██║         ║")
-  printlnConsoleOnly("║     ██║  ██║ ██║  ██╗      ╚██████╗    ║")
-  printlnConsoleOnly("║     ╚═╝  ╚═╝ ╚═╝  ╚═╝       ╚═════╝    ║")
-  printlnConsoleOnly("╠════════════════════════════════════════╣")
-  printlnConsoleOnly("║   microkernel-style system on RISC-V   ║")
+  printlnConsoleOnly("  +-----------------------------------------+")
+  printlnConsoleOnly("  |            Welcome to Rk-C!             |")
+  printlnConsoleOnly("  |-----------------------------------------|")
+  printlnConsoleOnly("  |   microkernel-style system on RISC-V    |")
   printBannerVersionLine()
-  printlnConsoleOnly("╚════════════════════════════════════════╝\n")
+  printlnConsoleOnly("  +-----------------------------------------+")
+  printConsoleOnly("\n")
 
 
 ## Waits for for initial services.
