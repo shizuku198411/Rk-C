@@ -439,33 +439,6 @@ proc releaseUserAddressSpace(p: ptr Process) =
   if p.rootPageTable == nil or p.rootPageTable == kernelPageTable:
     return
 
-  when defined(platformMilkVDuo256m):
-    print("[milkv-debug][lifecycle] release user pid=")
-    printSigned(p.pid)
-    print(" exe=")
-    print(p.exePath)
-    print(" root=")
-    printPtr(cast[U64](p.rootPageTable))
-    print(" current=")
-    if currentProc == nil:
-      print("(nil)")
-    else:
-      printSigned(currentProc.pid)
-    putChar('\n')
-    print("[milkv-debug][lifecycle] user base=")
-    printPtr(p.user.base)
-    print(" imagePages=")
-    printUnsigned(p.user.imagePages)
-    print(" stackTop=")
-    printPtr(p.user.stackTop)
-    print(" stackPages=")
-    printUnsigned(p.user.stackPages)
-    print(" heapStart=")
-    printPtr(p.user.heapStart)
-    print(" heapEnd=")
-    printPtr(p.user.heapEnd)
-    putChar('\n')
-
   let oldSatp = arch.readSatp()
   let kernelSatp =
     if kernelPageTable == nil:
@@ -473,18 +446,8 @@ proc releaseUserAddressSpace(p: ptr Process) =
     else:
       makeSatp(cast[PAddr](kernelPageTable))
   let restoreSatp = currentProc != p and kernelSatp != U64(0) and oldSatp != kernelSatp
-  when defined(platformMilkVDuo256m):
-    print("[milkv-debug][lifecycle] satp old=")
-    printPtr(oldSatp)
-    print(" kernel=")
-    printPtr(kernelSatp)
-    print(" restore=")
-    printBool(restoreSatp)
-    putChar('\n')
 
   if restoreSatp:
-    when defined(platformMilkVDuo256m):
-      println("[milkv-debug][lifecycle] switch to kernel satp")
     arch.writeSatp(kernelSatp)
     arch.flushTlb()
 
@@ -499,14 +462,10 @@ proc releaseUserAddressSpace(p: ptr Process) =
   if heapPages != 0:
     discard unmapRangeFree(p.rootPageTable, p.user.heapStart, heapPages)
 
-  when defined(platformMilkVDuo256m):
-    println("[milkv-debug][lifecycle] free page table")
   freePageTablePages(p.rootPageTable)
   p.rootPageTable = nil
 
   if restoreSatp:
-    when defined(platformMilkVDuo256m):
-      println("[milkv-debug][lifecycle] restore old satp")
     arch.writeSatp(oldSatp)
     arch.flushTlb()
 
@@ -515,15 +474,6 @@ proc releaseUserAddressSpace(p: ptr Process) =
 proc discardProcess*(p: ptr Process) =
   if p == nil:
     return
-
-  when defined(platformMilkVDuo256m):
-    print("[milkv-debug][lifecycle] discard pid=")
-    printSigned(p.pid)
-    print(" exe=")
-    print(p.exePath)
-    print(" state=")
-    printProcessState(p.state)
-    putChar('\n')
 
   releaseUserAddressSpace(p)
 

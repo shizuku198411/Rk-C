@@ -254,20 +254,6 @@ proc markProcessZombie*(p: ptr Process, status: U64) =
   if p == nil:
     return
 
-  when defined(platformMilkVDuo256m):
-    print("[milkv-debug][process] zombie pid=")
-    printSigned(p.pid)
-    print(" exe=")
-    print(p.exePath)
-    print(" status=")
-    printUnsigned(status)
-    print(" current=")
-    if currentProc == nil:
-      print("(nil)")
-    else:
-      printSigned(currentProc.pid)
-    putChar('\n')
-
   let pid = p.pid
   let parentPid = p.parentPid
 

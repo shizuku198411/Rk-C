@@ -103,15 +103,6 @@ proc syscallExit*(status: U64): U64 =
   if currentProc == nil:
     panic("exit without current process")
 
-  when defined(platformMilkVDuo256m):
-    print("[milkv-debug][process] exit pid=")
-    printSigned(currentProc.pid)
-    print(" exe=")
-    print(currentProc.exePath)
-    print(" status=")
-    printUnsigned(status)
-    putChar('\n')
-
   markProcessZombie(currentProc, status)
   schedule()
   0

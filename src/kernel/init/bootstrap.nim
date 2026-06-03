@@ -82,12 +82,6 @@ proc enableSv39(memInfo: MemoryInfo) =
 
   setKernelPageTable(kernelRootPageTable)
   let satp = makeSatp(cast[PAddr](kernelRootPageTable))
-  when defined(platformMilkVDuo256m):
-    print("[milkv-debug][bootstrap] enable sv39 kernel root=")
-    printPtr(cast[U64](kernelRootPageTable))
-    print(" satp=")
-    printPtr(satp)
-    putChar('\n')
   paging.flushTlb()
   arch.writeSatp(satp)
   paging.flushTlb()

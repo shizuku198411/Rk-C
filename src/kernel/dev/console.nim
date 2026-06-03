@@ -3,6 +3,10 @@ import ../../arch/riscv64/arch
 import ../../lib/types
 import ./klog
 
+when defined(platformMilkVDuo256m):
+  import ../../platform/milkv_duo256m/memory_layout
+  import ./uart16550
+
 const
   InputBufCap = U64(128)
 
@@ -24,6 +28,11 @@ proc sbiGetchar(): clong {.importc: "sbi_getchar", cdecl.}
 when defined(platformMilkVDuo256m):
   ## Imports the SBI putchar routine.
   proc sbiPutchar(ch: clong) {.importc: "sbi_putchar", cdecl.}
+
+
+  ## Returns the platform UART used for Milk-V console input.
+  proc consoleUart(): Uart16550 =
+    Uart16550(base: MilkvUart0Base, regShift: U8(2), regWidth: U8(4))
 
 var
   inputBuf: array[InputBufCap, char]
@@ -69,7 +78,18 @@ proc popInput*(): int =
 ## Implements the poll input kernel helper.
 proc pollInput*(): bool =
   when defined(platformMilkVDuo256m):
-    false
+    let uart = consoleUart()
+    var pushed = false
+    while true:
+      let ch = uart16550TryGetChar(uart)
+      if ch < 0:
+        break
+
+      if not pushInput(char(ch and 0xff)):
+        break
+      pushed = true
+
+    pushed
   else:
     let uart = cast[ptr UncheckedArray[U8]](Uart0Base)
     var pushed = false

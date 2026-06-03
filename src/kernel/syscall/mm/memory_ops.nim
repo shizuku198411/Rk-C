@@ -25,17 +25,6 @@ proc heapBreathable(current: ptr Process, newEnd: U64): bool =
 proc growHeapPages(current: ptr Process, startVa, pages: U64): bool =
   var mappedPages = U64(0)
 
-  when defined(platformMilkVDuo256m):
-    print("[milkv-debug][heap] grow pid=")
-    printSigned(current.pid)
-    print(" exe=")
-    print(current.exePath)
-    print(" startVa=")
-    printPtr(startVa)
-    print(" pages=")
-    printUnsigned(pages)
-    putChar('\n')
-
   while mappedPages < pages:
     let pagePa = palloc(U64(1))
     if pagePa == NilPAddr:
@@ -46,13 +35,6 @@ proc growHeapPages(current: ptr Process, startVa, pages: U64): bool =
       return false
 
     let pageVa = startVa + mappedPages * PageSize
-    when defined(platformMilkVDuo256m):
-      print("[milkv-debug][heap] map va=")
-      printPtr(pageVa)
-      print(" pa=")
-      printPtr(pagePa)
-      putChar('\n')
-
     if mapPage(current.rootPageTable, pageVa, pagePa, PteU or PteR or PteW) != 0:
       when defined(platformMilkVDuo256m):
         println("[milkv-debug][heap] map failed")
@@ -60,15 +42,6 @@ proc growHeapPages(current: ptr Process, startVa, pages: U64): bool =
       if mappedPages != U64(0):
         discard unmapRangeFree(current.rootPageTable, startVa, mappedPages)
       return false
-
-    when defined(platformMilkVDuo256m):
-      print("[milkv-debug][heap] pte va=")
-      printPtr(pageVa)
-      print(" pa=")
-      printPtr(mappedPagePa(current.rootPageTable, pageVa))
-      print(" flags=")
-      printPtr(mappedPageFlags(current.rootPageTable, pageVa))
-      putChar('\n')
 
     inc mappedPages
 
@@ -99,19 +72,6 @@ proc syscallBrk*(newEnd: U64): U64 =
   if newEnd == U64(0):
     return currentProc.user.heapEnd
 
-  when defined(platformMilkVDuo256m):
-    print("[milkv-debug][heap] brk pid=")
-    printSigned(currentProc.pid)
-    print(" exe=")
-    print(currentProc.exePath)
-    print(" current=")
-    printPtr(currentProc.user.heapEnd)
-    print(" new=")
-    printPtr(newEnd)
-    print(" limit=")
-    printPtr(currentProc.user.heapLimit)
-    putChar('\n')
-
   if not heapBreathable(currentProc, newEnd):
     when defined(platformMilkVDuo256m):
       println("[milkv-debug][heap] brk rejected")
@@ -135,10 +95,6 @@ proc syscallBrk*(newEnd: U64): U64 =
       return U64(-1'i64)
 
   currentProc.user.heapEnd = newEnd
-  when defined(platformMilkVDuo256m):
-    print("[milkv-debug][heap] brk OK heapEnd=")
-    printPtr(currentProc.user.heapEnd)
-    putChar('\n')
   0
 
 
@@ -149,17 +105,6 @@ proc syscallSbrk*(delta: I64): U64 =
 
   let current = currentProc.user.heapEnd
   var newEnd = current
-
-  when defined(platformMilkVDuo256m):
-    print("[milkv-debug][heap] sbrk pid=")
-    printSigned(currentProc.pid)
-    print(" exe=")
-    print(currentProc.exePath)
-    print(" current=")
-    printPtr(current)
-    print(" delta=")
-    printSigned(delta)
-    putChar('\n')
 
   if delta >= 0:
     let add = U64(delta)
@@ -180,8 +125,4 @@ proc syscallSbrk*(delta: I64): U64 =
       println("[milkv-debug][heap] sbrk failed")
     return U64(-1'i64)
 
-  when defined(platformMilkVDuo256m):
-    print("[milkv-debug][heap] sbrk return=")
-    printPtr(current)
-    putChar('\n')
   current
