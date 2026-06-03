@@ -259,7 +259,7 @@ proc fsReadFile*(path: cstring, dst: pointer, capacity: U64): int =
     let size = U64(appfsEntries[appIdx].size)
     if size > capacity:
       return -1
-    let base = AppfsStartBlock * BlockSize + U64(appfsEntries[appIdx].dataOff)
+    let base = appfsStartBlock * BlockSize + U64(appfsEntries[appIdx].dataOff)
     if appfsReadBytes(base, dst, size) < 0:
       return -1
     return int(size)
@@ -308,7 +308,7 @@ proc fsReadFileRange*(path: cstring, dst: pointer, offset, capacity: U64): int =
     if readLen > capacity:
       readLen = capacity
 
-    let base = AppfsStartBlock * BlockSize + U64(appfsEntries[appIdx].dataOff) + offset
+    let base = appfsStartBlock * BlockSize + U64(appfsEntries[appIdx].dataOff) + offset
     if appfsReadBytes(base, dst, readLen) < 0:
       return -1
     return int(readLen)

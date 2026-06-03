@@ -10,5 +10,10 @@ const
   MilkvReservedIonSize* = U64(75 * 1024 * 1024)
   MilkvReservedIonEnd* = MilkvReservedIonStart + MilkvReservedIonSize
   MilkvUart0Base* = U64(0x04140000)
+  MilkvSdBase* = U64(0x04310000)
+  MilkvDeviceMmioSize* = U64(0x00010000)
+  MilkvSdBlockSize* = U64(512)
+  MilkvAppfsPartitionIndex* = U64(1) # zero-origin, partition 2
+  MilkvAppfsLocalStartBlock* = U64(4096)
   MilkvTimerFrequency* = U64(25_000_000)
   MilkvTimerInterruptDelta* = MilkvTimerFrequency div U64(2)

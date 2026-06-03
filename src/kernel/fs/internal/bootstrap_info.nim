@@ -125,9 +125,31 @@ proc ensureFileContent(parentIdx: int, name, data: cstring, uid, gid, mode: U32)
   true
 
 
+## Selects the platform rootfs/appfs block range before mounting the filesystem.
+proc configurePlatformBlockLayout() =
+  when defined(platformMilkVDuo256m):
+    var part: BlockPartition
+    if not readMbrPartition(MilkvAppfsPartitionIndex, part):
+      panic("milkv rootfs partition not found")
+    if not blockdevSetLogicalRange(part.startBlock, part.blockCount):
+      panic("milkv rootfs partition invalid")
+
+    fsSetAppfsBaseBlock(MilkvAppfsLocalStartBlock)
+    printBootMsg("  milkv rootfs base block = ")
+    printUnsigned(blockdevBaseOffset())
+    putChar('\n')
+    printBootMsg("  milkv rootfs blocks = ")
+    printUnsigned(blockdevCapacityBlocks())
+    putChar('\n')
+    printBootMsg("  milkv appfs local block = ")
+    printUnsigned(fsAppfsBaseBlock())
+    putChar('\n')
+
+
 ## Implements the fs init kernel helper.
 proc fsInit*() =
   blockServiceInit()
+  configurePlatformBlockLayout()
 
   if readSuper() < 0:
     panic("fs super read failed")

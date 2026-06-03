@@ -213,6 +213,13 @@ proc deliverCurrentSignals*()
 
 ## Sets kernel page table.
 proc setKernelPageTable*(root: PageTable) =
+  when defined(platformMilkVDuo256m):
+    print("[milkv-debug][process] set kernel page table root=")
+    printPtr(cast[U64](root))
+    print(" satp=")
+    printPtr(arch.readSatp())
+    putChar('\n')
+
   kernelPageTable = root
 
 

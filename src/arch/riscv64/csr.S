@@ -99,6 +99,11 @@ arch_fence_rw_rw:
     fence rw, rw
     ret
 
+.global arch_fence_i
+arch_fence_i:
+    fence.i
+    ret
+
 .global arch_enter_user
 arch_enter_user:
     csrw sepc, a0

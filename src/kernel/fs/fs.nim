@@ -12,17 +12,22 @@ import ../fs/tmpfs
 import ../lib/path
 import ../syscall/blk/block_service_ops
 
+when defined(platformMilkVDuo256m):
+  import ../fs/blockdev except BlockSize, BlockCount
+  import ../fs/partition
+  import ../../platform/milkv_duo256m/memory_layout
+
 const
   FsMagic = U32(0x4e465333) # NFS3
   FsMaxNodes* = 128
   FsNameMax* = 16
   AppfsMagic = U32(0x41504653) # APFS
-  AppfsStartBlock = U64(4096)
+  AppfsDefaultStartBlock = U64(4096)
   AppfsMaxEntries = 64
   FsMetaBlocks = U64(16)
   FsMetaBytes = 8192
   FsDataStartBlock = FsMetaBlocks
-  FsDataBlockCount = int(AppfsStartBlock - FsDataStartBlock)
+  FsDataBlockCount = int(AppfsDefaultStartBlock - FsDataStartBlock)
   FsDataBitmapBytes = (FsDataBlockCount + 7) div 8
 
   FsTypeFile = U32(1)
@@ -89,6 +94,7 @@ var
   mountCount: int
   appfsEntries: array[AppfsMaxEntries, AppfsEntry]
   appfsEntryCount: U32
+  appfsStartBlock: U64 = AppfsDefaultStartBlock
   appfsReady: bool
 
 
@@ -112,6 +118,10 @@ proc fsRename*(oldPath, newPath: cstring): int
 proc fsChmod*(path: cstring, mode: U32): int
 ## Implements the fs chown kernel helper.
 proc fsChown*(path: cstring, uid, gid: U32): int
+## Sets the logical block where appfs starts.
+proc fsSetAppfsBaseBlock*(baseBlock: U64)
+## Returns the logical block where appfs starts.
+proc fsAppfsBaseBlock*(): U64
 ## Ensures a child node exists below an existing directory.
 proc ensureDir(parentIdx: int, name: cstring, typ: U32): bool
 
@@ -146,3 +156,37 @@ include ./internal/directory_queries
 
 ## Includes performs rootfs mutations and file-content reads and writes.
 include ./internal/file_mutations
+
+
+## Sets the logical block where appfs starts.
+proc fsSetAppfsBaseBlock*(baseBlock: U64) =
+  appfsStartBlock = baseBlock
+  appfsReady = false
+  appfsEntryCount = U32(0)
+
+
+## Returns the logical block where appfs starts.
+proc fsAppfsBaseBlock*(): U64 =
+  appfsStartBlock
+
+
+## Loads only appfs metadata without requiring rootfs initialization.
+proc fsLoadAppfsOnly*(): int =
+  appfsLoad()
+
+
+## Returns the loaded appfs entry count.
+proc fsAppfsEntryCount*(): U32 =
+  if not appfsReady:
+    return U32(0)
+
+  appfsEntryCount
+
+
+## Looks up a /bin appfs entry size without requiring fsReady.
+proc fsAppfsFileSize*(path: cstring): int =
+  let idx = resolveAppfsPath(path)
+  if idx < 0:
+    return -1
+
+  int(appfsEntries[idx].size)

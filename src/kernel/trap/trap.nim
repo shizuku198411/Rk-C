@@ -9,10 +9,13 @@ import ../task/process
 import ../trap/syscall
 import ../trap/trap_types
 
+when defined(platformMilkVDuo256m):
+  import ../mm/paging
+
 when not defined(milkvBringup):
   import ../dev/timer
 
-when defined(platformMilkVDuo256m):
+when defined(platformMilkVDuo256m) and defined(milkvBringup):
   import ../../platform/milkv_duo256m/memory_layout
 
 const
@@ -181,6 +184,33 @@ proc writeUserPanicLog(scause: U64, stval: U64, userPc: U64, frame: ptr TrapFram
 ## Implements the fault or panic kernel helper.
 proc faultOrPanic(scauseType: cstring, scause: U64, stval: U64, userPc: U64, fromUser: bool, frame: ptr TrapFrame) =
   if fromUser and currentProc != nil:
+    when defined(platformMilkVDuo256m):
+      print("[milkv-debug][trap] user fault pid=")
+      printSigned(currentProc.pid)
+      print(" exe=")
+      print(currentProc.exePath)
+      print(" root=")
+      printPtr(cast[U64](currentProc.rootPageTable))
+      print(" satp=")
+      printPtr(arch.readSatp())
+      print(" frame.sstatus=")
+      printPtr(frame.sstatus)
+      print(" spp=")
+      if (frame.sstatus and SstatusSpp) == U64(0):
+        print("user")
+      else:
+        print("supervisor")
+      putChar('\n')
+      if scause == ScauseInstructionPageFault or scause == ScauseLoadPageFault or
+          scause == ScauseStoreAMOPageFault:
+        print("[milkv-debug][trap] fault va page=")
+        printPtr(alignDown(stval, PageSize))
+        print(" pa=")
+        printPtr(mappedPagePa(currentProc.rootPageTable, stval))
+        print(" flags=")
+        printPtr(mappedPageFlags(currentProc.rootPageTable, stval))
+        putChar('\n')
+
     print("PAGE FAULT DETECTED: ")
     print(scauseType)
     print(". scause=")

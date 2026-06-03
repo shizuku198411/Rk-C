@@ -11,6 +11,9 @@ import ../mm/paging
 import ../task/process
 import ../task/rkx_loader
 
+when defined(platformMilkVDuo256m):
+  import ../../platform/milkv_duo256m/memory_layout
+
 const
   ShellBase* = VAddr(0x01000000)
   ShellStackTop* = VAddr(0x01100000)
@@ -18,12 +21,14 @@ const
   AppStackTop* = VAddr(0x01300000)
   UserArgMax = U64(256)
 
-  QemuUart0Base = PAddr(0x10000000)
-  QemuMmioSize = U64(0x00010000)
-  QemuPlicBase = PAddr(0x0c000000)
-  QemuPlicSize = U64(0x00400000)
-  QemuRtcBase = PAddr(0x00101000)
-  QemuRtcSize = U64(0x00001000)
+when not defined(platformMilkVDuo256m):
+  const
+    QemuUart0Base = PAddr(0x10000000)
+    QemuMmioSize = U64(0x00010000)
+    QemuPlicBase = PAddr(0x0c000000)
+    QemuPlicSize = U64(0x00400000)
+    QemuRtcBase = PAddr(0x00101000)
+    QemuRtcSize = U64(0x00001000)
 
 
 var
@@ -223,14 +228,21 @@ proc mapKernelRanges(root: PageTable) =
   if mapRange(root, dataStart, dataStart, dataSize, PteR or PteW) != 0:
     panic("failed to map kernel data range")
 
-  if mapRange(root, QemuUart0Base, QemuUart0Base, QemuMmioSize, PteR or PteW) != 0:
-    panic("failed to map qemu mmio")
+  when defined(platformMilkVDuo256m):
+    if mapDeviceRange(root, PAddr(MilkvUart0Base), PAddr(MilkvUart0Base), MilkvDeviceMmioSize, PteR or PteW) != 0:
+      panic("failed to map milkv uart mmio")
 
-  if mapRange(root, QemuPlicBase, QemuPlicBase, QemuPlicSize, PteR or PteW) != 0:
-    panic("failed to map plic mmio")
+    if mapDeviceRange(root, PAddr(MilkvSdBase), PAddr(MilkvSdBase), MilkvDeviceMmioSize, PteR or PteW) != 0:
+      panic("failed to map milkv sd mmio")
+  else:
+    if mapDeviceRange(root, QemuUart0Base, QemuUart0Base, QemuMmioSize, PteR or PteW) != 0:
+      panic("failed to map qemu mmio")
 
-  if mapRange(root, QemuRtcBase, QemuRtcBase, QemuRtcSize, PteR or PteW) != 0:
-    panic("failed to map rtc mmio")
+    if mapDeviceRange(root, QemuPlicBase, QemuPlicBase, QemuPlicSize, PteR or PteW) != 0:
+      panic("failed to map plic mmio")
+
+    if mapDeviceRange(root, QemuRtcBase, QemuRtcBase, QemuRtcSize, PteR or PteW) != 0:
+      panic("failed to map rtc mmio")
 
 
 ## Creates kernel mapped page table.
@@ -274,7 +286,10 @@ proc createLoginUserProcess*(): int32 =
 
 ## Creates service manager user process.
 proc createServiceManagerUserProcess*(): int32 =
-  loadUserProcess("/bin/svcmgtd", AppBase, AppStackTop, nil)
+  when defined(platformMilkVDuo256m):
+    loadUserProcess("/bin/svcmgtd", AppBase, AppStackTop, "--no-network")
+  else:
+    loadUserProcess("/bin/svcmgtd", AppBase, AppStackTop, nil)
 
 
 ## Creates fs server user process.

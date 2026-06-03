@@ -11,8 +11,17 @@ proc appfsReadBytes(absOff: U64, outBuf: pointer, n: U64): int =
     let cur = absOff + done
     let blk = cur div BlockSize
     let inBlk = cur mod BlockSize
-    if serviceBlockRead(blk, addr blockBuf[0]) < 0:
-      return -1
+    when defined(platformMilkVDuo256m):
+      ##
+      ## appfs backs executable images used to start user services.  Keep this
+      ## path independent from blockd so service startup cannot depend on the
+      ## block service that is still being assembled.
+      ##
+      if blockRead(blk, addr blockBuf[0]) < 0:
+        return -1
+    else:
+      if serviceBlockRead(blk, addr blockBuf[0]) < 0:
+        return -1
 
     var chunk = BlockSize - inBlk
     if chunk > n - done:
@@ -63,7 +72,7 @@ proc resolveAppfsPath(path: cstring): int =
 ## Implements the appfs load kernel helper.
 proc appfsLoad(): int =
   var hdr: AppfsHeader
-  let base = AppfsStartBlock * BlockSize
+  let base = appfsStartBlock * BlockSize
   if appfsReadBytes(base, addr hdr, U64(sizeof(AppfsHeader))) < 0:
     return -1
   if hdr.magic != AppfsMagic or hdr.count > U32(AppfsMaxEntries):
@@ -77,5 +86,3 @@ proc appfsLoad(): int =
 
   appfsReady = true
   0
-
-

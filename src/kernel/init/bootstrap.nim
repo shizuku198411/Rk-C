@@ -14,12 +14,16 @@ import ../task/process
 import ../task/exec
 import ../service/registry
 
-when defined(platformMilkVDuo256m):
+when defined(platformMilkVDuo256m) and defined(milkvBringup):
   import ../../platform/milkv_duo256m/memory_layout
 
 when defined(milkvBringup):
   import ../../lib/syscall_ids
   import ../lib/fdt
+  import ../dev/uart16550
+  import ../dev/sd/sdhci
+  import ../fs/blockdev
+  import ../fs/partition
   import ../trap/trap
 
 const
@@ -78,6 +82,12 @@ proc enableSv39(memInfo: MemoryInfo) =
 
   setKernelPageTable(kernelRootPageTable)
   let satp = makeSatp(cast[PAddr](kernelRootPageTable))
+  when defined(platformMilkVDuo256m):
+    print("[milkv-debug][bootstrap] enable sv39 kernel root=")
+    printPtr(cast[U64](kernelRootPageTable))
+    print(" satp=")
+    printPtr(satp)
+    putChar('\n')
   paging.flushTlb()
   arch.writeSatp(satp)
   paging.flushTlb()
@@ -159,24 +169,28 @@ proc toolchainStdlibInstalled(): bool =
 
 ## Installs optional hosted toolchain library files before login when absent.
 proc maybeInstallToolchainStdlib() =
-  if fsFileSize(cstring(ToolchainInstallerPath)) < 0:
-    return
-  printBootMsg(" optional toolchain is installed.\n")
-  if toolchainStdlibInstalled():
-    printBootMsg(" standard library already installed.\n")
-    return
+  when defined(platformMilkVDuo256m):
+    printBootMsg(" optional toolchain standard library ... SKIP\n")
+  else:
+    if fsFileSize(cstring(ToolchainInstallerPath)) < 0:
+      return
 
-  let pid = execUserAppAs(
-    cstring(ToolchainInstallerPath),
-    cstring(ToolchainInstallArgs),
-    RootUid,
-    RootGid,
-  )
-  if pid < 0 or waitForSetupProcess(pid) != U64(0):
-    printBootMsg(" install optional toolchain standard library ... FAIL\n")
-    return
+    printBootMsg(" optional toolchain is installed.\n")
+    if toolchainStdlibInstalled():
+      printBootMsg(" standard library already installed.\n")
+      return
 
-  printBootMsg(" install optional toolchain standard library ... OK\n")
+    let pid = execUserAppAs(
+      cstring(ToolchainInstallerPath),
+      cstring(ToolchainInstallArgs),
+      RootUid,
+      RootGid,
+    )
+    if pid < 0 or waitForSetupProcess(pid) != U64(0):
+      printBootMsg(" install optional toolchain standard library ... FAIL\n")
+      return
+
+    printBootMsg(" install optional toolchain standard library ... OK\n")
 
 
 ## Implements the boot task kernel helper.
@@ -674,6 +688,183 @@ when defined(milkvBringup):
     printMilkvStatus("phase4 dtb runtime", "OK")
 
 
+  ## Reads a little-endian U32 from a byte buffer.
+  proc milkvReadLe32(buf: ptr UncheckedArray[U8], offset: U64): U32 =
+    U32(buf[offset]) or
+      (U32(buf[offset + U64(1)]) shl 8) or
+      (U32(buf[offset + U64(2)]) shl 16) or
+      (U32(buf[offset + U64(3)]) shl 24)
+
+
+  ## Prints a fixed number of bytes from a buffer as hexadecimal.
+  proc printMilkvBytes(label: cstring, buf: ptr UncheckedArray[U8], count: U64) =
+    printMilkvPrefix()
+    printConsoleOnly(label)
+    printConsoleOnly(" =")
+
+    var i = U64(0)
+    while i < count:
+      putChar(' ')
+      let value = U64(buf[i])
+      if value < U64(0x10):
+        putChar('0')
+      printHex(value)
+      inc i
+
+    putChar('\n')
+
+
+  ## Prints one MBR partition entry from an SD card sector.
+  proc printMilkvPartitionEntry(index: U64, buf: ptr UncheckedArray[U8]) =
+    let off = U64(0x1be) + index * U64(16)
+    let partType = buf[off + U64(4)]
+    let startLba = milkvReadLe32(buf, off + U64(8))
+    let sectors = milkvReadLe32(buf, off + U64(12))
+
+    printMilkvPrefix()
+    printConsoleOnly("  partition ")
+    printUnsigned(index + U64(1))
+    printConsoleOnly(": type=")
+    printHex(U64(partType))
+    printConsoleOnly(" start=")
+    printUnsigned(U64(startLba))
+    printConsoleOnly(" sectors=")
+    printUnsigned(U64(sectors))
+    putChar('\n')
+
+
+  ## Runs a direct UART0 MMIO probe without changing the global console backend.
+  proc runMilkvPhase7UartChecks(): bool =
+    let uart = Uart16550(base: MilkvUart0Base, regShift: U8(2), regWidth: U8(4))
+    printMilkvPrefix()
+    printlnConsoleOnly("uart0:")
+    printMilkvHex("  base", MilkvUart0Base)
+    printMilkvUnsigned("  reg shift", U64(uart.regShift))
+    printMilkvUnsigned("  reg width", U64(uart.regWidth))
+    printMilkvHex("  lsr", U64(uartRead(uart, U64(5))))
+
+    if not uart16550Probe(uart):
+      printMilkvStatus("uart0 probe", "FAIL")
+      return false
+
+    printMilkvStatus("uart0 probe", "OK")
+    printMilkvPrefix()
+    printConsoleOnly("  direct uart write: ")
+    discard uart16550PutChar(uart, 'O')
+    discard uart16550PutChar(uart, 'K')
+    discard uart16550PutChar(uart, '\n')
+    true
+
+
+  ## Runs a direct SDHCI probe and attempts to read sector zero from the SD card.
+  proc runMilkvPhase7SdChecks(): bool =
+    var sector: array[512, U8]
+    printMilkvPrefix()
+    printlnConsoleOnly("sdhci:")
+    printMilkvHex("  base", MilkvSdBase)
+
+    let probe = probeSdhci(MilkvSdBase)
+    printMilkvHex("  host version", U64(probe.hostVersion))
+    printMilkvHex("  present state", U64(probe.presentState))
+    printMilkvHex("  capabilities", probe.capabilities)
+    printMilkvHex("  clock control", U64(probe.clockControl))
+    printMilkvHex("  power control", U64(probe.powerControl))
+    printMilkvStatus("sdhci probe", "OK")
+
+    let read = readLba0(MilkvSdBase, addr sector[0])
+    printMilkvUnsigned("  read stage", U64(ord(read.stage)))
+    printMilkvHex("  int status", U64(read.intStatus))
+    printMilkvHex("  present state", U64(read.presentState))
+    printMilkvUnsigned("  words read", read.wordsRead)
+
+    if not read.ok:
+      printMilkvStatus("sd lba0 read", "FAIL")
+      return false
+
+    let bytes = cast[ptr UncheckedArray[U8]](addr sector[0])
+    printMilkvBytes("  mbr first bytes", bytes, U64(16))
+    let signature = U16(bytes[U64(510)]) or (U16(bytes[U64(511)]) shl 8)
+    if signature == U16(0xaa55):
+      printMilkvStatus("mbr signature", "OK")
+      var i = U64(0)
+      while i < U64(4):
+        printMilkvPartitionEntry(i, bytes)
+        inc i
+      return true
+
+    printMilkvStatus("mbr signature", "WARN")
+    true
+
+
+  ## Runs Phase 7 UART and SD card driver checks before entering the scheduled runtime.
+  proc runMilkvPhase7Checks() =
+    printlnConsoleOnly("")
+    printlnConsoleOnly("[milkv] phase7 uart/sd driver checks")
+
+    let uartOk = runMilkvPhase7UartChecks()
+    let sdOk = runMilkvPhase7SdChecks()
+    if uartOk and sdOk:
+      printMilkvStatus("phase7 uart/sd drivers", "OK")
+    else:
+      printMilkvStatus("phase7 uart/sd drivers", "FAIL")
+
+
+  ## Prints a Milk-V partition record.
+  proc printMilkvPartition(label: cstring, part: BlockPartition) =
+    printMilkvPrefix()
+    printConsoleOnly(label)
+    printConsoleOnly(": type=")
+    printHex(U64(part.typ))
+    printConsoleOnly(" start=")
+    printUnsigned(part.startBlock)
+    printConsoleOnly(" blocks=")
+    printUnsigned(part.blockCount)
+    putChar('\n')
+
+
+  ## Runs Phase 8A block/appfs diagnostics without starting the full service tree.
+  proc runMilkvPhase8AppfsChecks() =
+    printlnConsoleOnly("")
+    printlnConsoleOnly("[milkv] phase8 appfs bootstrap checks")
+
+    blockdevInit()
+
+    var part: BlockPartition
+    if not readMbrPartition(MilkvAppfsPartitionIndex, part):
+      printMilkvStatus("appfs partition", "FAIL")
+      return
+
+    printMilkvPartition("  selected partition", part)
+    if not blockdevSetLogicalRange(part.startBlock, part.blockCount):
+      printMilkvStatus("logical block range", "FAIL")
+      return
+
+    fsSetAppfsBaseBlock(MilkvAppfsLocalStartBlock)
+    printMilkvHex("  logical base block", blockdevBaseOffset())
+    printMilkvHex("  appfs local block", fsAppfsBaseBlock())
+
+    if fsLoadAppfsOnly() != 0:
+      printMilkvStatus("appfs load", "FAIL")
+      return
+
+    printMilkvStatus("appfs load", "OK")
+    printMilkvUnsigned("  appfs entries", U64(fsAppfsEntryCount()))
+
+    let svcmgtdSize = fsAppfsFileSize("/bin/svcmgtd")
+    let loginSize = fsAppfsFileSize("/bin/login")
+    let shellSize = fsAppfsFileSize("/bin/shell")
+    printMilkvUnsigned("  /bin/svcmgtd size", U64(if svcmgtdSize < 0: 0 else: svcmgtdSize))
+    printMilkvUnsigned("  /bin/login size", U64(if loginSize < 0: 0 else: loginSize))
+    printMilkvUnsigned("  /bin/shell size", U64(if shellSize < 0: 0 else: shellSize))
+
+    if svcmgtdSize >= 0 and loginSize >= 0 and shellSize >= 0:
+      printMilkvStatus("appfs lookup", "OK")
+      printMilkvStatus("phase8 appfs bootstrap", "OK")
+    else:
+      printMilkvStatus("appfs lookup", "FAIL")
+      printMilkvStatus("phase8 appfs bootstrap", "FAIL")
+
+
   ## Checks BSS and current stack placement before restoring runtime state.
   proc runMilkvPhase6BssStackChecks(): bool =
     var stackProbe: U64
@@ -949,6 +1140,8 @@ when defined(milkvBringup):
     runMilkvPhase2Checks(dtb)
     runMilkvPhase3Checks()
     runMilkvPhase4Checks(dtb)
+    runMilkvPhase7Checks()
+    runMilkvPhase8AppfsChecks()
     runMilkvPhase6Checks()
 
 
