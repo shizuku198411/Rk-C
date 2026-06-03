@@ -226,7 +226,12 @@ proc assignPid(): I32 =
 
 
 ## Creates kernel process internal.
-proc createKernelProcessInternal(entry: KernelTask, isIdle: bool, name: cstring): int32 =
+proc createKernelProcessInternal(
+  entry: KernelTask,
+  isIdle: bool,
+  name: cstring,
+  initialState: ProcessState = procRunnable,
+): int32 =
   let p = findUnusedProc()
   if p == nil or entry == nil:
     return -1
@@ -240,7 +245,7 @@ proc createKernelProcessInternal(entry: KernelTask, isIdle: bool, name: cstring)
   p.parentPid = 0
   setIdentity(p, RootUid, RootGid)
   setExePath(p, name)
-  p.state = procRunnable
+  p.state = initialState
   p.entry = entry
   p.kernelStack = stack
   p.rootPageTable = nil
@@ -356,7 +361,7 @@ proc inheritProcessMetadata*(child, parent: ptr Process) =
 
 ## Allocates user process from parent.
 proc allocUserProcessFromParent*(parent: ptr Process, inheritMetadata: bool = true): ptr Process =
-  let pid = createKernelProcessInternal(userProcessBootstrap, false, "user_proc")
+  let pid = createKernelProcessInternal(userProcessBootstrap, false, "user_proc", procSleeping)
   if pid < 0:
     return nil
 
@@ -364,7 +369,6 @@ proc allocUserProcessFromParent*(parent: ptr Process, inheritMetadata: bool = tr
   if p == nil:
     return nil
 
-  p.state = procSleeping
   p.user.active = true
   if inheritMetadata:
     inheritProcessMetadata(p, parent)
@@ -435,6 +439,18 @@ proc releaseUserAddressSpace(p: ptr Process) =
   if p.rootPageTable == nil or p.rootPageTable == kernelPageTable:
     return
 
+  let oldSatp = arch.readSatp()
+  let kernelSatp =
+    if kernelPageTable == nil:
+      U64(0)
+    else:
+      makeSatp(cast[PAddr](kernelPageTable))
+  let restoreSatp = currentProc != p and kernelSatp != U64(0) and oldSatp != kernelSatp
+
+  if restoreSatp:
+    arch.writeSatp(kernelSatp)
+    arch.flushTlb()
+
   discard unmapRangeFree(p.rootPageTable, p.user.base, p.user.imagePages)
   if p.user.stackTop != 0 and p.user.stackPages != 0:
     discard unmapRangeFree(
@@ -448,6 +464,10 @@ proc releaseUserAddressSpace(p: ptr Process) =
 
   freePageTablePages(p.rootPageTable)
   p.rootPageTable = nil
+
+  if restoreSatp:
+    arch.writeSatp(oldSatp)
+    arch.flushTlb()
 
 
 ## Implements the discard process kernel helper.

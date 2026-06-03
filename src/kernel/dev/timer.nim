@@ -2,6 +2,7 @@
 import ../../arch/riscv64/arch
 import ../../lib/calc
 import ../../lib/types
+import ../../platform/timer_backend
 
 const
   TimerInterval* = U64(200000)
@@ -21,7 +22,7 @@ var
 ## Sets next timer.
 proc setNextTimer*() =
   let now = arch.rdtime()
-  arch.writeStimecmp(now + TimerInterval)
+  timer_backend.setNextTimer(now + TimerInterval)
 
 
 ## Implements the count up timer tick kernel helper.

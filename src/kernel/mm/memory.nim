@@ -337,6 +337,21 @@ proc pfree*(paddr: PAddr, n: U64): int =
   0
 
 
+## Returns whether a physical page belongs to the managed region and is allocated.
+proc managedPageAllocated*(paddr: PAddr): bool =
+  if not memoryInitialized or not isAligned(paddr, PageSize):
+    return false
+
+  if paddr < managedRegionStart:
+    return false
+
+  let idx = (paddr - managedRegionStart) div PageSize
+  if idx >= managedPageCount:
+    return false
+
+  bitmapCheck(idx)
+
+
 ## Implements the bitmap info kernel helper.
 proc bitmapInfo*(): BitmapInfo =
   if not memoryInitialized:

@@ -2,6 +2,7 @@
 import ../../arch/riscv64/arch
 import ../../lib/types
 import ../mm/memory
+import ../../platform/paging_attrs
 
 type
   Pte* = U64
@@ -17,12 +18,13 @@ const
   PteU* = U64(1 shl 4)
   PteA* = U64(1 shl 6)
   PteD* = U64(1 shl 7)
+  PtePpnMask = ((U64(1) shl 44) - U64(1)) shl 10
+  PteFlagMask = not PtePpnMask
   SatpModeSv39* = U64(8) shl 60
   
   Sv39SignBit = U64(1) shl 38
   Sv39LowTop = U64(1) shl 38
   Sv39HighBase = not ((U64(1) shl 39) - U64(1))
-
 
 ## Returns the Sv39 level-0 VPN index for a virtual address.
 func sv39Vpn0(va: VAddr): U64 {.inline.} = (va shr 12) and VpnMask
@@ -35,9 +37,29 @@ func pteIsValid(pte: Pte): bool {.inline.} = (pte and PteV) != 0
 ## Returns whether a page-table entry maps a leaf page.
 func pteIsLeaf(pte: Pte): bool {.inline.} = (pte and (PteR or PteW or PteX)) != 0
 ## Converts a page-table entry into a physical address.
-func pteToPa(pte: Pte): PAddr {.inline.} = (pte shr 10) shl PageShift
+func pteToPa(pte: Pte): PAddr {.inline.} = ((pte and PtePpnMask) shr 10) shl PageShift
 ## Converts a physical address into page-table entry address bits.
 func paToPte(pa: PAddr): Pte {.inline.} = (pa shr PageShift) shl 10
+
+
+## Returns platform-specific default memory attributes for leaf PTEs.
+func platformNormalMemoryFlags(flags: U64): U64 {.inline.} =
+  paging_attrs.normalMemoryFlags(flags)
+
+
+## Returns platform-specific device memory attributes for leaf PTEs.
+func platformDeviceMemoryFlags(flags: U64): U64 {.inline.} =
+  paging_attrs.deviceMemoryFlags(flags)
+
+
+## Builds a leaf PTE with platform memory attributes applied.
+func leafPte(pa: PAddr, flags: U64): Pte {.inline.} =
+  paToPte(pa) or platformNormalMemoryFlags(flags) or PteV or PteA or PteD
+
+
+## Builds a device leaf PTE with platform MMIO attributes applied.
+func deviceLeafPte(pa: PAddr, flags: U64): Pte {.inline.} =
+  paToPte(pa) or platformDeviceMemoryFlags(flags) or PteV or PteA or PteD
 
 
 ## Returns whether a page table contains no valid child entries.
@@ -136,7 +158,7 @@ proc mapPage*(root: PageTable, va: VAddr, pa: PAddr, flags: U64): int =
   if pteIsValid(entry[]):
     return -1
 
-  entry[] = paToPte(pa) or flags or PteV or PteA or PteD
+  entry[] = leafPte(pa, flags)
   0
 
 
@@ -149,7 +171,7 @@ proc mapPageReplace*(root: PageTable, va: VAddr, pa: PAddr, flags: U64): int =
   if entry == nil:
     return -1
 
-  entry[] = paToPte(pa) or flags or PteV or PteA or PteD
+  entry[] = leafPte(pa, flags)
   0
 
 
@@ -165,7 +187,24 @@ proc mapPageReplaceFree*(root: PageTable, va: VAddr, pa: PAddr, flags: U64): int
   if pteIsValid(entry[]) and pteIsLeaf(entry[]):
     discard pfree(pteToPa(entry[]), 1)
 
-  entry[] = paToPte(pa) or flags or PteV or PteA or PteD
+  entry[] = leafPte(pa, flags)
+  0
+
+
+## Maps an MMIO page with platform device memory attributes.
+proc mapDevicePage*(root: PageTable, va: VAddr, pa: PAddr, flags: U64): int =
+  if not isAligned(va, PageSize) or not isAligned(pa, PageSize):
+    return -1
+
+  let entry = walkPageTable(root, va, true)
+  if entry == nil:
+    pruneEmptyPageTablePath(root, va)
+    return -1
+
+  if pteIsValid(entry[]):
+    return -1
+
+  entry[] = deviceLeafPte(pa, flags)
   0
 
 
@@ -178,6 +217,21 @@ proc mapRange*(root: PageTable, va: VAddr, pa: PAddr, size: Size, flags: U64): i
   var off = U64(0)
   while off < alignedSize:
     if mapPage(root, va + off, pa + off, flags) != 0:
+      return -1
+    off += PageSize
+
+  0
+
+
+## Maps an MMIO range with platform device memory attributes.
+proc mapDeviceRange*(root: PageTable, va: VAddr, pa: PAddr, size: Size, flags: U64): int =
+  if size == 0:
+    return 0
+
+  let alignedSize = alignUp(size, PageSize)
+  var off = U64(0)
+  while off < alignedSize:
+    if mapDevicePage(root, va + off, pa + off, flags) != 0:
       return -1
     off += PageSize
 
@@ -229,7 +283,7 @@ proc mappedPageFlags*(root: PageTable, va: VAddr): U64 =
   if entry == nil or not pteIsValid(entry[]) or not pteIsLeaf(entry[]):
     return 0
 
-  entry[] and 0x3ff'u64
+  entry[] and PteFlagMask
 
 
 ## Unmaps range free.
@@ -274,4 +328,5 @@ proc makeSatp*(rootPa: PAddr): U64 =
 
 ## Implements the flush tlb kernel helper.
 proc flushTlb*() =
+  arch.fenceRwRw()
   arch.flushTlb()

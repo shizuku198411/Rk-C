@@ -46,6 +46,7 @@ var
   serviceLogs: array[ServiceLogCount, array[ServiceLogLen, char]]
   serviceLogNext: U32
   serviceLogTotal: U32
+  skipNetwork: bool
 
 
 ## Includes formats service-manager state and initializes service descriptors.
@@ -118,12 +119,15 @@ proc waitForServiceReady(entry: ptr ServiceEntry) =
 
 
 proc startInitialService(entry: ptr ServiceEntry) =
+  if entry.state == srvDegraded and not entry.required:
+    return
+
   startService(entry)
   waitForServiceReady(entry)
 
 
 proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
-  discard arg
+  skipNetwork = cstringEq(arg, cstring("--no-network"))
 
   let pid = sysGetPid()
   write("[svcmgtd] service management server started pid=")

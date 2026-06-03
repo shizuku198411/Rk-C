@@ -4,11 +4,17 @@ import ../../lib/types
 import ../../lib/syscall_types
 import ../syscall/system/trap_ops
 import ../dev/console
-import ../dev/timer
 import ../fs/fs
 import ../task/process
 import ../trap/syscall
 import ../trap/trap_types
+import ../mm/paging
+
+when not defined(milkvBringup):
+  import ../dev/timer
+
+when defined(platformMilkVDuo256m) and defined(milkvBringup):
+  import ../../platform/milkv_duo256m/memory_layout
 
 const
   UserPanicLogPath = cstring"/var/log/user_panic.log"
@@ -29,6 +35,15 @@ const
   ScauseStoreAMOPageFault               = U64(0x0f)
   ScauseInterruptFlag                   = U64(1) shl 63
   ScauseSupervisorTimer                 = ScauseInterruptFlag or U64(0x05)
+
+when defined(milkvBringup):
+  var
+    milkvTimerInterruptCount* {.volatile.}: U64
+    milkvLastTimerScause* {.volatile.}: U64
+    milkvLastTimerSepc* {.volatile.}: U64
+
+
+  proc sbiSetTimer(value: U64) {.importc: "sbi_set_timer", cdecl.}
 
 
 ## Implements the trap from user kernel helper.
@@ -167,6 +182,32 @@ proc writeUserPanicLog(scause: U64, stval: U64, userPc: U64, frame: ptr TrapFram
 ## Implements the fault or panic kernel helper.
 proc faultOrPanic(scauseType: cstring, scause: U64, stval: U64, userPc: U64, fromUser: bool, frame: ptr TrapFrame) =
   if fromUser and currentProc != nil:
+    print("[trap] user fault pid=")
+    printSigned(currentProc.pid)
+    print(" exe=")
+    print(currentProc.exePath)
+    print(" root=")
+    printPtr(cast[U64](currentProc.rootPageTable))
+    print(" satp=")
+    printPtr(arch.readSatp())
+    print(" frame.sstatus=")
+    printPtr(frame.sstatus)
+    print(" spp=")
+    if (frame.sstatus and SstatusSpp) == U64(0):
+      print("user")
+    else:
+      print("supervisor")
+    putChar('\n')
+    if scause == ScauseInstructionPageFault or scause == ScauseLoadPageFault or
+        scause == ScauseStoreAMOPageFault:
+      print("[trap] fault va page=")
+      printPtr(alignDown(stval, PageSize))
+      print(" pa=")
+      printPtr(mappedPagePa(currentProc.rootPageTable, stval))
+      print(" flags=")
+      printPtr(mappedPageFlags(currentProc.rootPageTable, stval))
+      putChar('\n')
+
     print("PAGE FAULT DETECTED: ")
     print(scauseType)
     print(". scause=")
@@ -249,25 +290,32 @@ proc trapHandler*(frame: ptr TrapFrame) {.exportc: "trap_handler", cdecl.} =
     faultOrPanic("Store/AMO Page Fault", scause, stval, userPc, fromUser, frame)
   
   of ScauseSupervisorTimer:
-    inc trapCount.supervisorTimer
-    countUpTimerTick()
-    countCurrentProcessCpuTick()
-    if currentIsIdleProcess():
-      countUpIdleTick()
-    if cpuWindowReady():
-      snapshotProcessCpuWindow(cpuWindowTickCount)
-      snapshotCpuWindow()
-    wakeTimerWaiters(timerTickCount)
+    when defined(milkvBringup):
+      inc trapCount.supervisorTimer
+      inc milkvTimerInterruptCount
+      milkvLastTimerScause = scause
+      milkvLastTimerSepc = userPc
+      sbiSetTimer(arch.rdtime() + MilkvTimerInterruptDelta)
+    else:
+      inc trapCount.supervisorTimer
+      countUpTimerTick()
+      countCurrentProcessCpuTick()
+      if currentIsIdleProcess():
+        countUpIdleTick()
+      if cpuWindowReady():
+        snapshotProcessCpuWindow(cpuWindowTickCount)
+        snapshotCpuWindow()
+      wakeTimerWaiters(timerTickCount)
 
-    if pollInput():
-      wakeInputWaiters()
-    
-    setNextTimer()
+      if pollInput():
+        wakeInputWaiters()
 
-    requestResched()
-    if fromUser:
-      deliverCurrentSignals()
-      maybeYieldOnResched()
+      setNextTimer()
+
+      requestResched()
+      if fromUser:
+        deliverCurrentSignals()
+        maybeYieldOnResched()
   
   else:
     panicMsg("Unexpected Trap", scause, stval, userPc)

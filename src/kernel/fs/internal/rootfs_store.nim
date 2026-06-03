@@ -352,7 +352,7 @@ proc resizeFileExtent(idx: int, requiredBlocks: U32, preserve: bool): int =
       superBlock.nodes[idx].startBlock = U32(0)
     return 0
 
-  if oldCount > U32(0) and oldStart + requiredBlocks <= U32(AppfsStartBlock):
+  if oldCount > U32(0) and oldStart + requiredBlocks <= U32(AppfsDefaultStartBlock):
     var canExtend = true
     var i = oldCount
     while i < requiredBlocks:

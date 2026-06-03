@@ -125,9 +125,20 @@ proc ensureFileContent(parentIdx: int, name, data: cstring, uid, gid, mode: U32)
   true
 
 
+## Selects the platform rootfs/appfs block range before mounting the filesystem.
+proc configurePlatformBlockLayout() =
+  if fs_layout.configureBlockLayout() != 0:
+    panic("platform rootfs layout invalid")
+
+  let appfsBase = fs_layout.appfsBaseBlock()
+  if appfsBase != U64(0):
+    fsSetAppfsBaseBlock(appfsBase)
+
+
 ## Implements the fs init kernel helper.
 proc fsInit*() =
   blockServiceInit()
+  configurePlatformBlockLayout()
 
   if readSuper() < 0:
     panic("fs super read failed")

@@ -128,6 +128,9 @@ proc startService(entry: ptr ServiceEntry) =
   if pid < 0:
     write("[svcmgtd] failed to start ")
     write(entry.name)
+    write(" rc=")
+    write("-")
+    writeUnsigned(U64(-pid))
     write("\n")
     if entry.required:
       entry.state = srvStopped

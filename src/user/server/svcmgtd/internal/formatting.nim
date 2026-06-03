@@ -87,14 +87,17 @@ proc initServices() =
     services[i].path = managedServices[i].path
     services[i].required = managedServices[i].required
     services[i].pid = -1
-    services[i].state = srvStopped
+    if skipNetwork and managedServices[i].kind == SysServiceKindNet:
+      services[i].state = srvDegraded
+      services[i].lastFailureReason = cstring("profile_disabled")
+    else:
+      services[i].state = srvStopped
+      services[i].lastFailureReason = cstring("none")
     services[i].startCount = 0
     services[i].restarts = 0
     services[i].readyDeadline = 0
     services[i].lastReadyTick = 0
     services[i].lastExitStatus = 0
-    services[i].lastFailureReason = cstring("none")
     services[i].livenessMisses = U32(0)
     inc i
-
 

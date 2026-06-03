@@ -10,3 +10,4 @@ opensbi/
 rkc_doc/
 src/generated/
 .workshop.lock
+tmp/

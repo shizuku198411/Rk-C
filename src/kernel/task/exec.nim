@@ -10,6 +10,8 @@ import ../mm/memory
 import ../mm/paging
 import ../task/process
 import ../task/rkx_loader
+import ../../platform/mmio_map
+import ../../platform/service_policy
 
 const
   ShellBase* = VAddr(0x01000000)
@@ -17,14 +19,6 @@ const
   AppBase* = VAddr(0x01200000)
   AppStackTop* = VAddr(0x01300000)
   UserArgMax = U64(256)
-
-  QemuUart0Base = PAddr(0x10000000)
-  QemuMmioSize = U64(0x00010000)
-  QemuPlicBase = PAddr(0x0c000000)
-  QemuPlicSize = U64(0x00400000)
-  QemuRtcBase = PAddr(0x00101000)
-  QemuRtcSize = U64(0x00001000)
-
 
 var
   textStartSym {.importc: "__text_start".}: char
@@ -223,14 +217,8 @@ proc mapKernelRanges(root: PageTable) =
   if mapRange(root, dataStart, dataStart, dataSize, PteR or PteW) != 0:
     panic("failed to map kernel data range")
 
-  if mapRange(root, QemuUart0Base, QemuUart0Base, QemuMmioSize, PteR or PteW) != 0:
-    panic("failed to map qemu mmio")
-
-  if mapRange(root, QemuPlicBase, QemuPlicBase, QemuPlicSize, PteR or PteW) != 0:
-    panic("failed to map plic mmio")
-
-  if mapRange(root, QemuRtcBase, QemuRtcBase, QemuRtcSize, PteR or PteW) != 0:
-    panic("failed to map rtc mmio")
+  if mapPlatformDeviceRanges(root) != 0:
+    panic("failed to map platform device mmio")
 
 
 ## Creates kernel mapped page table.
@@ -274,7 +262,7 @@ proc createLoginUserProcess*(): int32 =
 
 ## Creates service manager user process.
 proc createServiceManagerUserProcess*(): int32 =
-  loadUserProcess("/bin/svcmgtd", AppBase, AppStackTop, nil)
+  loadUserProcess("/bin/svcmgtd", AppBase, AppStackTop, service_policy.serviceManagerArgs())
 
 
 ## Creates fs server user process.

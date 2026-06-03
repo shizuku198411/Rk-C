@@ -1,4 +1,6 @@
 ## Runs process entry trampolines and performs scheduling and CPU yields.
+var missingKernelPageTableLogged: bool
+
 
 ## Runs the initial trampoline for a newly scheduled process.
 proc processBootstrap*() =
@@ -15,6 +17,19 @@ proc processBootstrap*() =
 proc effectiveRootPageTable(p: ptr Process): PageTable =
   if p != nil and p.rootPageTable != nil:
     return p.rootPageTable
+
+  if kernelPageTable == nil and not missingKernelPageTableLogged:
+    missingKernelPageTableLogged = true
+    print("[sched] missing kernel page table for pid=")
+    if p == nil:
+      print("(nil)")
+    else:
+      printSigned(p.pid)
+      print(" exe=")
+      print(p.exePath)
+    print(" satp=")
+    printPtr(arch.readSatp())
+    putChar('\n')
 
   kernelPageTable
 
