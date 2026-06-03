@@ -2,9 +2,7 @@
 import ../../arch/riscv64/arch
 import ../../lib/calc
 import ../../lib/types
-
-when defined(platformMilkVDuo256m):
-  proc sbiSetTimer(value: U64) {.importc: "sbi_set_timer", cdecl.}
+import ../../platform/timer_backend
 
 const
   TimerInterval* = U64(200000)
@@ -24,10 +22,7 @@ var
 ## Sets next timer.
 proc setNextTimer*() =
   let now = arch.rdtime()
-  when defined(platformMilkVDuo256m):
-    sbiSetTimer(now + TimerInterval)
-  else:
-    arch.writeStimecmp(now + TimerInterval)
+  timer_backend.setNextTimer(now + TimerInterval)
 
 
 ## Implements the count up timer tick kernel helper.

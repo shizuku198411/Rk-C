@@ -13,6 +13,7 @@ import ../mm/paging
 import ../task/process
 import ../task/exec
 import ../service/registry
+import ../../platform/toolchain_policy
 
 when defined(platformMilkVDuo256m) and defined(milkvBringup):
   import ../../platform/milkv_duo256m/memory_layout
@@ -163,28 +164,29 @@ proc toolchainStdlibInstalled(): bool =
 
 ## Installs optional hosted toolchain library files before login when absent.
 proc maybeInstallToolchainStdlib() =
-  when defined(platformMilkVDuo256m):
+  if not toolchain_policy.installToolchainStdlibOnBoot():
     printBootMsg(" optional toolchain standard library ... SKIP\n")
-  else:
-    if fsFileSize(cstring(ToolchainInstallerPath)) < 0:
-      return
+    return
 
-    printBootMsg(" optional toolchain is installed.\n")
-    if toolchainStdlibInstalled():
-      printBootMsg(" standard library already installed.\n")
-      return
+  if fsFileSize(cstring(ToolchainInstallerPath)) < 0:
+    return
 
-    let pid = execUserAppAs(
-      cstring(ToolchainInstallerPath),
-      cstring(ToolchainInstallArgs),
-      RootUid,
-      RootGid,
-    )
-    if pid < 0 or waitForSetupProcess(pid) != U64(0):
-      printBootMsg(" install optional toolchain standard library ... FAIL\n")
-      return
+  printBootMsg(" optional toolchain is installed.\n")
+  if toolchainStdlibInstalled():
+    printBootMsg(" standard library already installed.\n")
+    return
 
-    printBootMsg(" install optional toolchain standard library ... OK\n")
+  let pid = execUserAppAs(
+    cstring(ToolchainInstallerPath),
+    cstring(ToolchainInstallArgs),
+    RootUid,
+    RootGid,
+  )
+  if pid < 0 or waitForSetupProcess(pid) != U64(0):
+    printBootMsg(" install optional toolchain standard library ... FAIL\n")
+    return
+
+  printBootMsg(" install optional toolchain standard library ... OK\n")
 
 
 ## Implements the boot task kernel helper.

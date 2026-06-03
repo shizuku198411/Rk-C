@@ -1,7 +1,5 @@
 ## Runs process entry trampolines and performs scheduling and CPU yields.
-
-when defined(platformMilkVDuo256m):
-  var missingKernelPageTableLogged: bool
+var missingKernelPageTableLogged: bool
 
 
 ## Runs the initial trampoline for a newly scheduled process.
@@ -20,19 +18,18 @@ proc effectiveRootPageTable(p: ptr Process): PageTable =
   if p != nil and p.rootPageTable != nil:
     return p.rootPageTable
 
-  when defined(platformMilkVDuo256m):
-    if kernelPageTable == nil and not missingKernelPageTableLogged:
-      missingKernelPageTableLogged = true
-      print("[milkv-debug][sched] missing kernel page table for pid=")
-      if p == nil:
-        print("(nil)")
-      else:
-        printSigned(p.pid)
-        print(" exe=")
-        print(p.exePath)
-      print(" satp=")
-      printPtr(arch.readSatp())
-      putChar('\n')
+  if kernelPageTable == nil and not missingKernelPageTableLogged:
+    missingKernelPageTableLogged = true
+    print("[sched] missing kernel page table for pid=")
+    if p == nil:
+      print("(nil)")
+    else:
+      printSigned(p.pid)
+      print(" exe=")
+      print(p.exePath)
+    print(" satp=")
+    printPtr(arch.readSatp())
+    putChar('\n')
 
   kernelPageTable
 

@@ -361,23 +361,21 @@ proc loadRkxImage*(
 
   let loaded = fsReadFile(path, cast[pointer](imagePa), RkxImageMaxSize)
   if loaded <= 0:
-    when defined(platformMilkVDuo256m):
-      print("[rkx] fsReadFile failed path=")
-      print(path)
-      print(" loaded=")
-      printUnsigned(U64(loaded))
-      putChar('\n')
+    print("[rkx] fsReadFile failed path=")
+    print(path)
+    print(" loaded=")
+    printUnsigned(U64(loaded))
+    putChar('\n')
     discard pfree(imagePa, RkxImageMaxPages)
     return -1
 
   let imageSize = U64(loaded)
   if imageSize < U64(sizeof(RkxHeader)):
-    when defined(platformMilkVDuo256m):
-      print("[rkx] image too small path=")
-      print(path)
-      print(" size=")
-      printUnsigned(imageSize)
-      putChar('\n')
+    print("[rkx] image too small path=")
+    print(path)
+    print(" size=")
+    printUnsigned(imageSize)
+    putChar('\n')
     discard pfree(imagePa, RkxImageMaxPages)
     return -1
 
@@ -385,18 +383,17 @@ proc loadRkxImage*(
   let hdr = cast[ptr RkxHeader](imagePa)
 
   if not validateRkxHeader(hdr, imageSize, expectedBase):
-    when defined(platformMilkVDuo256m):
-      print("[rkx] invalid header path=")
-      print(path)
-      print(" magic=")
-      printHex(U64(hdr.magic))
-      print(" entry=")
-      printPtr(hdr.entryVa)
-      print(" text=")
-      printPtr(hdr.textVa)
-      print(" textSize=")
-      printUnsigned(hdr.textMemSize)
-      putChar('\n')
+    print("[rkx] invalid header path=")
+    print(path)
+    print(" magic=")
+    printHex(U64(hdr.magic))
+    print(" entry=")
+    printPtr(hdr.entryVa)
+    print(" text=")
+    printPtr(hdr.textVa)
+    print(" textSize=")
+    printUnsigned(hdr.textMemSize)
+    putChar('\n')
     discard pfree(imagePa, RkxImageMaxPages)
     return -1
 

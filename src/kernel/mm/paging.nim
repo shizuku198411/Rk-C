@@ -2,6 +2,7 @@
 import ../../arch/riscv64/arch
 import ../../lib/types
 import ../mm/memory
+import ../../platform/paging_attrs
 
 type
   Pte* = U64
@@ -25,20 +26,6 @@ const
   Sv39LowTop = U64(1) shl 38
   Sv39HighBase = not ((U64(1) shl 39) - U64(1))
 
-when defined(platformMilkVDuo256m):
-  const
-    PteTheadSecure = U64(1) shl 59
-    PteTheadShare = U64(1) shl 60
-    PteTheadBuffer = U64(1) shl 61
-    PteTheadCache = U64(1) shl 62
-    PteTheadStrongOrder = U64(1) shl 63
-    PteTheadMemoryTypeMask =
-      PteTheadSecure or PteTheadShare or PteTheadBuffer or
-      PteTheadCache or PteTheadStrongOrder
-    PteTheadNormalMemory* = PteTheadShare or PteTheadBuffer or PteTheadCache
-    PteTheadDeviceMemory* = PteTheadStrongOrder or PteTheadShare
-
-
 ## Returns the Sv39 level-0 VPN index for a virtual address.
 func sv39Vpn0(va: VAddr): U64 {.inline.} = (va shr 12) and VpnMask
 ## Returns the Sv39 level-1 VPN index for a virtual address.
@@ -57,21 +44,12 @@ func paToPte(pa: PAddr): Pte {.inline.} = (pa shr PageShift) shl 10
 
 ## Returns platform-specific default memory attributes for leaf PTEs.
 func platformNormalMemoryFlags(flags: U64): U64 {.inline.} =
-  when defined(platformMilkVDuo256m):
-    if (flags and PteTheadMemoryTypeMask) != U64(0):
-      flags
-    else:
-      flags or PteTheadNormalMemory
-  else:
-    flags
+  paging_attrs.normalMemoryFlags(flags)
 
 
 ## Returns platform-specific device memory attributes for leaf PTEs.
 func platformDeviceMemoryFlags(flags: U64): U64 {.inline.} =
-  when defined(platformMilkVDuo256m):
-    (flags and not PteTheadMemoryTypeMask) or PteTheadDeviceMemory
-  else:
-    flags
+  paging_attrs.deviceMemoryFlags(flags)
 
 
 ## Builds a leaf PTE with platform memory attributes applied.

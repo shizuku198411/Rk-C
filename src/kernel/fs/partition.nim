@@ -23,30 +23,27 @@ var mbrBuf: array[512, U8]
 
 ## Prints a Milk-V MBR diagnostic line during early filesystem bootstrap.
 proc printMbrDiag(label: cstring) =
-  when defined(platformMilkVDuo256m):
-    printBootMsg("  milkv mbr ")
-    print(label)
-    putChar('\n')
+  printBootMsg("  mbr ")
+  print(label)
+  putChar('\n')
 
 
 ## Prints one Milk-V MBR diagnostic numeric value.
 proc printMbrDiagValue(label: cstring, value: U64) =
-  when defined(platformMilkVDuo256m):
-    printBootMsg("  milkv mbr ")
-    print(label)
-    print(" = ")
-    printUnsigned(value)
-    putChar('\n')
+  printBootMsg("  mbr ")
+  print(label)
+  print(" = ")
+  printUnsigned(value)
+  putChar('\n')
 
 
 ## Prints one Milk-V MBR diagnostic hexadecimal value.
 proc printMbrDiagHex(label: cstring, value: U64) =
-  when defined(platformMilkVDuo256m):
-    printBootMsg("  milkv mbr ")
-    print(label)
-    print(" = ")
-    printHex(value)
-    putChar('\n')
+  printBootMsg("  mbr ")
+  print(label)
+  print(" = ")
+  printHex(value)
+  putChar('\n')
 
 
 ## Reads a little-endian U16 from the MBR buffer.
@@ -64,12 +61,11 @@ proc readLe32(buf: ptr UncheckedArray[U8], off: U64): U32 =
 
 ## Prints a compact snapshot of the last loaded MBR sector.
 proc printMbrSectorSnapshot() =
-  when defined(platformMilkVDuo256m):
-    let buf = cast[ptr UncheckedArray[U8]](addr mbrBuf[0])
-    printMbrDiagHex("word0", U64(readLe32(buf, U64(0))))
-    printMbrDiagHex("word1", U64(readLe32(buf, U64(4))))
-    printMbrDiagHex("word126", U64(readLe32(buf, U64(504))))
-    printMbrDiagHex("word127", U64(readLe32(buf, U64(508))))
+  let buf = cast[ptr UncheckedArray[U8]](addr mbrBuf[0])
+  printMbrDiagHex("word0", U64(readLe32(buf, U64(0))))
+  printMbrDiagHex("word1", U64(readLe32(buf, U64(4))))
+  printMbrDiagHex("word126", U64(readLe32(buf, U64(504))))
+  printMbrDiagHex("word127", U64(readLe32(buf, U64(508))))
 
 
 ## Decodes one MBR partition entry from the last loaded sector.

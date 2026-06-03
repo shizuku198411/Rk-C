@@ -7,15 +7,12 @@ import ../../lib/types
 import ../../lib/user_ids
 import ../../generated/version
 import ../dev/console
+import ../fs/blockdev
 import ../fs/dirent
 import ../fs/tmpfs
 import ../lib/path
-import ../syscall/blk/block_service_ops
-
-when defined(platformMilkVDuo256m):
-  import ../fs/blockdev except BlockSize, BlockCount
-  import ../fs/partition
-  import ../../platform/milkv_duo256m/memory_layout
+import ../syscall/blk/block_service_ops except BlockSize
+import ../../platform/fs_layout
 
 const
   FsMagic = U32(0x4e465333) # NFS3

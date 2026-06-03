@@ -5,9 +5,7 @@ import ../../lib/syscall_out
 import ../../mm/memory
 import ../../mm/paging
 import ../../task/process
-
-when defined(platformMilkVDuo256m):
-  import ../../dev/console
+import ../../dev/console
 
 
 ## Returns whether heap growth is safe for the current process.
@@ -28,16 +26,14 @@ proc growHeapPages(current: ptr Process, startVa, pages: U64): bool =
   while mappedPages < pages:
     let pagePa = palloc(U64(1))
     if pagePa == NilPAddr:
-      when defined(platformMilkVDuo256m):
-        println("[milkv-debug][heap] palloc failed")
+      println("[heap] palloc failed")
       if mappedPages != U64(0):
         discard unmapRangeFree(current.rootPageTable, startVa, mappedPages)
       return false
 
     let pageVa = startVa + mappedPages * PageSize
     if mapPage(current.rootPageTable, pageVa, pagePa, PteU or PteR or PteW) != 0:
-      when defined(platformMilkVDuo256m):
-        println("[milkv-debug][heap] map failed")
+      println("[heap] map failed")
       discard pfree(pagePa, U64(1))
       if mappedPages != U64(0):
         discard unmapRangeFree(current.rootPageTable, startVa, mappedPages)
@@ -73,8 +69,7 @@ proc syscallBrk*(newEnd: U64): U64 =
     return currentProc.user.heapEnd
 
   if not heapBreathable(currentProc, newEnd):
-    when defined(platformMilkVDuo256m):
-      println("[milkv-debug][heap] brk rejected")
+    println("[heap] brk rejected")
     return U64(-1'i64)
 
   let currentPages = heapPageCount(currentProc.user)
@@ -121,8 +116,7 @@ proc syscallSbrk*(delta: I64): U64 =
     newEnd = current - sub
 
   if syscallBrk(newEnd) != 0:
-    when defined(platformMilkVDuo256m):
-      println("[milkv-debug][heap] sbrk failed")
+    println("[heap] sbrk failed")
     return U64(-1'i64)
 
   current
