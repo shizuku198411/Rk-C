@@ -6,6 +6,7 @@ import ../../lib/syscall_types
 import ../../lib/types
 import ../../lib/user_ids
 import ../dev/console
+import ../dev/tty
 import ../mm/memory
 import ../mm/paging
 
@@ -23,7 +24,7 @@ type
 
   WaitKind* = enum
     waitNone = 0
-    waitInput
+    waitTtyRead
     waitIpc
     waitPid
     waitFsReq
@@ -74,6 +75,7 @@ type
     offset*: U64
     size*: U64
     pipeId*: I32
+    ttyId*: I32
     path*: array[SysFdPathMax, char]
 
   FileState* {.bycopy.} = object
@@ -163,8 +165,8 @@ proc maybeYieldOnResched*()
 proc printProcessState*(state: ProcessState)
 ## Creates kernel process named.
 proc createKernelProcessNamed*(entry: KernelTask, name: cstring): int32
-## Puts the current process to sleep for current for input.
-proc sleepCurrentForInput*()
+## Puts the current process to sleep while waiting for TTY input.
+proc sleepCurrentForTtyRead*(ttyId: I32)
 ## Puts the current process to sleep for current for ipc.
 proc sleepCurrentForIpc*()
 ## Puts the current process to sleep for current for fs req.
@@ -181,8 +183,8 @@ proc sleepCurrentForPipeRead*(pipeId: I32)
 proc sleepCurrentForPipeWrite*(pipeId: I32)
 ## Puts the current process to sleep for current for poll.
 proc sleepCurrentForPoll*(deadlineTick: U64)
-## Wakes processes waiting for input waiters.
-proc wakeInputWaiters*()
+## Wakes processes waiting to read from a TTY.
+proc wakeTtyReaders*(ttyId: I32)
 ## Wakes processes waiting for ipc waiter.
 proc wakeIpcWaiter*(pid: int32)
 ## Wakes processes waiting for fs waiter.

@@ -270,6 +270,8 @@ proc createKernelProcessInternal(
 
 ## Implements the process init kernel helper.
 proc processInit*() =
+  ttyInit()
+
   var i = 0
   while i < MaxProcs:
     procs[i].pid = 0

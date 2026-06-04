@@ -154,18 +154,21 @@ proc initStandardFiles*(p: ptr Process) =
   clearFileState(p)
 
   p.files.entries[0].used = true
-  p.files.entries[0].kind = SysFdKindStdin
+  p.files.entries[0].kind = SysFdKindTty
   p.files.entries[0].flags = SysOpenRead
+  p.files.entries[0].ttyId = Tty0Id
   setFdPath(p.files.entries[0], "/dev/stdin")
 
   p.files.entries[1].used = true
-  p.files.entries[1].kind = SysFdKindStdout
+  p.files.entries[1].kind = SysFdKindTty
   p.files.entries[1].flags = SysOpenWrite
+  p.files.entries[1].ttyId = Tty0Id
   setFdPath(p.files.entries[1], "/dev/stdout")
 
   p.files.entries[2].used = true
-  p.files.entries[2].kind = SysFdKindStderr
+  p.files.entries[2].kind = SysFdKindTty
   p.files.entries[2].flags = SysOpenWrite
+  p.files.entries[2].ttyId = Tty0Id
   setFdPath(p.files.entries[2], "/dev/stderr")
 
 
@@ -176,5 +179,4 @@ proc copyFileState(dst, src: ptr Process) =
   while i < SysFdMax:
     retainFdEntry(dst.files.entries[i])
     inc i
-
 

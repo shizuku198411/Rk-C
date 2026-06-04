@@ -28,9 +28,9 @@ proc printProcessState*(state: ProcessState) =
     print("zombie  ")
 
 
-## Puts the current process to sleep for current for input.
-proc sleepCurrentForInput*() =
-  sleepCurrentFor(waitInput, 1)
+## Puts the current process to sleep while waiting for TTY input.
+proc sleepCurrentForTtyRead*(ttyId: I32) =
+  sleepCurrentFor(waitTtyRead, U64(ttyId))
 
 
 ## Puts the current process to sleep for current for ipc.
@@ -86,9 +86,9 @@ proc wakePollWaiters*() =
       procs[idx].state = procRunnable
 
 
-## Wakes processes waiting for input waiters.
-proc wakeInputWaiters*() =
-  wakeWaiters(waitInput, 1, true)
+## Wakes processes waiting to read from a TTY.
+proc wakeTtyReaders*(ttyId: I32) =
+  wakeWaiters(waitTtyRead, U64(ttyId), true)
   wakePollWaiters()
 
 

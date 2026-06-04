@@ -31,7 +31,7 @@ const
   FsTypeDir = U32(2)
   FsTypeMount = U32(3)
   VfsMaxMounts = 4
-  DevEntryCount = 4
+  DevEntryCount = 5
   OsReleaseContent = cstring(
     "NAME=\"Rk-C\"\n" &
     "VERSION=\"" & RkcVersion & "\"\n" &
@@ -101,6 +101,7 @@ let devEntryNames = [
   cstring("stdout"),
   cstring("stderr"),
   cstring("console"),
+  cstring("tty0"),
 ]
 
 

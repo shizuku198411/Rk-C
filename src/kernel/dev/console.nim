@@ -1,99 +1,8 @@
-## Implements SBI console I/O and the kernel input buffer.
+## Implements early, panic, and formatted kernel console I/O.
 import ../../arch/riscv64/arch
 import ../../lib/types
-import ../../lib/syscall_types
-import ./byte_ring
 import ./klog
 import ../../platform/console_backend
-
-const
-  InputBufCap = 4096
-  InputStatusReady = U32(1 shl 0)
-  InputStatusOverrun = U32(1 shl 1)
-  InputStatusParity = U32(1 shl 2)
-  InputStatusFraming = U32(1 shl 3)
-  InputStatusBreak = U32(1 shl 4)
-
-
-var
-  inputRing: ByteRing[InputBufCap]
-  inputStats: SysConsoleInfo
-
-
-## Implements the input empty kernel helper.
-proc inputEmpty*(): bool =
-  inputRing.isEmpty()
-
-
-## Implements the input full kernel helper.
-proc inputFull(): bool =
-  inputRing.isFull()
-
-
-## Implements the push input kernel helper.
-proc pushInput(ch: U8): bool =
-  inputRing.push(ch)
-
-
-## Implements the pop input kernel helper.
-proc popInput*(): int =
-  var ch = U8(0)
-  if not inputRing.pop(ch):
-    return -1
-
-  int(ch)
-
-
-## Records UART line-status errors observed while polling input.
-proc recordInputErrors(status: U32) =
-  if (status and InputStatusOverrun) != U32(0):
-    inc inputStats.overrunErrors
-    inc inputStats.dropped
-  if (status and (InputStatusParity or InputStatusFraming or InputStatusBreak)) != U32(0):
-    inc inputStats.lineErrors
-
-
-## Implements the poll input kernel helper.
-proc pollInput*(): bool =
-  var pushed = false
-
-  while true:
-    let status = console_backend.inputStatus()
-    recordInputErrors(status)
-    if (status and InputStatusReady) == U32(0):
-      break
-    if inputFull():
-      inc inputStats.fullEvents
-      break
-
-    let ch = console_backend.readInput()
-    if ch < 0:
-      break
-    if not pushInput(U8(ch and 0xff)):
-      inc inputStats.fullEvents
-      break
-
-    inc inputStats.received
-    pushed = true
-
-  pushed
-
-
-## Returns a snapshot of console input statistics.
-proc consoleInfo*(): SysConsoleInfo =
-  result = inputStats
-  result.capacity = inputRing.capacity()
-  result.buffered = inputRing.len()
-
-
-## Returns whether console input is currently readable.
-proc consoleReadReady*(): bool =
-  if not inputEmpty():
-    return true
-
-  discard pollInput()
-  not inputEmpty()
-
 
 ## Implements the put char kernel helper.
 proc putChar*(ch: char) =
@@ -108,19 +17,10 @@ proc printChar(ch: char) =
 
 ## Implements the try get char kernel helper.
 proc tryGetChar*(): int =
-  let buffered = popInput()
-  if buffered >= 0:
-    return buffered
+  if (console_backend.inputStatus() and U32(1)) != U32(0):
+    return console_backend.readInput()
 
-  discard pollInput()
-  let polled = popInput()
-  if polled >= 0:
-    return polled
-
-  let fallback = console_backend.tryGetFallback()
-  if fallback >= 0:
-    inc inputStats.received
-  fallback
+  console_backend.tryGetFallback()
 
 
 ## Gets char blocking.

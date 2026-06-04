@@ -99,6 +99,7 @@ const
   SysFdKindStderr* = U32(3)
   SysFdKindConsole* = U32(4)
   SysFdKindPipe* = U32(5)
+  SysFdKindTty* = U32(6)
   SysPollMaxEvents* = U32(16)
   SysPollFdRead* = U32(1)
   SysPollFdWrite* = U32(2)
@@ -301,4 +302,5 @@ type
     offset*: U64
     size*: U64
     pipeId*: I32
+    ttyId*: I32
     path*: array[SysFdPathMax, char]

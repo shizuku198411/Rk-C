@@ -40,6 +40,12 @@ def runtime_tests() -> list[TestCase]:
             "cat /proc/tty",
             ["capacity: 4096", "buffered:", "received:", "dropped: 0"],
         ),
+        TestCase(
+            "standard input references tty0",
+            "cat /proc/1/fd/0",
+            ["kind: tty", "tty_id: 0", "path: /dev/stdin"],
+        ),
+        TestCase("write through /dev/tty0", "echo tty0-ok > /dev/tty0", ["tty0-ok"]),
         TestCase("df", "df", ["Filesystem", "rootfs", "tmpfs", "appfs", "Mounted on"]),
         TestCase("shell cd /proc", "cd /proc", []),
         TestCase("shell pwd after cd /proc", "pwd", ["/proc"]),

@@ -4,6 +4,7 @@ import ../../lib/types
 import ../../lib/syscall_types
 import ../syscall/system/trap_ops
 import ../dev/console
+import ../dev/tty
 import ../fs/fs
 import ../task/process
 import ../trap/syscall
@@ -307,8 +308,8 @@ proc trapHandler*(frame: ptr TrapFrame) {.exportc: "trap_handler", cdecl.} =
         snapshotCpuWindow()
       wakeTimerWaiters(timerTickCount)
 
-      if pollInput():
-        wakeInputWaiters()
+      if ttyPollInput(Tty0Id):
+        wakeTtyReaders(Tty0Id)
 
       setNextTimer()
 
