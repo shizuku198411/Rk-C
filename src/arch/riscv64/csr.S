@@ -99,6 +99,11 @@ arch_fence_rw_rw:
     fence rw, rw
     ret
 
+.global arch_fence_iorw_iorw
+arch_fence_iorw_iorw:
+    fence iorw, iorw
+    ret
+
 .global arch_fence_i
 arch_fence_i:
     fence.i

@@ -13,6 +13,7 @@ import ../mm/paging
 import ../task/process
 import ../task/exec
 import ../service/registry
+import ../../platform/status_led
 
 when defined(platformMilkVDuo256m) and defined(milkvBringup):
   import ../../platform/milkv_duo256m/memory_layout
@@ -124,7 +125,7 @@ proc waitForInitialServices() =
         printBootMsg("  required service wait timeout\n")
         panic("required services did not become ready")
 
-      printBootMsg("  optional service wait timeout; degraded boot\n")
+      printBootMsg(" optional service wait timeout; degraded boot\n")
       return
 
     sleepCurrentUntilTick(saturatingAddU64(timerTickCount, U64(1)))
@@ -191,6 +192,9 @@ proc bootTask() {.cdecl.} =
 
   if createLoginUserProcess() < 0:
     panic("failed to create login")
+
+  if not status_led.setStatusLed(true):
+    printBootMsg("  status LED ... FAIL\n")
 
   if currentProc != nil:
     currentProc.detached = true
