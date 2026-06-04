@@ -69,7 +69,7 @@ USER_SERVER_NAMES := svcmgtd procmgtd fsd blockd procfsd netd userd
 USER_ORC_APP_NAMES := rkxinfo ps svc
 USER_ORC_SERVER_NAMES := procfsd
 
-TEST_APP_NAMES := faultcheck capcheck pollcheck signalcheck writecheck heapcheck
+TEST_APP_NAMES := faultcheck capcheck pollcheck signalcheck writecheck heapcheck inputcheck
 ORC_TEST_APP_NAMES := orccheck
 APPFS_EXTRA_APPS ?=
 

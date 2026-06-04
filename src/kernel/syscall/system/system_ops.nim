@@ -6,6 +6,7 @@ import ../../../lib/types
 import ../../dev/rtc
 import ../../dev/timer
 import ../../dev/klog
+import ../../dev/console
 import ../../mm/usercopy
 import ../../task/process
 import ../../system/shutdown
@@ -84,6 +85,18 @@ proc syscallCpuInfo*(outInfo: U64): U64 =
   )
 
   if copyToUser(outInfo, addr info, U64(sizeof(SysCpuInfo))) != 0:
+    return U64(-1'i64)
+
+  0
+
+
+## Handles the console info syscall operation.
+proc syscallConsoleInfo*(outInfo: U64): U64 =
+  if outInfo == 0:
+    return U64(-1'i64)
+
+  var info = consoleInfo()
+  if copyToUser(outInfo, addr info, U64(sizeof(SysConsoleInfo))) != 0:
     return U64(-1'i64)
 
   0

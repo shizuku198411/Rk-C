@@ -11,6 +11,7 @@ proc syscallName*(num: U64): cstring =
   of SysPs: cstring("ps")
   of SysTicks: cstring("ticks")
   of SysCpuInfo: cstring("cpu_info")
+  of SysConsoleInfo: cstring("console_info")
   of SysKmsg: cstring("kmsg")
   of SysPoll: cstring("poll")
   of SysExit: cstring("exit")

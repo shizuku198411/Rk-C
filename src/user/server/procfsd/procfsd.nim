@@ -17,7 +17,7 @@ import ../lib/service_ready
 const
   ProcFsChunkMax = U32(SysIpcMessageMax)
   ProcFsBufSize = U32(SysKmsgMax)
-  ProcFsEntryCount = 8
+  ProcFsEntryCount = 9
   ProcFsPageSize = U64(4096)
   ProcFsTickMillis = U64(20)
 
@@ -31,6 +31,7 @@ let procEntries = [
   cstring("traps"),
   cstring("kmsg"),
   cstring("fsinfo"),
+  cstring("tty"),
 ]
 
 var
@@ -50,6 +51,7 @@ var
   traps: SysTrapCount
   bitmap: SysBitmapInfo
   cpuInfo: SysCpuInfo
+  consoleInfo: SysConsoleInfo
   fsInfos: seq[SysFsInfoEntry] = @[]
   fdInfos: seq[SysFdInfo] = @[]
   measuringOutput = false
@@ -159,6 +161,9 @@ proc renderRead(path: cstring): U32 =
 
   if cstringEq(path, cstring"/proc/fsinfo"):
     return renderFsinfo()
+
+  if cstringEq(path, cstring"/proc/tty"):
+    return renderTty()
 
   clearOut()
   U32(0)

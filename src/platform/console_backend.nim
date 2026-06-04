@@ -1,13 +1,20 @@
 ## Dispatches console I/O calls to the active platform backend.
+import ../lib/types
+
 when defined(platformMilkVDuo256m):
   import ./milkv_duo256m/console_backend as backend
 else:
   import ./qemu_virt/console_backend as backend
 
 
-## Polls platform console input and pushes bytes into the caller-owned buffer.
-proc pollInput*(push: proc(ch: char): bool): bool =
-  backend.pollInput(push)
+## Reads the normalized status of the active platform console input.
+proc inputStatus*(): U32 =
+  backend.inputStatus()
+
+
+## Reads one byte from the active platform console input.
+proc readInput*(): int =
+  backend.readInput()
 
 
 ## Writes one byte to the active platform console.

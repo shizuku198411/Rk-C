@@ -221,6 +221,15 @@ type
     busyTicks*: U64
     usagePercent*: U32
 
+  SysConsoleInfo* {.packed.} = object
+    capacity*: U64
+    buffered*: U64
+    received*: U64
+    fullEvents*: U64
+    dropped*: U64
+    overrunErrors*: U64
+    lineErrors*: U64
+
   SysPollEvent* {.packed.} = object
     target*: I32
     events*: U32

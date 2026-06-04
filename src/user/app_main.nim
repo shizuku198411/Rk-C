@@ -103,6 +103,8 @@ elif defined(userApp_writecheck):
   import apps/writecheck/writecheck
 elif defined(userApp_heapcheck):
   import apps/heapcheck/heapcheck
+elif defined(userApp_inputcheck):
+  import apps/inputcheck/inputcheck
 elif defined(userApp_orccheck):
   import apps/orccheck/orccheck
 else:

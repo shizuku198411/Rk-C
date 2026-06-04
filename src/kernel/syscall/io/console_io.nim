@@ -9,6 +9,11 @@ const
   ConsoleIoChunk = U64(128)
 
 
+## Returns whether console input can be read without blocking.
+proc syscallConsoleReadReady*(): bool =
+  consoleReadReady()
+
+
 ## Handles the console write syscall operation.
 proc syscallConsoleWrite*(buf: U64, len: U64): U64 =
   if len == 0:
@@ -41,23 +46,27 @@ proc syscallConsoleRead*(buf: U64, len: U64): U64 =
     return U64(-1'i64)
 
   var chunk: array[ConsoleIoChunk, U8]
+  let chunkLen = minU64(ConsoleIoChunk, len)
   var copied = U64(0)
-  while copied < len:
-    let chunkLen = minU64(ConsoleIoChunk, len - copied)
 
-    var i = U64(0)
-    while i < chunkLen:
-      let ch = tryGetChar()
-      if ch < 0:
-        sleepCurrentForInput()
-        continue
+  while copied == U64(0):
+    let ch = tryGetChar()
+    if ch < 0:
+      sleepCurrentForInput()
+      continue
 
-      chunk[i] = U8(ch and 0xff)
-      inc i
+    chunk[copied] = U8(ch and 0xff)
+    inc copied
 
-    if copyToUser(buf + copied, addr chunk[0], chunkLen) != 0:
-      return U64(-1'i64)
+  while copied < chunkLen:
+    let ch = tryGetChar()
+    if ch < 0:
+      break
 
-    copied += chunkLen
+    chunk[copied] = U8(ch and 0xff)
+    inc copied
+
+  if copyToUser(buf, addr chunk[0], copied) != 0:
+    return U64(-1'i64)
 
   copied

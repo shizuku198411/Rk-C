@@ -11,6 +11,8 @@ proc fdReadReady(fd: I32): bool =
 
   if entry.kind == SysFdKindPipe:
     return pipeReadable(entry.pipeId)
+  if entry.kind == SysFdKindStdin or entry.kind == SysFdKindConsole:
+    return syscallConsoleReadReady()
   if entry.kind == SysFdKindFile:
     return true
 

@@ -17,21 +17,17 @@ proc consoleUart(): Uart16550 =
   Uart16550(base: MilkvUart0Base, regShift: U8(2), regWidth: U8(4))
 
 
-## Polls the Milk-V UART and pushes all available input bytes.
-proc pollInput*(push: proc(ch: char): bool): bool =
-  let uart = consoleUart()
-  var pushed = false
+## Reads the normalized Milk-V UART input status.
+proc inputStatus*(): U32 =
+  uart16550LineStatus(consoleUart()) and (
+    UartLsrDataReady or UartLsrOverrunError or UartLsrParityError or
+    UartLsrFramingError or UartLsrBreakInterrupt
+  )
 
-  while true:
-    let ch = uart16550TryGetChar(uart)
-    if ch < 0:
-      break
 
-    if not push(char(ch and 0xff)):
-      break
-    pushed = true
-
-  pushed
+## Reads one byte from the Milk-V UART receive register.
+proc readInput*(): int =
+  int(uartRead(consoleUart(), U64(0)) and U32(0xff))
 
 
 ## Writes one byte through SBI console output.
