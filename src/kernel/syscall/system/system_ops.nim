@@ -8,7 +8,7 @@ import ../../dev/timer
 import ../../dev/klog
 import ../../mm/usercopy
 import ../../task/process
-import ../../fs/fs
+import ../../system/shutdown
 import ../syscall_cap
 
 
@@ -18,10 +18,6 @@ const
 var
   entropyState {.volatile.}: U64 = U64(0x726b635f656e7472'u64)
   kmsgReadBuf: array[SysKmsgMax, char]
-
-
-## Implements the sbi shutdown kernel helper.
-proc sbiShutdown() {.importc: "sbi_shutdown", cdecl.}
 
 
 ## Implements the entropy mix kernel helper.
@@ -113,11 +109,7 @@ proc syscallShutdown*(): U64 =
   if not canSyscallShutdown():
     return U64(-1'i64)
 
-  if fsFlushMetadata() < 0:
-    return U64(-1'i64)
-
-  sbiShutdown()
-  0
+  U64(shutdownSystem())
 
 
 ## Handles the yield syscall operation.

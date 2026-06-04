@@ -85,6 +85,7 @@ var
   superRawBuf: array[FsMetaBytes, U8]
   blockBuf: array[512, U8]
   fsReady: bool
+  fsAcceptingWrites: bool = true
   fsMetaDirty: bool
   fsMetaDeferredWrites: U64
   mounts: array[VfsMaxMounts, VfsMount]
@@ -121,6 +122,21 @@ proc fsSetAppfsBaseBlock*(baseBlock: U64)
 proc fsAppfsBaseBlock*(): U64
 ## Ensures a child node exists below an existing directory.
 proc ensureDir(parentIdx: int, name: cstring, typ: U32): bool
+
+
+## Stops new filesystem mutations while allowing shutdown metadata flushes.
+proc fsBeginShutdown*() =
+  fsAcceptingWrites = false
+
+
+## Re-enables filesystem mutations after a failed shutdown preparation.
+proc fsCancelShutdown*() =
+  fsAcceptingWrites = true
+
+
+## Returns whether the filesystem currently accepts mutations.
+proc fsWritesAllowed*(): bool =
+  fsAcceptingWrites
 
 
 ## Includes defines node metadata defaults and permission-bit checks for rootfs nodes.

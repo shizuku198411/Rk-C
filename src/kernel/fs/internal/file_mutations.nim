@@ -2,7 +2,7 @@
 
 ## Implements the fs mkdir kernel helper.
 proc fsMkdir*(path: cstring): int =
-  if not fsReady:
+  if not fsReady or not fsWritesAllowed():
     return -1
   if isBinPath(path):
     return -1
@@ -39,7 +39,7 @@ proc fsWriteFile*(path: cstring, data: pointer, size: U64): int =
 
 ## Implements the fs write file with flags kernel helper.
 proc fsWriteFileWithFlags*(path: cstring, data: pointer, size: U64, flags: U32): int =
-  if not fsReady:
+  if not fsReady or not fsWritesAllowed():
     return -1
   if isBinPath(path):
     return -1
@@ -84,7 +84,7 @@ proc fsWriteFileWithFlags*(path: cstring, data: pointer, size: U64, flags: U32):
 
 ## Implements range writes used by descriptor-based streaming I/O.
 proc fsWriteFileRange*(path: cstring, data: pointer, offset, size: U64): int =
-  if not fsReady or path == nil:
+  if not fsReady or not fsWritesAllowed() or path == nil:
     return -1
   if isBinPath(path) or (data == nil and size > U64(0)):
     return -1
@@ -105,7 +105,7 @@ proc fsWriteFileRange*(path: cstring, data: pointer, offset, size: U64): int =
 
 ## Implements the fs unlink kernel helper.
 proc fsUnlink*(path: cstring): int =
-  if not fsReady:
+  if not fsReady or not fsWritesAllowed():
     return -1
   if isBinPath(path):
     return -1
@@ -131,7 +131,7 @@ proc fsUnlink*(path: cstring): int =
 
 ## Implements the fs rmdir kernel helper.
 proc fsRmdir*(path: cstring): int =
-  if not fsReady:
+  if not fsReady or not fsWritesAllowed():
     return -1
   if isBinPath(path):
     return -1
@@ -162,7 +162,7 @@ proc isDescendant(idx, maybeParent: int): bool =
 
 ## Implements the fs rename kernel helper.
 proc fsRename*(oldPath, newPath: cstring): int =
-  if not fsReady:
+  if not fsReady or not fsWritesAllowed():
     return -1
   if oldPath == nil or newPath == nil:
     return -1
@@ -206,7 +206,7 @@ proc fsRename*(oldPath, newPath: cstring): int =
 
 ## Implements the fs chmod kernel helper.
 proc fsChmod*(path: cstring, mode: U32): int =
-  if not fsReady or path == nil:
+  if not fsReady or not fsWritesAllowed() or path == nil:
     return -1
   if isBinPath(path) or resolveAppfsPath(path) >= 0 or
       resolveDevPath(path) >= 0 or isProcPath(path):
@@ -226,7 +226,7 @@ proc fsChmod*(path: cstring, mode: U32): int =
 
 ## Implements the fs chown kernel helper.
 proc fsChown*(path: cstring, uid, gid: U32): int =
-  if not fsReady or path == nil:
+  if not fsReady or not fsWritesAllowed() or path == nil:
     return -1
   if isBinPath(path) or resolveAppfsPath(path) >= 0 or
       resolveDevPath(path) >= 0 or isProcPath(path):

@@ -238,3 +238,12 @@ proc write*(blockIndex: U64, inBlock: pointer): int =
     return -1
 
   doIo(VirtioBlkOut, blockIndex, inBlock)
+
+
+## Waits until all synchronous virtio-blk requests are visible to the device.
+proc sync*(): int =
+  if not initialized:
+    return -1
+
+  arch.fenceRwRw()
+  0

@@ -137,6 +137,7 @@ proc configurePlatformBlockLayout() =
 
 ## Implements the fs init kernel helper.
 proc fsInit*() =
+  fsAcceptingWrites = true
   blockServiceInit()
   configurePlatformBlockLayout()
 
