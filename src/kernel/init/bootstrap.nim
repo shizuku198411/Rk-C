@@ -13,7 +13,6 @@ import ../mm/paging
 import ../task/process
 import ../task/exec
 import ../service/registry
-import ../../platform/toolchain_policy
 
 when defined(platformMilkVDuo256m) and defined(milkvBringup):
   import ../../platform/milkv_duo256m/memory_layout
@@ -160,10 +159,6 @@ proc toolchainStdlibInstalled(): bool =
 
 ## Installs optional hosted toolchain library files before login when absent.
 proc maybeInstallToolchainStdlib() =
-  if not toolchain_policy.installToolchainStdlibOnBoot():
-    printBootMsg(" optional toolchain standard library ... SKIP\n")
-    return
-
   if fsFileSize(cstring(ToolchainInstallerPath)) < 0:
     return
 
