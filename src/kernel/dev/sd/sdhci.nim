@@ -251,6 +251,18 @@ proc resetSdhci*(base: U64): bool =
   false
 
 
+## Waits until the SD host has completed all command and data activity.
+proc syncSdhci*(base: U64): bool =
+  var spin = SpinLimit
+  while spin > U64(0):
+    if (read32(base, RegPresentState) and (PresentCmdInhibit or PresentDatInhibit)) == U32(0):
+      arch.fenceRwRw()
+      return true
+    dec spin
+
+  false
+
+
 ## Reads one 512-byte sector through SDHCI PIO into the supplied buffer.
 proc readBlock*(base, blockIndex: U64, buf: pointer): SdhciReadResult =
   result.stage = sdhciReadNotStarted

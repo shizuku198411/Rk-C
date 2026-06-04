@@ -23,6 +23,11 @@ proc sysCpuInfo*(info: ptr SysCpuInfo): I32 =
   I32(rawSyscall3(SysCpuInfo, cast[U64](info), 0, 0))
 
 
+## Invokes the console info syscall wrapper.
+proc sysConsoleInfo*(info: ptr SysConsoleInfo): I32 =
+  I32(rawSyscall3(SysConsoleInfo, cast[U64](info), 0, 0))
+
+
 ## Invokes the kmsg syscall wrapper.
 proc sysKmsg*(buf: pointer, capacity: U64): I32 =
   I32(rawSyscall3(SysKmsg, cast[U64](buf), capacity, 0))

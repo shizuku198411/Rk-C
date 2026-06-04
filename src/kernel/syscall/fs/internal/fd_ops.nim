@@ -33,10 +33,10 @@ proc syscallOpen*(pathVal, flagsVal: U64): U64 =
   copyFdPath(entry, path)
 
   if entry.kind != SysFdKindFile:
-    if entry.kind == SysFdKindStdin and (flags and SysOpenWrite) != 0:
+    if entry.kind != SysFdKindTty or not ttyPathAllowsFlags(path, flags):
       return U64(-1'i64)
-    if (entry.kind == SysFdKindStdout or entry.kind == SysFdKindStderr) and
-        (flags and SysOpenRead) != 0:
+    entry.ttyId = ttyIdForPath(path)
+    if not ttyValid(entry.ttyId):
       return U64(-1'i64)
     if not canOpenDevicePath(path, flags):
       return U64(-1'i64)
@@ -70,8 +70,8 @@ proc syscallReadFd*(fdVal, bufVal, len: U64): U64 =
   if (entry.flags and SysOpenRead) == 0:
     return U64(-1'i64)
 
-  if entry.kind == SysFdKindStdin or entry.kind == SysFdKindConsole:
-    return syscallConsoleRead(bufVal, len)
+  if entry.kind == SysFdKindTty:
+    return syscallTtyRead(entry.ttyId, bufVal, len)
   if entry.kind == SysFdKindPipe:
     let readLen = pipeReadKernel(entry.pipeId, cast[ptr UncheckedArray[U8]](addr fdFileBuf[0]), len)
     if readLen < 0:
@@ -122,9 +122,8 @@ proc syscallWriteFd*(fdVal, bufVal, len: U64): U64 =
   if (entry.flags and SysOpenWrite) == 0:
     return U64(-1'i64)
 
-  if entry.kind == SysFdKindStdout or entry.kind == SysFdKindStderr or
-      entry.kind == SysFdKindConsole:
-    return syscallConsoleWrite(bufVal, len)
+  if entry.kind == SysFdKindTty:
+    return syscallTtyWrite(entry.ttyId, bufVal, len)
   if entry.kind == SysFdKindPipe:
     if copyFromUser(addr fdFileBuf[0], bufVal, len) != 0:
       return U64(-1'i64)

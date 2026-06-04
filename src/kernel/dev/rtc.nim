@@ -1,38 +1,10 @@
 ## Reads RTC time and formats kernel date/time strings.
 import ../../lib/types
 import ../../lib/syscall_types
+import ../../platform/rtc_backend
 
 const
-  GoldfishRtcBase = U64(0x101000)
-  RtcTimeLow = U32(0x00)
-  RtcTimeHigh = U32(0x04)
-
   NsecPerSec = U64(1_000_000_000)
-
-
-## Implements the rtc read32 kernel helper.
-proc rtcRead32(off: U32): U32 =
-  let mmioAddr = GoldfishRtcBase + U64(off)
-  var value {.volatile.}: U32 = cast[ptr U32](mmioAddr)[]
-  value
-
-
-## Implements the rtc now ns kernel helper.
-proc rtcNowNS(): U64 =
-  var
-    hi1: U32
-    hi2: U32
-    lo: U32
-  
-  while true:
-    hi1 = rtcRead32(RtcTimeHigh)
-    lo = rtcRead32(RtcTimeLow)
-    hi2 = rtcRead32(RtcTimeHigh)
-
-    if hi1 == hi2:
-      break
-
-  (U64(hi2) shl 32) or U64(lo)
 
 
 ## Returns whether leap year is true.
@@ -100,7 +72,7 @@ proc unixSecondsToDateTime(secInput: U64): SysDateTime =
 
 ## Implements the now date time kernel helper.
 proc nowDateTime*(): SysDateTime =
-  unixSecondsToDateTime(rtcNowNS() div NsecPerSec)
+  unixSecondsToDateTime(rtc_backend.nowNanoseconds() div NsecPerSec)
 
 
 ## Implements the put2 kernel helper.
@@ -160,5 +132,5 @@ proc rtcNsToCString*(ns: U64): cstring =
 
 ## Implements the now cstring kernel helper.
 proc nowCString*(): cstring =
-  let ns = rtcNowNS()
+  let ns = rtc_backend.nowNanoseconds()
   rtcNsToCString(ns)

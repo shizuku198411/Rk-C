@@ -69,6 +69,45 @@ proc renderCpuinfo(): U32 =
   pos
 
 
+proc renderTty(): U32 =
+  clearOut()
+  var pos = U32(0)
+
+  if sysConsoleInfo(addr consoleInfo) < 0:
+    appendStr(pos, cstring("error\n"))
+    return pos
+
+  appendStr(pos, cstring("capacity: "))
+  appendU64(pos, consoleInfo.capacity)
+  appendChar(pos, '\n')
+
+  appendStr(pos, cstring("buffered: "))
+  appendU64(pos, consoleInfo.buffered)
+  appendChar(pos, '\n')
+
+  appendStr(pos, cstring("received: "))
+  appendU64(pos, consoleInfo.received)
+  appendChar(pos, '\n')
+
+  appendStr(pos, cstring("full_events: "))
+  appendU64(pos, consoleInfo.fullEvents)
+  appendChar(pos, '\n')
+
+  appendStr(pos, cstring("dropped: "))
+  appendU64(pos, consoleInfo.dropped)
+  appendChar(pos, '\n')
+
+  appendStr(pos, cstring("overrun_errors: "))
+  appendU64(pos, consoleInfo.overrunErrors)
+  appendChar(pos, '\n')
+
+  appendStr(pos, cstring("line_errors: "))
+  appendU64(pos, consoleInfo.lineErrors)
+  appendChar(pos, '\n')
+
+  pos
+
+
 proc userName(user: U32): cstring =
   if user == 0:
     cstring("kernel")
@@ -134,5 +173,4 @@ proc renderProcesses(): U32 =
     inc i
 
   pos
-
 

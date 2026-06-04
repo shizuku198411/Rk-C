@@ -9,8 +9,16 @@ const
   MilkvReservedIonStart* = U64(0x8b300000)
   MilkvReservedIonSize* = U64(75 * 1024 * 1024)
   MilkvReservedIonEnd* = MilkvReservedIonStart + MilkvReservedIonSize
+  MilkvPinmuxBase* = U64(0x03001000)
   MilkvUart0Base* = U64(0x04140000)
   MilkvSdBase* = U64(0x04310000)
+  MilkvGpioEBase* = U64(0x05021000)
+  MilkvGpioESize* = U64(0x00001000)
+  MilkvRtcBase* = U64(0x05025000)
+  MilkvRtcSize* = U64(0x00002000)
+  MilkvRtcRegisterOffset* = U64(0x00001000)
+  MilkvStatusLedPinmuxOffset* = U64(0x000000ac)
+  MilkvStatusLedPin* = U32(2)
   MilkvDeviceMmioSize* = U64(0x00010000)
   MilkvSdBlockSize* = U64(512)
   MilkvAppfsPartitionIndex* = U64(1) # zero-origin, partition 2

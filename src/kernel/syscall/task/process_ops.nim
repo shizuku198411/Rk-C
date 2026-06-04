@@ -399,6 +399,7 @@ proc fillFdInfo(entry: var SysFdInfo, fd: I32, src: FdEntry) =
   entry.offset = src.offset
   entry.size = src.size
   entry.pipeId = src.pipeId
+  entry.ttyId = src.ttyId
   discard copyCString(entry.path, cast[cstring](addr src.path[0]))
 
 

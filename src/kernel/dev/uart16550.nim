@@ -6,7 +6,11 @@ const
   UartRbr = U64(0)
   UartThr = U64(0)
   UartLsr = U64(5)
-  UartLsrDataReady = U32(1 shl 0)
+  UartLsrDataReady* = U32(1 shl 0)
+  UartLsrOverrunError* = U32(1 shl 1)
+  UartLsrParityError* = U32(1 shl 2)
+  UartLsrFramingError* = U32(1 shl 3)
+  UartLsrBreakInterrupt* = U32(1 shl 4)
   UartLsrThrEmpty = U32(1 shl 5)
   UartSpinLimit = U64(1_000_000)
 
@@ -46,6 +50,11 @@ proc uart16550Probe*(dev: Uart16550): bool =
   lsr != U32(0xff)
 
 
+## Reads the UART line status register.
+proc uart16550LineStatus*(dev: Uart16550): U32 =
+  uartRead(dev, UartLsr) and U32(0xff)
+
+
 ## Writes one byte to a 16550-compatible UART.
 proc uart16550PutChar*(dev: Uart16550, ch: char): bool =
   var spin = UartSpinLimit
@@ -60,7 +69,7 @@ proc uart16550PutChar*(dev: Uart16550, ch: char): bool =
 
 ## Reads one byte from a 16550-compatible UART if input is available.
 proc uart16550TryGetChar*(dev: Uart16550): int =
-  if (uartRead(dev, UartLsr) and UartLsrDataReady) == U32(0):
+  if (uart16550LineStatus(dev) and UartLsrDataReady) == U32(0):
     return -1
 
   int(uartRead(dev, UartRbr) and U32(0xff))

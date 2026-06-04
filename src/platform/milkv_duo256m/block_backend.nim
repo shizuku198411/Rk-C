@@ -53,3 +53,12 @@ proc write*(blockIndex: U64, inBlock: pointer): int =
   printHex(U64(writeResult.presentState))
   putChar('\n')
   -1
+
+
+## Waits until the SD host reports no active command or data transfer.
+proc sync*(): int =
+  if syncSdhci(MilkvSdBase):
+    return 0
+
+  printBootMsg("  milkv sd sync failed\n")
+  -1

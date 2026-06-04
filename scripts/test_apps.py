@@ -22,7 +22,7 @@ from app_tests.user_cases import user_tests
 
 ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
 PROMPT_MARKER = "$ "
-TEST_APP_NAMES = ["faultcheck", "capcheck", "pollcheck", "signalcheck", "writecheck", "heapcheck", "orccheck"]
+TEST_APP_NAMES = ["faultcheck", "capcheck", "pollcheck", "signalcheck", "writecheck", "heapcheck", "inputcheck", "orccheck"]
 OPTIONAL_TOOLCHAIN_TESTS = os.environ.get("RKC_OPTIONAL_TOOLCHAIN_TESTS", "")
 OPTIONAL_TOOLCHAIN_TEST_APPS = os.environ.get("RKC_OPTIONAL_TOOLCHAIN_TEST_APPS", "").split()
 

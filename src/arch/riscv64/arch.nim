@@ -27,6 +27,7 @@ proc rdtime*(): U64 {.importc: "arch_rdtime", cdecl.}
 proc writeStimecmp*(value: U64) {.importc: "arch_write_stimecmp", cdecl.}
 proc flushTlb*() {.importc: "arch_flush_tlb", cdecl.}
 proc fenceRwRw*() {.importc: "arch_fence_rw_rw", cdecl.}
+proc fenceIorwIorw*() {.importc: "arch_fence_iorw_iorw", cdecl.}
 proc fenceI*() {.importc: "arch_fence_i", cdecl.}
 proc enterUser*(pc: U64, sp: U64, kernelSp: U64, arg0: U64, arg1: U64) {.importc: "arch_enter_user", cdecl, noreturn.}
 

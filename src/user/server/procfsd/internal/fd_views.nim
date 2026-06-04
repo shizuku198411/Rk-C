@@ -13,6 +13,8 @@ proc fdKindName(kind: U32): cstring =
     cstring"console"
   elif kind == SysFdKindPipe:
     cstring"pipe"
+  elif kind == SysFdKindTty:
+    cstring"tty"
   else:
     cstring"unknown"
 
@@ -77,6 +79,11 @@ proc renderFdInfo(pid, fd: I32): U32 =
         appendI32(pos, fdInfos[i].pipeId)
         appendChar(pos, '\n')
 
+      if fdInfos[i].kind == SysFdKindTty:
+        appendStr(pos, cstring"tty_id: ")
+        appendI32(pos, fdInfos[i].ttyId)
+        appendChar(pos, '\n')
+
       appendStr(pos, cstring"path: ")
       appendStr(pos, cast[cstring](addr fdInfos[i].path[0]))
       appendChar(pos, '\n')
@@ -87,5 +94,4 @@ proc renderFdInfo(pid, fd: I32): U32 =
 
   appendStr(pos, cstring"not found\n")
   pos
-
 

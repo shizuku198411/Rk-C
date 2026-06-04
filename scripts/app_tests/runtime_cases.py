@@ -4,6 +4,8 @@ from .model import TestCase
 
 def runtime_tests() -> list[TestCase]:
     """Returns process observation and service runtime behavior tests."""
+    input_burst = "inputcheck\n" + ("x" * 4096)
+
     return [
         TestCase("ps", "ps", ["pid", "exe", "shell"]),
         TestCase("id", "id", ["uid=0", "gid=0"]),
@@ -26,6 +28,24 @@ def runtime_tests() -> list[TestCase]:
         ),
         TestCase("cat /proc/processes", "cat /proc/processes", ["pid", "ppid", "uid", "gid", "exe"]),
         TestCase("cat /proc/fsinfo", "cat /proc/fsinfo", ["Filesystem", "rootfs", "tmpfs", "appfs", "/bin"]),
+        TestCase(
+            "console 4096-byte burst",
+            input_burst,
+            ["inputcheck: 4096-byte burst ok"],
+            timeout=15.0,
+            append_newline=False,
+        ),
+        TestCase(
+            "cat /proc/tty",
+            "cat /proc/tty",
+            ["capacity: 4096", "buffered:", "received:", "dropped: 0"],
+        ),
+        TestCase(
+            "standard input references tty0",
+            "cat /proc/1/fd/0",
+            ["kind: tty", "tty_id: 0", "path: /dev/stdin"],
+        ),
+        TestCase("write through /dev/tty0", "echo tty0-ok > /dev/tty0", ["tty0-ok"]),
         TestCase("df", "df", ["Filesystem", "rootfs", "tmpfs", "appfs", "Mounted on"]),
         TestCase("shell cd /proc", "cd /proc", []),
         TestCase("shell pwd after cd /proc", "pwd", ["/proc"]),

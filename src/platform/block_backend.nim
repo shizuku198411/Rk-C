@@ -25,3 +25,8 @@ proc read*(blockIndex: U64, outBlock: pointer): int =
 ## Writes one physical block.
 proc write*(blockIndex: U64, inBlock: pointer): int =
   backend.write(blockIndex, inBlock)
+
+
+## Waits until all writes accepted by the active block backend are complete.
+proc sync*(): int =
+  backend.sync()

@@ -88,3 +88,4 @@ const
   SysBrk* = U64(86)
   SysSbrk* = U64(87)
   SysRawWriteRange* = U64(88)
+  SysConsoleInfo* = U64(89)

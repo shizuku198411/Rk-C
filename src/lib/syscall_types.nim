@@ -99,6 +99,7 @@ const
   SysFdKindStderr* = U32(3)
   SysFdKindConsole* = U32(4)
   SysFdKindPipe* = U32(5)
+  SysFdKindTty* = U32(6)
   SysPollMaxEvents* = U32(16)
   SysPollFdRead* = U32(1)
   SysPollFdWrite* = U32(2)
@@ -221,6 +222,15 @@ type
     busyTicks*: U64
     usagePercent*: U32
 
+  SysConsoleInfo* {.packed.} = object
+    capacity*: U64
+    buffered*: U64
+    received*: U64
+    fullEvents*: U64
+    dropped*: U64
+    overrunErrors*: U64
+    lineErrors*: U64
+
   SysPollEvent* {.packed.} = object
     target*: I32
     events*: U32
@@ -292,4 +302,5 @@ type
     offset*: U64
     size*: U64
     pipeId*: I32
+    ttyId*: I32
     path*: array[SysFdPathMax, char]

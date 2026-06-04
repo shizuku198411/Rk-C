@@ -2,6 +2,7 @@
 import ../../lib/fixed_string
 import ../../lib/syscall_types
 import ../../lib/types
+import ../dev/tty
 import ../task/process
 
 
@@ -17,16 +18,32 @@ proc fdPath*(entry: var FdEntry): cstring =
 
 ## Implements the device kind for path kernel helper.
 proc deviceKindForPath*(path: cstring): U32 =
-  if cstringEq(path, "/dev/stdin"):
-    return SysFdKindStdin
-  if cstringEq(path, "/dev/stdout"):
-    return SysFdKindStdout
-  if cstringEq(path, "/dev/stderr"):
-    return SysFdKindStderr
-  if cstringEq(path, "/dev/console"):
-    return SysFdKindConsole
+  if cstringEq(path, "/dev/stdin") or cstringEq(path, "/dev/stdout") or
+      cstringEq(path, "/dev/stderr") or cstringEq(path, "/dev/console") or
+      cstringEq(path, "/dev/tty0"):
+    return SysFdKindTty
 
   SysFdKindFile
+
+
+## Returns the TTY device identifier associated with a device path.
+proc ttyIdForPath*(path: cstring): I32 =
+  if deviceKindForPath(path) == SysFdKindTty:
+    return Tty0Id
+
+  -1
+
+
+## Returns whether open flags are valid for a TTY alias path.
+proc ttyPathAllowsFlags*(path: cstring, flags: U32): bool =
+  if cstringEq(path, "/dev/stdin"):
+    return (flags and SysOpenRead) != U32(0) and (flags and SysOpenWrite) == U32(0)
+  if cstringEq(path, "/dev/stdout") or cstringEq(path, "/dev/stderr"):
+    return (flags and SysOpenWrite) != U32(0) and (flags and SysOpenRead) == U32(0)
+  if cstringEq(path, "/dev/console") or cstringEq(path, "/dev/tty0"):
+    return (flags and (SysOpenRead or SysOpenWrite)) != U32(0)
+
+  false
 
 
 ## Returns whether fd is valid.

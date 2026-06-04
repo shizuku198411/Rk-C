@@ -87,3 +87,11 @@ proc blockWrite*(blockIndex: U64, inBlock: pointer): int =
     return -1
 
   block_backend.write(physical, inBlock)
+
+
+## Waits until all block writes accepted by the active backend are complete.
+proc blockSync*(): int =
+  if not initialized:
+    return -1
+
+  block_backend.sync()

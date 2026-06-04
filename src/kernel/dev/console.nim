@@ -1,58 +1,8 @@
-## Implements SBI console I/O and the kernel input buffer.
+## Implements early, panic, and formatted kernel console I/O.
 import ../../arch/riscv64/arch
 import ../../lib/types
 import ./klog
 import ../../platform/console_backend
-
-const
-  InputBufCap = U64(128)
-
-
-var
-  inputBuf: array[InputBufCap, char]
-  inputHead: U64
-  inputTail: U64
-
-
-## Implements the input next kernel helper.
-proc inputNext(index: U64): U64 =
-  (index + 1'u64) mod InputBufCap
-
-
-## Implements the input empty kernel helper.
-proc inputEmpty*(): bool =
-  inputHead == inputTail
-
-
-## Implements the input full kernel helper.
-proc inputFull(): bool =
-  inputNext(inputTail) == inputHead
-
-
-## Implements the push input kernel helper.
-proc pushInput(ch: char): bool =
-  if inputFull():
-    return false
-
-  inputBuf[inputTail] = ch
-  inputTail = inputNext(inputTail)
-  true
-
-
-## Implements the pop input kernel helper.
-proc popInput*(): int =
-  if inputEmpty():
-    return -1
-
-  let ch = inputBuf[inputHead]
-  inputHead = inputNext(inputHead)
-  int(ord(ch))
-
-
-## Implements the poll input kernel helper.
-proc pollInput*(): bool =
-  console_backend.pollInput(pushInput)
-
 
 ## Implements the put char kernel helper.
 proc putChar*(ch: char) =
@@ -67,14 +17,8 @@ proc printChar(ch: char) =
 
 ## Implements the try get char kernel helper.
 proc tryGetChar*(): int =
-  let buffered = popInput()
-  if buffered >= 0:
-    return buffered
-
-  discard pollInput()
-  let polled = popInput()
-  if polled >= 0:
-    return polled
+  if (console_backend.inputStatus() and U32(1)) != U32(0):
+    return console_backend.readInput()
 
   console_backend.tryGetFallback()
 

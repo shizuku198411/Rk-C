@@ -6,9 +6,10 @@ import ../../../lib/types
 import ../../dev/rtc
 import ../../dev/timer
 import ../../dev/klog
+import ../../dev/tty
 import ../../mm/usercopy
 import ../../task/process
-import ../../fs/fs
+import ../../system/shutdown
 import ../syscall_cap
 
 
@@ -18,10 +19,6 @@ const
 var
   entropyState {.volatile.}: U64 = U64(0x726b635f656e7472'u64)
   kmsgReadBuf: array[SysKmsgMax, char]
-
-
-## Implements the sbi shutdown kernel helper.
-proc sbiShutdown() {.importc: "sbi_shutdown", cdecl.}
 
 
 ## Implements the entropy mix kernel helper.
@@ -93,6 +90,18 @@ proc syscallCpuInfo*(outInfo: U64): U64 =
   0
 
 
+## Handles the console info syscall operation.
+proc syscallConsoleInfo*(outInfo: U64): U64 =
+  if outInfo == 0:
+    return U64(-1'i64)
+
+  var info = ttyInfo(Tty0Id)
+  if copyToUser(outInfo, addr info, U64(sizeof(SysConsoleInfo))) != 0:
+    return U64(-1'i64)
+
+  0
+
+
 ## Handles the kmsg syscall operation.
 proc syscallKmsg*(outBuf, capacity: U64): U64 =
   if outBuf == U64(0) or capacity == U64(0) or capacity > U64(SysKmsgMax):
@@ -113,11 +122,7 @@ proc syscallShutdown*(): U64 =
   if not canSyscallShutdown():
     return U64(-1'i64)
 
-  if fsFlushMetadata() < 0:
-    return U64(-1'i64)
-
-  sbiShutdown()
-  0
+  U64(shutdownSystem())
 
 
 ## Handles the yield syscall operation.

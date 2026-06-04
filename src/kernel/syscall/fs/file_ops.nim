@@ -5,11 +5,12 @@ import ../../../lib/calc
 import ../../../lib/fs_permissions
 import ../../../lib/user_ids
 import ../../dev/timer
+import ../../dev/tty
 import ../../fs/fs
 import ../../lib/fd_helpers
 import ../../lib/user_path
 import ../../syscall/fs/fs_service_ops
-import ../../syscall/io/console_io
+import ../../syscall/io/tty_ops
 import ../../mm/usercopy
 import ../../task/process
 
