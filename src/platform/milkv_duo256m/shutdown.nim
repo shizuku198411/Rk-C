@@ -39,7 +39,7 @@ proc waitRegisterValue(address: U64, expected: U32, timeoutTicks: U64): bool =
 
 ## Requests SoC poweroff using the same RTC sequence as the official Linux driver.
 proc tryPowerOff*() =
-  let rtcCtrlBase = MilkvRtcPowerBase
+  let rtcCtrlBase = MilkvRtcBase
   let rtcBase = rtcCtrlBase + MilkvRtcRegisterOffset
   let shutdownRequestAddress = rtcBase + RtcShutdownRequest
 

@@ -15,8 +15,10 @@ proc mapPlatformDeviceRanges*(root: PageTable): int =
   if mapDeviceRange(root, PAddr(MilkvSdBase), PAddr(MilkvSdBase), MilkvDeviceMmioSize, PteR or PteW) != 0:
     return -1
 
-  if mapDeviceRange(root, PAddr(MilkvGpioEBase), PAddr(MilkvGpioEBase), MilkvDeviceMmioSize, PteR or PteW) != 0:
+  if mapDeviceRange(root, PAddr(MilkvGpioEBase), PAddr(MilkvGpioEBase), MilkvGpioESize, PteR or PteW) != 0:
     return -1
 
-  # The GPIOE device window also covers the adjacent RTC power controller.
+  if mapDeviceRange(root, PAddr(MilkvRtcBase), PAddr(MilkvRtcBase), MilkvRtcSize, PteR or PteW) != 0:
+    return -1
+
   0
