@@ -1,71 +1,119 @@
 # Boot and Architecture
 
-Rk-C targets QEMU `virt` on RISC-V 64-bit. The firmware path is OpenSBI
-`fw_jump`, which enters the kernel in S-mode.
+Rk-C is a Nim-based RISC-V 64-bit microkernel-style system. The main development target is QEMU `virt`, and the current real-board bring-up target is Milk-V Duo 256M. Both boot through OpenSBI and enter the kernel in S-mode.
 
-## Boot Flow
+## High-Level Boot Flow
 
 ```text
 OpenSBI
   -> src/arch/riscv64/boot.S
   -> kernel_main
-  -> bootstrap
-  -> boot task
+  -> kernelBootstrap()
+  -> runtime setup
+  -> filesystem setup
+  -> boot_task
   -> svcmgtd
-  -> managed services
+  -> required services
+  -> optional services
+  -> login
   -> shell
 ```
 
-Early boot performs:
+The common boot entry is `src/kernel/init/bootstrap.nim`. Platform bring-up diagnostics for Milk-V are compiled behind `milkvBringup`; the normal runtime path is shared and uses platform dispatchers under `src/platform/`.
 
-- BSS clear
-- global pointer and stack setup
-- trap vector setup
-- physical memory allocator initialization
-- process table initialization
-- Sv39 enablement
-- filesystem and appfs initialization
-- timer interrupt enablement
+## Early Runtime Setup
 
-The kernel then creates a boot task. The boot task starts `svcmgtd`, waits for
-required services, waits for optional services until timeout, and starts the
-interactive shell after the service startup pass is complete.
+The normal runtime path performs the following sequence:
 
-## Kernel/User Split
+```text
+clear BSS
+set trap vector
+initialize physical page allocator
+initialize process table and TTY state
+enable Sv39 kernel identity mappings
+initialize filesystem and appfs
+enable external interrupts
+enable timer interrupts
+create boot_task
+```
 
-The kernel keeps mechanisms that need privilege or direct hardware access:
+Important implementation entry points:
 
-- traps and syscall dispatch
-- page allocation and page table management
-- process table and context switching
-- IPC queues
-- service registry
-- raw VirtIO access
-- RKX image loading
+- `src/kernel/init/runtime_setup.nim`: BSS clear, trap vector, Sv39, interrupt enablement, memory layout reporting.
+- `src/kernel/init/bootstrap.nim`: top-level boot sequence selection.
+- `src/kernel/init/userland_boot.nim`: service startup, optional hosted toolchain installation, login startup, status LED.
 
-Most OS policy is pushed into userland services:
+## Boot Task
 
-- service management: `svcmgtd`
-- process service API: `procmgtd`
-- block I/O server: `blockd`
-- filesystem server: `fsd`
-- procfs server: `procfsd`
-- network server: `netd`
+`boot_task` is a temporary kernel process created after core runtime setup. It starts `svcmgtd`, waits for service readiness, optionally installs hosted toolchain library files, starts `/bin/login`, marks itself detached, and then leaves scheduling to the normal process lifecycle.
 
-## Service Startup
+```mermaid
+flowchart TD
+  A[boot_task] --> B[create /bin/svcmgtd]
+  B --> C[wait required services]
+  C --> D{optional services ready?}
+  D -->|yes| E[maybe install /usr/include and /usr/lib toolchain files]
+  D -->|timeout but required ready| E
+  E --> F[create /bin/login]
+  F --> G[turn status LED on when supported]
+  G --> H[detach boot_task]
+```
 
-Managed services are defined in `src/lib/service_catalog.nim`.
+The initial service wait uses `requiredServicesReady()` and `allServicesReady()`. Required services must become ready or boot panics. Optional services may time out and the system continues in degraded mode.
+
+## Service Catalog
+
+Service metadata is shared through `src/lib/service_catalog.nim`.
 
 Required services:
 
-- `procmgtd`
-- `blockd`
-- `fsd`
+- `procmgtd`: process information and kill mediation.
+- `blockd`: raw block-device service.
+- `fsd`: filesystem service.
+- `userd`: passwd, shadow, group, authentication, and password updates.
 
 Optional services:
 
-- `procfsd`
-- `netd`
+- `procfsd`: `/proc` virtual filesystem.
+- `netd`: network service.
 
-Optional services can become degraded. Required services are restart targets.
+`svcmgtd` itself is the service manager and is started directly by the boot task.
 
+## Platform Startup Policy
+
+The service manager receives platform-selected startup arguments from `src/platform/service_policy.nim`.
+
+- QEMU currently starts `svcmgtd` without extra arguments, so network services are allowed.
+- Milk-V Duo 256M currently starts `svcmgtd --no-network`, because the real-board core bring-up currently targets UART, SD, filesystem, login, and shell before Ethernet.
+
+This policy keeps the common service catalog intact while allowing platform-specific boot limits.
+
+## Kernel/User Split
+
+The kernel keeps privileged mechanisms:
+
+- trap and syscall dispatch
+- physical page allocation
+- Sv39 page table management
+- process table and context switching
+- TTY state and platform interrupt intake
+- IPC queues and packet stamping
+- service registry
+- raw filesystem and block fallback during early boot
+- RKX loading and capability granting
+
+Most policy lives in userspace:
+
+- service lifecycle: `svcmgtd`
+- process API: `procmgtd`
+- block I/O server: `blockd`
+- filesystem server: `fsd`
+- procfs server: `procfsd`
+- user database and authentication: `userd`
+- network stack: `netd`
+
+## Address and Platform Notes
+
+The common linker still places the kernel at `0x80200000`. QEMU and Milk-V each provide memory, MMIO, RTC, block, interrupt, timer, shutdown, and status LED backends through dispatcher files in `src/platform/`.
+
+The platform split is intentional: common boot code should call dispatcher modules, while board-specific register sequences stay in `src/platform/qemu_virt/` or `src/platform/milkv_duo256m/`.

@@ -227,7 +227,20 @@ rkxinfo kill
 mask only; it does not prove the kernel will grant it.
 
 The current process can also query its own effective mask through `sysGetCap`.
-The shell `getcap` test command and the `capcheck` app use this for smoke tests.
+The `capcheck` test app uses this for smoke tests.
+
+## User Identity Is Separate
+
+UID/GID and filesystem permissions are not capabilities. They are handled through process identity, filesystem mode checks, and userd-backed account data.
+
+For example:
+
+- `root` can bypass normal file mode checks.
+- `root` does not automatically gain raw filesystem, raw block, raw network, trace, shutdown, or service-manager capabilities.
+- `sudo` and `su` authenticate through userd before changing process identity.
+- Service-control commands still need `sys_service_manager` capability even when run by root.
+
+This separation keeps the capability model focused on privileged kernel/syscall mechanisms, while multi-user file access stays in the filesystem permission model.
 
 ## Denial Behavior
 
