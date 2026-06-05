@@ -45,6 +45,10 @@ proc renderTraps(): U32 =
   appendU64(pos, traps.supervisorTimer)
   appendChar(pos, '\n')
 
+  appendStr(pos, cstring"external: ")
+  appendU64(pos, traps.supervisorExternal)
+  appendChar(pos, '\n')
+
   appendStr(pos, cstring"syscall: ")
   appendU64(pos, traps.environmentCallFromUMode)
   appendChar(pos, '\n')

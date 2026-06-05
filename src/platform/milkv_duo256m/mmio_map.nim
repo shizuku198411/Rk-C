@@ -21,4 +21,7 @@ proc mapPlatformDeviceRanges*(root: PageTable): int =
   if mapDeviceRange(root, PAddr(MilkvRtcBase), PAddr(MilkvRtcBase), MilkvRtcSize, PteR or PteW) != 0:
     return -1
 
+  if mapDeviceRange(root, PAddr(MilkvPlicBase), PAddr(MilkvPlicBase), MilkvPlicSize, PteR or PteW) != 0:
+    return -1
+
   0

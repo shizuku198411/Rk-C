@@ -20,6 +20,10 @@ const
   MilkvStatusLedPinmuxOffset* = U64(0x000000ac)
   MilkvStatusLedPin* = U32(2)
   MilkvDeviceMmioSize* = U64(0x00010000)
+  MilkvPlicBase* = U64(0x70000000)
+  MilkvPlicSize* = U64(0x04000000)
+  MilkvPlicSModeContext* = U64(1)
+  MilkvUart0Irq* = U32(44)
   MilkvSdBlockSize* = U64(512)
   MilkvAppfsPartitionIndex* = U64(1) # zero-origin, partition 2
   MilkvAppfsLocalStartBlock* = U64(4096)

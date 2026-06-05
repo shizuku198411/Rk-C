@@ -45,6 +45,10 @@ proc kernelBootstrap*(hartid: U64, dtb: pointer) =
     printBootMsg("initialize file system:\n")
     fsInit()
 
+    printBootMsg("  enable external interrupt ")
+    enableExternalInterrupts()
+    println("OK")
+
     printBootMsg("  enable timer interrupt ")
     setNextTimer()
     enableTimerInterrupt()

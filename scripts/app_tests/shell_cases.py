@@ -7,7 +7,7 @@ def shell_tests() -> list[TestCase]:
     tests = [
         TestCase("shell help", "help", ["available commands:", "curl", "stracectl", "dmesg", "which"]),
         TestCase("shell ticks", "ticks", regex=[r"\d+"]),
-        TestCase("shell traps", "traps", ["trap count:", "supervisor timer"]),
+        TestCase("shell traps", "traps", ["trap count:", "supervisor timer", "supervisor external"]),
         TestCase("shell bitmap", "bitmap", ["bitmap:", "free"]),
         TestCase("shell history", "history", ["history"]),
         TestCase("shell cd", "cd /bin", []),
