@@ -7,6 +7,7 @@ import ../mm/memory
 import ../mm/paging
 import ../task/exec
 import ../task/process
+import ../../platform/interrupt_backend
 
 
 var
@@ -41,6 +42,11 @@ proc setTrapVector*() =
 proc enableTimerInterrupt*() =
   arch.writeSie(arch.readSie() or SieStie)
   arch.writeSstatus((arch.readSstatus() or SstatusSie) and not SstatusSum)
+
+
+## Enables platform external interrupts for runtime devices.
+proc enableExternalInterrupts*() =
+  interrupt_backend.initExternalInterrupts()
 
 
 ## Implements the enable sv39 kernel helper.

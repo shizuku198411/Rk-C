@@ -108,6 +108,9 @@ proc printTrapCount*() =
   write("  supervisor timer               : ")
   writeUnsigned(trapCount.supervisorTimer)
   write("\n")
+  write("  supervisor external            : ")
+  writeUnsigned(trapCount.supervisorExternal)
+  write("\n")
 
 
 ## Prints physical page bitmap totals from the kernel memory manager.

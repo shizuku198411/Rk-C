@@ -2,6 +2,7 @@ import ../../lib/types
 
 const
   SieStie* = U64(1 shl 5)
+  SieSeie* = U64(1 shl 9)
   SstatusSie* = U64(1 shl 1)
   SstatusSum* = U64(1 shl 18)
   SstatusSpp* = U64(1 shl 8)

@@ -1,64 +1,146 @@
 # Trap and Syscall ABI
 
-Rk-C uses RISC-V traps for syscalls, timer interrupts, and fault handling.
+Rk-C uses RISC-V traps for syscalls, timer interrupts, external interrupts, and fault handling.
 
 ## Trap Entry
 
-The trap entry path saves register state into a trap frame, dispatches to kernel
-handlers, and restores state before returning to the interrupted context.
+The assembly trap entry saves registers into a trap frame, enters Nim trap handling, and restores the interrupted context before `sret`.
 
-Timer interrupts are used for preemptive scheduling. User faults are reported
-and kill the current user process. Kernel faults panic.
+```text
+U-mode or S-mode event
+  -> src/arch/riscv64/trap.S
+  -> TrapFrame
+  -> src/kernel/trap/trap.nim
+  -> syscall / interrupt / fault handler
+  -> restore frame
+  -> sret or schedule
+```
+
+Timer interrupts drive preemption. External interrupts feed platform devices such as Milk-V UART RX. User faults terminate the current user process, while kernel faults panic.
 
 ## Syscall ABI
 
-Shared syscall identifiers live in:
+Shared syscall numbers live in:
 
 ```text
 src/lib/syscall_ids.nim
 ```
 
-Shared ABI types live in:
+Shared syscall structures live in:
 
 ```text
 src/lib/syscall_types.nim
 ```
 
-User wrappers live in:
+The userland raw syscall entry point is:
 
 ```text
-src/user/lib/core/syscall.nim
+src/user/lib/syscall/base.nim
+src/user/lib/syscall.S
 ```
 
-Kernel dispatch lives in:
+Domain-specific wrappers live in:
 
 ```text
-src/kernel/trap/syscall.nim
+src/user/lib/syscall/fs.nim
+src/user/lib/syscall/ipc.nim
+src/user/lib/syscall/net.nim
+src/user/lib/syscall/process.nim
+src/user/lib/syscall/service.nim
+src/user/lib/syscall/system.nim
+src/user/lib/syscall/trace.nim
 ```
 
-Subsystem implementations live under:
+`src/user/lib/core/syscall.nim` re-exports those wrappers so existing apps can import one stable module.
+
+## Register Convention
+
+The user wrapper places syscall arguments in the normal argument registers and places the syscall number in `a3`.
+
+```text
+a0 = arg0 / return value
+a1 = arg1
+a2 = arg2
+a3 = syscall number
+ecall
+```
+
+The kernel dispatches through `src/kernel/trap/syscall.nim`.
+
+## Dispatch Layout
+
+Subsystem implementations live under `src/kernel/syscall/`.
 
 ```text
 src/kernel/syscall/
+  blk/
+  fs/
+  io/
+  ipc/
+  mm/
+  net/
+  service/
+  system/
+  task/
 ```
 
-## Capability Checks
+The dispatcher should remain thin: it maps syscall numbers to subsystem handlers, applies capability checks, updates `lastError`, and emits syscall trace records.
 
-Syscall capability policy is centralized in:
+## Error Reporting
+
+Most failing syscalls return `-1` and set `lastError`. Error constants are shared in `src/lib/syscall_types.nim`.
+
+Examples:
+
+- `SysErrPerm`
+- `SysErrNoEnt`
+- `SysErrAccess`
+- `SysErrNotDir`
+- `SysErrIsDir`
+- `SysErrInval`
+- `SysErrCap`
+
+Apps should prefer domain wrappers and userland helpers rather than hard-coding raw negative values.
+
+## Syscall Trace
+
+Syscall tracing is controlled through `stracectl`.
+
+Supported modes include:
+
+- global trace on/off
+- trace one PID
+- trace only a child command, then turn tracing off when it exits
+
+Trace formatting names syscalls, decodes selected arguments, prints return values, and truncates large write buffers to keep logs readable.
+
+## External Interrupts
+
+External interrupts are platform-dispatched.
 
 ```text
-src/kernel/syscall/syscall_cap.nim
+trap.nim
+  -> platform/interrupt_backend.claimExternalInterrupt()
+  -> ttyPollInput(Tty0Id) when UART source
+  -> wake TTY readers
+  -> platform-specific UART ack
+  -> platform/interrupt_backend.completeExternalInterrupt()
 ```
 
-RKX headers can request capabilities, but the kernel grants only capabilities
-allowed by its trusted policy. This prevents a modified app image from granting
-itself arbitrary raw access.
+QEMU and Milk-V differ here: Milk-V uses PLIC source claim/complete for UART0 RX, while QEMU keeps the backend minimal.
 
-Actual capability masks can be inspected with:
+## Capability Gate
 
-```text
-/proc/<pid>/status
-```
+Before dispatch, `handleSyscall()` calls `canSyscallByNumber()` from `src/kernel/syscall/syscall_cap.nim`.
 
-The detailed request, grant, IPC propagation, and service authorization model is
-documented in [Capability Model](capabilities.md).
+Protected syscall groups include:
+
+- raw filesystem
+- raw block
+- raw network
+- service mutation
+- process list and kill
+- trace control
+- shutdown
+
+See [Capability Model](capabilities.md) for the full grant and enforcement flow.

@@ -1,40 +1,89 @@
 # Testing
 
-Rk-C uses a Python QEMU smoke test runner for end-to-end checks.
+Rk-C uses QEMU-based end-to-end tests plus targeted real-board bring-up logs.
 
 ## Main Test Command
+
+The preferred test entry point is:
+
+```bash
+workshop run rkc-dev -- test
+```
+
+The legacy direct command is:
 
 ```bash
 make test-apps
 ```
 
-The test runner:
+The workshop command keeps the test environment isolated and closer to CI.
 
-- builds normal and test-only RKX images
-- copies `bin/disk.img` to `bin/test-disk.img`
-- packs test-only apps into the test disk
-- boots QEMU with the test disk
-- verifies boot, shell commands, service commands, procfs, fd operations,
-  pipes, redirection, and selected network commands
-- verifies security/error cases such as invalid user CString rejection, W^X
-  user text, NX stack, and unauthorized capability behavior
-- removes `bin/test-disk.img` after completion unless requested otherwise
+## Test Runner
 
-## Useful Variants
+The Python runner under `scripts/test_apps.py`:
 
-```bash
-python3 scripts/test_apps.py --no-build
-python3 scripts/test_apps.py --skip-network-smoke
-python3 scripts/test_apps.py --keep-test-disk
-python3 scripts/test_apps.py --tap-if tap0 --host-ip 10.0.1.1
-```
+- builds kernel and user RKX images
+- builds test-only apps
+- creates `bin/test-disk.img`
+- packs normal and test apps
+- boots QEMU
+- logs in through `/bin/login`
+- runs shell/app test cases
+- reports failed test case numbers and commands
 
-## Test Apps
+Test cases are split by category under `scripts/app_tests/`.
 
-Test-only apps are not part of the normal appfs image unless the test build path
-packs them.
+## Covered Areas
 
-- `faultcheck`: usercopy, W^X, and NX stack checks
-- `capcheck`: capability grant/deny behavior
-- `pollcheck`: event wait behavior
+Current smoke coverage includes:
 
+- boot and login
+- shell built-ins
+- command help
+- cwd behavior
+- path resolution
+- file create/read/write/remove
+- chmod/chown and permission checks
+- user and group identity
+- passwd/shadow authentication paths
+- procfs files
+- service list/status/log commands
+- FD operations
+- pipes and redirection
+- TTY input behavior
+- panic log and dmesg
+- heap/brk/sbrk checks
+- capability grant/deny behavior
+- W^X and NX fault checks
+- selected network commands when enabled
+- optional hosted toolchain tests when packed
+
+## Network Tests
+
+Network tests may require host TAP setup and are disabled or skipped in environments where external network behavior is expected to be unstable.
+
+Milk-V real-board networking is not part of the current core bring-up test target.
+
+## CI Policy
+
+GitHub Actions runs on Ubuntu default runners, installs QEMU dependencies, and executes app tests without network tests. Because QEMU timing can vary, a small number of failures may be tolerated by policy, but stable repeated failures should be treated as real regressions.
+
+## Real Hardware Validation
+
+Milk-V Duo 256M validation is currently manual and log-driven.
+
+Important bring-up milestones already validated:
+
+- OpenSBI to Rk-C kernel entry
+- trap vector setup
+- timer interrupts
+- DTB parsing
+- allocator smoke tests
+- Sv39 enablement
+- context switching and user task syscall path
+- UART RX interrupt input
+- SD-backed appfs/rootfs bootstrap
+- service startup through login and shell
+- status LED on boot and off on shutdown
+
+Real-board logs are kept under `tmp/logs.txt` during active debugging and summarized in roadmap documents under `docs/roadmap/milk-v/`.

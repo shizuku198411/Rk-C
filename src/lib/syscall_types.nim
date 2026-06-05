@@ -196,6 +196,7 @@ type
     loadPageFault*: U64
     storeAMOPageFault*: U64
     supervisorTimer*: U64
+    supervisorExternal*: U64
 
   SysBitmapInfo* {.packed.} = object
     total*: U64

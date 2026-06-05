@@ -10,6 +10,7 @@ import ../task/process
 import ../trap/syscall
 import ../trap/trap_types
 import ../mm/paging
+import ../../platform/interrupt_backend
 
 when not defined(milkvBringup):
   import ../dev/timer
@@ -36,6 +37,7 @@ const
   ScauseStoreAMOPageFault               = U64(0x0f)
   ScauseInterruptFlag                   = U64(1) shl 63
   ScauseSupervisorTimer                 = ScauseInterruptFlag or U64(0x05)
+  ScauseSupervisorExternal              = ScauseInterruptFlag or U64(0x09)
 
 when defined(milkvBringup):
   var
@@ -317,6 +319,27 @@ proc trapHandler*(frame: ptr TrapFrame) {.exportc: "trap_handler", cdecl.} =
       if fromUser:
         deliverCurrentSignals()
         maybeYieldOnResched()
+
+  of ScauseSupervisorExternal:
+    inc trapCount.supervisorExternal
+    let source = interrupt_backend.claimExternalInterrupt()
+    if source == U32(0):
+      panicMsg("Unhandled Supervisor External Interrupt", scause, stval, userPc)
+
+    let handled = interrupt_backend.isUartRxInterrupt(source)
+    if handled:
+      if ttyPollInput(Tty0Id):
+        wakeTtyReaders(Tty0Id)
+      interrupt_backend.acknowledgeUartInterrupt()
+
+    interrupt_backend.completeExternalInterrupt(source)
+
+    if not handled:
+      panicMsg("Unhandled Supervisor External Interrupt", scause, stval, userPc)
+
+    if fromUser:
+      deliverCurrentSignals()
+      maybeYieldOnResched()
   
   else:
     panicMsg("Unexpected Trap", scause, stval, userPc)
