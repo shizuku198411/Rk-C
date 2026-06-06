@@ -20,6 +20,7 @@ proc printHelp*() =
   write("  cp\n")
   write("  mv\n")
   write("  df\n")
+  write("  cpuinfo\n")
   write("  id\n")
   write("  chmod\n")
   write("  chown\n")

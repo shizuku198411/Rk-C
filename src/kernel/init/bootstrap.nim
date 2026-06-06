@@ -1,5 +1,6 @@
 ## Boots the kernel by coordinating runtime, filesystem, and userspace initialization.
 import ../../lib/types
+import ../dev/boot_info
 import ../dev/console
 import ./runtime_setup
 
@@ -19,12 +20,14 @@ proc kernelBootstrap*(hartid: U64, dtb: pointer) =
 
   when defined(milkvBringup):
     clearBss()
+    setBootInfo(hartid, dtb)
     milkvBringupBoot(hartid, dtb)
   else:
     printBootMsg("initial setup:\n")
     printBootMsg("  clear bss ")
     clearBss()
     println("OK")
+    setBootInfo(hartid, dtb)
 
     printBootMsg("  set trap vector ")
     setTrapVector()

@@ -70,6 +70,8 @@ elif defined(userApp_mv):
   import apps/mv/mv
 elif defined(userApp_df):
   import apps/df/df
+elif defined(userApp_cpuinfo):
+  import apps/cpuinfo/cpuinfo
 elif defined(userApp_wc):
   import apps/wc/wc
 elif defined(userApp_paniclog):

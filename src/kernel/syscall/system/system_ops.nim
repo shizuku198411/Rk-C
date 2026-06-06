@@ -3,6 +3,7 @@ import ../../../arch/riscv64/arch
 import ../../../lib/calc
 import ../../../lib/syscall_types
 import ../../../lib/types
+import ../../dev/cpu_info
 import ../../dev/rtc
 import ../../dev/timer
 import ../../dev/klog
@@ -85,6 +86,18 @@ proc syscallCpuInfo*(outInfo: U64): U64 =
   )
 
   if copyToUser(outInfo, addr info, U64(sizeof(SysCpuInfo))) != 0:
+    return U64(-1'i64)
+
+  0
+
+
+## Handles the static cpu info syscall operation.
+proc syscallCpuStaticInfo*(outInfo: U64): U64 =
+  if outInfo == 0:
+    return U64(-1'i64)
+
+  var info = cpuStaticInfo()
+  if copyToUser(outInfo, addr info, U64(sizeof(SysCpuStaticInfo))) != 0:
     return U64(-1'i64)
 
   0

@@ -23,6 +23,11 @@ proc sysCpuInfo*(info: ptr SysCpuInfo): I32 =
   I32(rawSyscall3(SysCpuInfo, cast[U64](info), 0, 0))
 
 
+## Invokes the cpu static info syscall wrapper.
+proc sysCpuStaticInfo*(info: ptr SysCpuStaticInfo): I32 =
+  I32(rawSyscall3(SysCpuStaticInfo, cast[U64](info), 0, 0))
+
+
 ## Invokes the console info syscall wrapper.
 proc sysConsoleInfo*(info: ptr SysConsoleInfo): I32 =
   I32(rawSyscall3(SysConsoleInfo, cast[U64](info), 0, 0))
