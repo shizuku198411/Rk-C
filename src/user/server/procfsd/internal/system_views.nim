@@ -42,6 +42,52 @@ proc renderCpuinfo(): U32 =
   clearOut()
   var pos = U32(0)
 
+  if sysCpuStaticInfo(addr cpuStaticInfo) < 0:
+    appendStr(pos, cstring("error\n"))
+    return pos
+
+  appendStr(pos, cstring("platform: "))
+  appendStr(pos, cast[cstring](addr cpuStaticInfo.platform[0]))
+  appendChar(pos, '\n')
+
+  appendStr(pos, cstring("soc: "))
+  appendStr(pos, cast[cstring](addr cpuStaticInfo.soc[0]))
+  appendChar(pos, '\n')
+
+  appendStr(pos, cstring("cpu: "))
+  appendStr(pos, cast[cstring](addr cpuStaticInfo.cpu[0]))
+  appendChar(pos, '\n')
+
+  appendStr(pos, cstring("hart_count: "))
+  appendU64(pos, U64(cpuStaticInfo.hartCount))
+  appendChar(pos, '\n')
+
+  appendStr(pos, cstring("boot_hart: "))
+  appendU64(pos, cpuStaticInfo.bootHartId)
+  appendChar(pos, '\n')
+
+  appendStr(pos, cstring("isa: "))
+  appendStr(pos, cast[cstring](addr cpuStaticInfo.isa[0]))
+  appendChar(pos, '\n')
+
+  appendStr(pos, cstring("mmu: "))
+  appendStr(pos, cast[cstring](addr cpuStaticInfo.mmu[0]))
+  appendChar(pos, '\n')
+
+  appendStr(pos, cstring("timebase_hz: "))
+  if cpuStaticInfo.timebaseHz == U64(0):
+    appendStr(pos, cstring("unknown"))
+  else:
+    appendU64(pos, cpuStaticInfo.timebaseHz)
+  appendChar(pos, '\n')
+
+  appendStr(pos, cstring("core_clock_hz: "))
+  if cpuStaticInfo.coreClockHz == U64(0):
+    appendStr(pos, cstring("unknown"))
+  else:
+    appendU64(pos, cpuStaticInfo.coreClockHz)
+  appendStr(pos, cstring("\n\n"))
+
   if sysCpuInfo(addr cpuInfo) < 0:
     appendStr(pos, cstring("error\n"))
     return pos
@@ -173,4 +219,3 @@ proc renderProcesses(): U32 =
     inc i
 
   pos
-

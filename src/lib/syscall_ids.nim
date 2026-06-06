@@ -89,3 +89,4 @@ const
   SysSbrk* = U64(87)
   SysRawWriteRange* = U64(88)
   SysConsoleInfo* = U64(89)
+  SysCpuStaticInfo* = U64(90)

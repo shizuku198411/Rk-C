@@ -51,6 +51,18 @@ type
     ethernetFound*: bool
     scanOk*: bool
 
+  FdtCpuInfo* = object
+    valid*: bool
+    hartCount*: U32
+    firstHartId*: U64
+    timebaseHz*: U64
+    coreClockHz*: U64
+    model*: array[MaxTextLen, char]
+    compatible*: array[MaxTextLen, char]
+    cpuCompatible*: array[MaxTextLen, char]
+    isa*: array[MaxTextLen, char]
+    mmuType*: array[MaxTextLen, char]
+
 
 ## Reads one byte from a raw pointer plus offset.
 proc readU8(base: pointer, offset: U64): U8 =
@@ -214,6 +226,11 @@ proc readRegRegion(data: pointer, length: U64, addressCells, sizeCells: U32, reg
   storeRegion(region, base, size, name)
 
 
+## Returns whether a fixed string buffer contains text.
+proc fixedHasText(buf: openArray[char]): bool =
+  buf.len > 0 and buf[0] != '\0'
+
+
 ## Reads and validates the FDT header.
 proc fdtReadHeader*(blob: pointer): FdtHeaderInfo =
   if blob == nil:
@@ -371,3 +388,111 @@ proc fdtScanBasic*(blob: pointer): FdtScanResult =
 
   scanReserveMap(blob, result)
   scanStructBlock(blob, result)
+
+
+## Handles one CPU-info property in the FDT structure block.
+proc handleCpuProperty(blob: pointer, header: FdtHeaderInfo, result: var FdtCpuInfo, nodeNames: var array[MaxNodeDepth, array[MaxNodeNameLen, char]], depth: U64, nameOff: U32, data: pointer, length: U64, cpuAddressCells: var U32) =
+  if depth == U64(0):
+    return
+
+  let currentDepth = depth - U64(1)
+  let current = nodeNames[currentDepth]
+  var parent: array[MaxNodeNameLen, char]
+  if currentDepth > U64(0):
+    parent = nodeNames[currentDepth - U64(1)]
+
+  if currentDepth == U64(0):
+    if fdtStringEq(blob, header, nameOff, cstring"model"):
+      storeStringProperty(data, length, result.model)
+    elif fdtStringEq(blob, header, nameOff, cstring"compatible"):
+      storeStringProperty(data, length, result.compatible)
+    return
+
+  if fixedCStringEq(current, cstring"cpus"):
+    if fdtStringEq(blob, header, nameOff, cstring"#address-cells") and length >= U64(4):
+      cpuAddressCells = readBe32(data, U64(0))
+    elif fdtStringEq(blob, header, nameOff, cstring"timebase-frequency") and length >= U64(4):
+      result.timebaseHz = U64(readBe32(data, U64(0)))
+    return
+
+  if fixedCStringEq(parent, cstring"cpus") and fixedStartsWith(current, cstring"cpu@"):
+    if fdtStringEq(blob, header, nameOff, cstring"reg") and length >= U64(4) and result.hartCount == U32(1):
+      var offset = U64(0)
+      result.firstHartId = readCellValue(data, length, offset, cpuAddressCells)
+    elif fdtStringEq(blob, header, nameOff, cstring"compatible") and not fixedHasText(result.cpuCompatible):
+      storeStringProperty(data, length, result.cpuCompatible)
+    elif fdtStringEq(blob, header, nameOff, cstring"riscv,isa") and not fixedHasText(result.isa):
+      storeStringProperty(data, length, result.isa)
+    elif fdtStringEq(blob, header, nameOff, cstring"mmu-type") and not fixedHasText(result.mmuType):
+      storeStringProperty(data, length, result.mmuType)
+    elif fdtStringEq(blob, header, nameOff, cstring"clock-frequency") and length >= U64(4) and result.coreClockHz == U64(0):
+      result.coreClockHz = U64(readBe32(data, U64(0)))
+
+
+## Scans the FDT structure block for CPU description information.
+proc scanCpuStructBlock(blob: pointer, header: FdtHeaderInfo, result: var FdtCpuInfo) =
+  var nodeNames: array[MaxNodeDepth, array[MaxNodeNameLen, char]]
+  var depth = U64(0)
+  var offset = header.offDtStruct
+  let endOffset = header.offDtStruct + header.sizeDtStruct
+  var cpuAddressCells = U32(1)
+
+  while offset < endOffset and rangeInside(header.totalSize, offset, U64(4)):
+    let token = readBe32(blob, offset)
+    offset += U64(4)
+
+    case token
+    of FdtBeginNode:
+      if depth >= MaxNodeDepth:
+        return
+
+      let consumed = copyInlineCString(blob, header.totalSize, offset, nodeNames[depth])
+      if consumed == U64(0):
+        return
+
+      if depth > U64(0) and fixedCStringEq(nodeNames[depth - U64(1)], cstring"cpus") and
+          fixedStartsWith(nodeNames[depth], cstring"cpu@"):
+        if result.hartCount == U32(0):
+          result.firstHartId = U64(0)
+        inc result.hartCount
+
+      offset = alignFdt(offset + consumed)
+      inc depth
+
+    of FdtEndNode:
+      if depth == U64(0):
+        return
+      dec depth
+
+    of FdtProp:
+      if not rangeInside(header.totalSize, offset, U64(8)):
+        return
+
+      let length = U64(readBe32(blob, offset))
+      let nameOff = readBe32(blob, offset + U64(4))
+      offset += U64(8)
+
+      if not rangeInside(header.totalSize, offset, length):
+        return
+
+      handleCpuProperty(blob, header, result, nodeNames, depth, nameOff, cast[pointer](cast[U64](blob) + offset), length, cpuAddressCells)
+      offset = alignFdt(offset + length)
+
+    of FdtNop:
+      discard
+
+    of FdtEnd:
+      result.valid = result.hartCount > U32(0)
+      return
+
+    else:
+      return
+
+
+## Scans CPU description information from an FDT blob.
+proc fdtScanCpuInfo*(blob: pointer): FdtCpuInfo =
+  let header = fdtReadHeader(blob)
+  if not header.valid:
+    return
+
+  scanCpuStructBlock(blob, header, result)

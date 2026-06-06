@@ -19,6 +19,7 @@ const
   SysNetMacLen* = 6
   SysNetPacketMax* = 1514
   SysKmsgMax* = U32(16384)
+  SysCpuTextMax* = U32(64)
 
   SysFsOpLs* = U32(1)
   SysFsOpMkdir* = U32(2)
@@ -222,6 +223,17 @@ type
     idleTicks*: U64
     busyTicks*: U64
     usagePercent*: U32
+
+  SysCpuStaticInfo* {.packed.} = object
+    hartCount*: U32
+    bootHartId*: U64
+    timebaseHz*: U64
+    coreClockHz*: U64
+    platform*: array[SysCpuTextMax, char]
+    soc*: array[SysCpuTextMax, char]
+    cpu*: array[SysCpuTextMax, char]
+    isa*: array[SysCpuTextMax, char]
+    mmu*: array[SysCpuTextMax, char]
 
   SysConsoleInfo* {.packed.} = object
     capacity*: U64

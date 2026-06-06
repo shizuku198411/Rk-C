@@ -51,6 +51,7 @@ var
   traps: SysTrapCount
   bitmap: SysBitmapInfo
   cpuInfo: SysCpuInfo
+  cpuStaticInfo: SysCpuStaticInfo
   consoleInfo: SysConsoleInfo
   fsInfos: seq[SysFsInfoEntry] = @[]
   fdInfos: seq[SysFdInfo] = @[]
