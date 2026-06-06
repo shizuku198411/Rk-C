@@ -130,35 +130,30 @@ proc appendRkxMapLine(pos: var U32, start, size: U64, perms, name: cstring) =
   appendChar(pos, '\n')
 
 
-## Appends a named capability when its bit is present in a mask.
-proc appendCapName(pos: var U32, mask: U32, cap: U32, name: cstring, first: var bool) =
-  if (mask and cap) == 0:
+## Appends a named capability when its entry bit is present in a mask.
+proc appendCapName(pos: var U32, mask: U32, entry: UserCapabilityNameEntry,
+                   first: var bool) =
+  if (mask and entry.bit) == 0:
     return
 
   if not first:
     appendChar(pos, ',')
-  appendStr(pos, name)
+  appendStr(pos, entry.name)
   first = false
 
 
 ## Appends the recognized names represented by a capability mask.
 proc appendCapNames(pos: var U32, mask: U32) =
-  if mask == SysCapNone:
+  if capMaskIsNone(mask):
     appendStr(pos, cstring("none"))
     return
 
   var first = true
-  appendCapName(pos, mask, SysCapServiceManager, cstring(SysCapServiceManagerName), first)
-  appendCapName(pos, mask, SysCapRawFs, cstring(SysCapRawFsName), first)
-  appendCapName(pos, mask, SysCapRawBlock, cstring(SysCapRawBlockName), first)
-  appendCapName(pos, mask, SysCapRawNet, cstring(SysCapRawNetName), first)
-  appendCapName(pos, mask, SysCapProcessList, cstring(SysCapProcessListName), first)
-  appendCapName(pos, mask, SysCapProcessKill, cstring(SysCapProcessKillName), first)
-  appendCapName(pos, mask, SysCapTrace, cstring(SysCapTraceName), first)
-  appendCapName(pos, mask, SysCapShutdown, cstring(SysCapShutdownName), first)
+  for entry in UserCapabilityNameEntries:
+    appendCapName(pos, mask, entry, first)
 
-  let unknown = mask and (not SysCapAllKnown)
-  if unknown != SysCapNone:
+  let unknown = unknownCapabilityMask(mask)
+  if not capMaskIsNone(unknown):
     if not first:
       appendChar(pos, ' ')
     appendStr(pos, cstring("unknown:"))

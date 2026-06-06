@@ -2,10 +2,10 @@
 {.warning[UnusedImport]: off.}
 
 import ../../../lib/rkx
-import ../../../lib/syscall_caps
 import ../../lib/runtime/orc_osalloc
 import ../../lib/core/args
 import ../../lib/core/app
+import ../../lib/core/cap_names
 import ../../lib/core/io
 import ../../lib/core/path_buffer
 import ../../lib/core/pathutils
@@ -201,15 +201,15 @@ proc appendHexField(name: cstring, value: U64) =
   appendChar('\n')
 
 
-## Appends a named capability when the bit is present.
-proc appendCapName(mask: U32, bit: U32, name: cstring, first: var bool) =
-  if (mask and bit) == 0:
+## Appends a named capability when the entry bit is present.
+proc appendCapName(mask: U32, entry: UserCapabilityNameEntry, first: var bool) =
+  if (mask and entry.bit) == 0:
     return
 
   if not first:
     appendText(cstring(","))
 
-  appendText(name)
+  appendText(entry.name)
   first = false
 
 
@@ -218,22 +218,16 @@ proc appendCaps(mask: U32) =
   appendHex32Value(mask)
   appendText(cstring(" ("))
 
-  if mask == SysCapNone:
+  if capMaskIsNone(mask):
     appendText(cstring("none"))
   else:
     var first = true
 
-    appendCapName(mask, SysCapServiceManager, SysCapServiceManagerName, first)
-    appendCapName(mask, SysCapRawFs, SysCapRawFsName, first)
-    appendCapName(mask, SysCapRawBlock, SysCapRawBlockName, first)
-    appendCapName(mask, SysCapRawNet, SysCapRawNetName, first)
-    appendCapName(mask, SysCapProcessList, SysCapProcessListName, first)
-    appendCapName(mask, SysCapProcessKill, SysCapProcessKillName, first)
-    appendCapName(mask, SysCapTrace, SysCapTraceName, first)
-    appendCapName(mask, SysCapShutdown, SysCapShutdownName, first)
+    for entry in UserCapabilityNameEntries:
+      appendCapName(mask, entry, first)
 
-    let unknown = mask and not SysCapAllKnown
-    if unknown != SysCapNone:
+    let unknown = unknownCapabilityMask(mask)
+    if not capMaskIsNone(unknown):
       if not first:
         appendText(cstring(","))
       appendText(cstring("unknown:"))

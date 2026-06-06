@@ -104,6 +104,7 @@ USER_LIB_SRCS := $(shell find $(SRC_DIR)/user/lib -type f -name '*.nim' | sort)
 USER_SERVER_LIB_SRCS := $(shell find $(SRC_DIR)/user/server/lib -type f -name '*.nim' 2>/dev/null | sort)
 
 RKX_TOOL := scripts/make_rkx.py
+RKX_CAP_CHECK_TOOL := scripts/validate_rkx_caps.py
 APPFS_TOOL := scripts/pack_appfs.py
 
 OPENSBI_FW ?= opensbi/build/platform/generic/firmware/fw_jump.bin
@@ -254,17 +255,20 @@ QEMU_DEBUG_ARGS := \
 	-S \
 	-gdb tcp::$(GDB_PORT)
 
-.PHONY: all build build-bins build-test-bins generate-version appfs milkv-appfs clean disasm run qemu-run qemu-run-built degraded-run qemu-debug test-apps net-host-help milkv-bringup milkv-bringup-fit milkv-fit milkv-sd milkv-help
+.PHONY: all build build-bins build-test-bins generate-version check-rkx-caps appfs milkv-appfs clean disasm run qemu-run qemu-run-built degraded-run qemu-debug test-apps net-host-help milkv-bringup milkv-bringup-fit milkv-fit milkv-sd milkv-help
 
 all: build
 
-build: generate-version $(KERNEL_ELF) appfs
+build: check-rkx-caps generate-version $(KERNEL_ELF) appfs
 
-build-bins: generate-version $(KERNEL_ELF) $(USER_SHELL_RKX) $(USER_APP_RKXS) $(USER_SERVER_RKXS) $(OPTIONAL_APP_RKXS)
+build-bins: check-rkx-caps generate-version $(KERNEL_ELF) $(USER_SHELL_RKX) $(USER_APP_RKXS) $(USER_SERVER_RKXS) $(OPTIONAL_APP_RKXS)
 
 build-test-bins: build-bins $(TEST_APP_RKXS) $(OPTIONAL_TEST_APP_RKXS)
 
 generate-version: $(GENERATED_VERSION)
+
+check-rkx-caps:
+	python3 $(RKX_CAP_CHECK_TOOL)
 
 $(GENERATED_VERSION): $(VERSION_FILE) $(VERSION_GENERATOR) README.md | $(GENERATED_DIR)
 	python3 $(VERSION_GENERATOR) --version-file $(VERSION_FILE) --nim-out $(GENERATED_VERSION) --readme README.md
@@ -324,12 +328,12 @@ $(USER_SHELL_ELF): $(SRC_DIR)/user/app_main.nim $(shell find $(SRC_DIR)/user/app
 $(USER_SHELL_RKX): $(USER_SHELL_ELF) $(RKX_TOOL) $(SRC_DIR)/user/apps/shell/rkx.toml | $(BIN_DIR)
 	python3 $(RKX_TOOL) --elf $< --out $@
 
-appfs: $(DISK_IMG) $(USER_SHELL_RKX) $(USER_APP_RKXS) $(USER_SERVER_RKXS) $(OPTIONAL_APP_RKXS)
+appfs: check-rkx-caps $(DISK_IMG) $(USER_SHELL_RKX) $(USER_APP_RKXS) $(USER_SERVER_RKXS) $(OPTIONAL_APP_RKXS)
 	python3 $(APPFS_TOOL) --disk $(DISK_IMG) --bin-dir $(BIN_DIR) --ext rkx --apps shell $(USER_PACK_NAMES) $(APPFS_EXTRA_APPS)
 
-milkv-appfs: $(MILKV_APPFS_IMG)
+milkv-appfs: check-rkx-caps $(MILKV_APPFS_IMG)
 
-$(MILKV_APPFS_IMG): $(USER_SHELL_RKX) $(USER_APP_RKXS) $(USER_SERVER_RKXS) $(OPTIONAL_APP_RKXS) | $(MILKV_BIN_DIR)
+$(MILKV_APPFS_IMG): check-rkx-caps $(USER_SHELL_RKX) $(USER_APP_RKXS) $(USER_SERVER_RKXS) $(OPTIONAL_APP_RKXS) | $(MILKV_BIN_DIR)
 	python3 $(APPFS_TOOL) --out-image $@ --bin-dir $(BIN_DIR) --ext rkx --apps shell $(USER_PACK_NAMES) $(APPFS_EXTRA_APPS)
 
 define USER_APP_template

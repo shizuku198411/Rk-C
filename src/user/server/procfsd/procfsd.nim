@@ -5,12 +5,12 @@ import ../../lib/runtime/orc_osalloc
 import ../../lib/core/io
 import ../../lib/core/syscall
 import ../../lib/core/strutils
+import ../../lib/core/cap_names
 import ../../lib/core/passwd
 import ../../lib/core/group
 import ../../lib/core/userdb
 import ../../../lib/mem
 import ../../../lib/service_catalog
-import ../../../lib/syscall_caps
 import ../lib/service_ready
 
 
