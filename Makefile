@@ -61,7 +61,7 @@ USER_SHELL_RKX := $(BIN_DIR)/shell.rkx
 
 USER_APP_NAMES := \
 	login ls cat mkdir ps rm rmdir date edit ipc kill svc ping nslookup tcpcheck \
-	curl stracectl dmesg rkxinfo echo touch cp mv df wc paniclog id chmod chown passwd \
+	curl stracectl dmesg rkxinfo echo touch cp mv df cpuinfo wc paniclog id chmod chown passwd \
 	whoami sudo shutdown which
 
 USER_SERVER_NAMES := svcmgtd procmgtd fsd blockd procfsd netd userd
@@ -118,6 +118,8 @@ MILKV_BOOT_SD_SOURCE ?= /tmp/rkc-sd-boot/boot.sd
 MILKV_DTB := $(MILKV_BUILD_DIR)/sg2002_milkv_duo256m.dtb
 MILKV_FIT_ITS := $(SRC_DIR)/platform/milkv-duo256m/rkc_phase0.its
 MILKV_BRINGUP_FIT_ITS := $(MILKV_BUILD_DIR)/rkc_bringup.its
+MILKV_SD_MOUNT_DIR ?= /tmp/rkc-sd-boot
+MILKV_APPFS_PART2_LOCAL_BLOCK ?= 4096
 
 ARCH_FLAGS := \
 	-target $(TARGET) \
@@ -252,7 +254,7 @@ QEMU_DEBUG_ARGS := \
 	-S \
 	-gdb tcp::$(GDB_PORT)
 
-.PHONY: all build build-bins build-test-bins generate-version appfs milkv-appfs clean disasm run qemu-run qemu-run-built degraded-run qemu-debug test-apps net-host-help milkv-bringup milkv-bringup-fit milkv-fit milkv-help
+.PHONY: all build build-bins build-test-bins generate-version appfs milkv-appfs clean disasm run qemu-run qemu-run-built degraded-run qemu-debug test-apps net-host-help milkv-bringup milkv-bringup-fit milkv-fit milkv-sd milkv-help
 
 all: build
 
@@ -411,15 +413,103 @@ milkv-fit: generate-version $(MILKV_FIT)
 	@echo ""
 	@echo "Copy to SD boot partition as boot.sd to use the existing U-Boot bootcmd."
 
+milkv-sd: generate-version $(MILKV_APPFS_IMG)
+	@if [ -z "$(SD)" ]; then \
+		echo "missing SD target. usage: make milkv-sd SD=sdb" >&2; \
+		exit 1; \
+	fi; \
+	set -euo pipefail; \
+	sd="$(SD)"; \
+	case "$$sd" in \
+		/dev/*) dev="$$sd" ;; \
+		sd*|mmcblk*|nvme*) dev="/dev/$$sd" ;; \
+		*) echo "invalid SD target '$$sd'. use SD=sdb or SD=/dev/sdb" >&2; exit 1 ;; \
+	esac; \
+	if [ ! -b "$$dev" ]; then \
+		echo "not a block device: $$dev" >&2; \
+		exit 1; \
+	fi; \
+	root_src="$$(findmnt -n -o SOURCE / 2>/dev/null || true)"; \
+	root_pk="$$(lsblk -no PKNAME "$$root_src" 2>/dev/null | head -n1 || true)"; \
+	if [ -n "$$root_pk" ] && [ "$$dev" = "/dev/$$root_pk" ]; then \
+		echo "refusing to write root disk: $$dev" >&2; \
+		exit 1; \
+	fi; \
+	case "$$dev" in \
+		/dev/mmcblk*|/dev/nvme*) p1="$${dev}p1"; p2="$${dev}p2" ;; \
+		*) p1="$${dev}1"; p2="$${dev}2" ;; \
+	esac; \
+	if [ ! -b "$$p1" ] || [ ! -b "$$p2" ]; then \
+		echo "expected boot/rootfs partitions not found: $$p1 $$p2" >&2; \
+		exit 1; \
+	fi; \
+	part2_start="$$(lsblk -dnbo START "$$p2")"; \
+	if [ -z "$$part2_start" ]; then \
+		echo "failed to read partition start for $$p2" >&2; \
+		exit 1; \
+	fi; \
+	appfs_seek="$$(($$part2_start + $(MILKV_APPFS_PART2_LOCAL_BLOCK)))"; \
+	echo "Milk-V Duo 256M SD update:"; \
+	echo "  disk       : $$dev"; \
+	echo "  boot part  : $$p1"; \
+	echo "  rootfs part: $$p2"; \
+	echo "  FIT        : $(MILKV_FIT) -> $$p1:/boot.sd"; \
+	echo "  appfs      : $(MILKV_APPFS_IMG) -> $$dev block $$appfs_seek"; \
+	if findmnt -rn "$$p2" >/dev/null 2>&1; then \
+		echo "refusing to write while rootfs partition is mounted: $$p2" >&2; \
+		exit 1; \
+	fi; \
+	mounted_here=0; \
+	cleanup() { \
+		if [ "$$mounted_here" = "1" ]; then \
+			sudo umount "$(MILKV_SD_MOUNT_DIR)" || true; \
+		fi; \
+	}; \
+	trap cleanup EXIT; \
+	if findmnt -rn "$(MILKV_SD_MOUNT_DIR)" >/dev/null 2>&1; then \
+		mounted_src="$$(findmnt -n -o SOURCE "$(MILKV_SD_MOUNT_DIR)")"; \
+		if [ "$$mounted_src" != "$$p1" ]; then \
+			echo "$(MILKV_SD_MOUNT_DIR) is mounted from $$mounted_src, expected $$p1" >&2; \
+			exit 1; \
+		fi; \
+	else \
+		sudo mkdir -p "$(MILKV_SD_MOUNT_DIR)"; \
+		sudo mount "$$p1" "$(MILKV_SD_MOUNT_DIR)"; \
+		mounted_here=1; \
+	fi; \
+	source_fit="$(MILKV_BOOT_SD_SOURCE)"; \
+	if [ ! -f "$$source_fit" ]; then \
+		source_fit="$(MILKV_SD_MOUNT_DIR)/boot.sd"; \
+	fi; \
+	if [ ! -f "$$source_fit" ]; then \
+		echo "missing Milk-V source FIT. expected $(MILKV_BOOT_SD_SOURCE) or $(MILKV_SD_MOUNT_DIR)/boot.sd" >&2; \
+		exit 1; \
+	fi; \
+	$(MAKE) milkv-fit MILKV_BOOT_SD_SOURCE="$$source_fit"; \
+	sudo cp "$(MILKV_FIT)" "$(MILKV_SD_MOUNT_DIR)/boot.sd"; \
+	sync; \
+	if [ "$$mounted_here" = "1" ]; then \
+		sudo umount "$(MILKV_SD_MOUNT_DIR)"; \
+		mounted_here=0; \
+	fi; \
+	sudo dd if="$(MILKV_APPFS_IMG)" of="$$dev" bs=512 seek="$$appfs_seek" conv=notrunc status=progress; \
+	sync; \
+	echo "Milk-V SD update completed."
+
 milkv-help:
 	@echo "Build Milk-V Duo 256M images:"
 	@echo "  make milkv-bringup"
 	@echo "  make milkv-bringup-fit MILKV_BOOT_SD_SOURCE=/tmp/rkc-sd-boot/boot.sd"
 	@echo "  make milkv-fit MILKV_BOOT_SD_SOURCE=/tmp/rkc-sd-boot/boot.sd"
 	@echo "  make milkv-appfs"
+	@echo "  make milkv-sd SD=sdb"
 	@echo ""
 	@echo "Copy the full bootstrap FIT to the SD FAT partition:"
 	@echo "  $(MILKV_FIT) -> boot.sd"
+	@echo ""
+	@echo "Write FIT and appfs to an SD card:"
+	@echo "  SD=sdb writes $(MILKV_FIT) to /dev/sdb1:/boot.sd"
+	@echo "  and writes $(MILKV_APPFS_IMG) to /dev/sdb2 local block $(MILKV_APPFS_PART2_LOCAL_BLOCK)"
 
 net-host-help:
 	@echo "Default TAP network:"

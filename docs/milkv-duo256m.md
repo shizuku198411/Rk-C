@@ -120,6 +120,43 @@ local block:     4096
 block size:      512 bytes
 ```
 
+## Install FIT and AppFS with Make
+
+The recommended update path is the `milkv-sd` target. It builds the Milk-V FIT image and AppFS image, then writes both to the SD card.
+
+```bash
+make milkv-sd SD=sdX
+```
+
+Example:
+
+```bash
+make milkv-sd SD=sdb
+```
+
+This target performs the following operations:
+
+```text
+/dev/sdX1:/boot.sd                         <- bin/milkv-duo256m/boot.sd
+/dev/sdX at partition2_start + 4096 blocks <- bin/milkv-duo256m/appfs.img
+```
+
+The target expects an SD card layout compatible with the official Milk-V Duo 256M image:
+
+```text
+/dev/sdX1  FAT boot partition
+/dev/sdX2  rootfs partition used by Rk-C's SD-backed rootfs/appfs layout
+```
+
+Safety checks are intentionally conservative:
+
+- `SD` must be specified.
+- The target must be a block device.
+- The detected root disk is refused.
+- The second partition must not be mounted while AppFS is written.
+
+Use the manual steps below when inspecting or debugging the SD layout directly.
+
 ## Install the Rk-C FIT Image
 
 Back up the original `boot.sd`, then copy the generated Rk-C FIT image to the SD boot partition:
