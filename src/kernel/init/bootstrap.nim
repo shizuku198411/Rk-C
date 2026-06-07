@@ -10,6 +10,7 @@ else:
   import ../dev/timer
   import ../fs/fs
   import ../mm/memory
+  import ../security/rkx_trust
   import ../task/process
   import ./userland_boot
 
@@ -47,6 +48,18 @@ proc kernelBootstrap*(hartid: U64, dtb: pointer) =
 
     printBootMsg("initialize file system:\n")
     fsInit()
+
+    printBootMsg("  load RKX trusted manifest ")
+    if rkxTrustInit():
+      println("OK")
+      printBootMsg("  RKX trusted entries = ")
+      printUnsigned(U64(rkxTrustEntryCount()))
+      putChar('\n')
+      printBootMsg("  RKX verified entries = ")
+      printUnsigned(U64(rkxTrustVerifiedEntryCount()))
+      putChar('\n')
+    else:
+      println("FAIL")
 
     printBootMsg("  enable external interrupt ")
     enableExternalInterrupts()

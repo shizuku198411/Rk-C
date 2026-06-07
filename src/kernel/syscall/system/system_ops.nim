@@ -9,6 +9,7 @@ import ../../dev/timer
 import ../../dev/klog
 import ../../dev/tty
 import ../../mm/usercopy
+import ../../security/rkx_trust
 import ../../task/process
 import ../../system/shutdown
 import ../syscall_cap
@@ -128,6 +129,31 @@ proc syscallKmsg*(outBuf, capacity: U64): U64 =
     return U64(-1'i64)
 
   size
+
+
+## Handles the RKX trust table list syscall operation.
+proc syscallRkxTrustList*(outEntries, maxEntries: U64): U64 =
+  if outEntries == U64(0):
+    return U64(-1'i64)
+
+  let total = rkxTrustEntryCount()
+  var count = total
+  if count > U32(maxEntries):
+    count = U32(maxEntries)
+
+  var i = U32(0)
+  while i < count:
+    var entry = SysRkxTrustInfo()
+    if not rkxTrustCopyEntry(i, entry):
+      return U64(-1'i64)
+
+    let dst = outEntries + U64(i) * U64(sizeof(SysRkxTrustInfo))
+    if copyToUser(dst, addr entry, U64(sizeof(SysRkxTrustInfo))) != 0:
+      return U64(-1'i64)
+
+    inc i
+
+  U64(total)
 
 
 ## Handles the shutdown syscall operation.

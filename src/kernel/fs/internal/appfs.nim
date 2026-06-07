@@ -38,6 +38,60 @@ proc appfsNameEq(entry: ptr AppfsEntry, name: cstring): bool =
   fixedCStringEq(cast[ptr UncheckedArray[char]](addr entry.name[0]), FsNameMax, name)
 
 
+## Returns true when an appfs entry is reserved for kernel-internal metadata.
+proc appfsEntryIsHidden(entry: ptr AppfsEntry): bool =
+  if entry == nil:
+    return false
+
+  entry.name[0] == '_' and entry.name[1] == '_'
+
+
+## Finds the appfs table index for the Nth visible appfs entry.
+proc appfsVisibleEntryIndex(entryIndex: U64): int =
+  var seen = U64(0)
+  var i = 0
+  while i < int(appfsEntryCount):
+    if not appfsEntryIsHidden(addr appfsEntries[i]):
+      if seen == entryIndex:
+        return i
+      inc seen
+    inc i
+  -1
+
+
+## Finds an internal appfs entry by raw appfs name.
+proc appfsInternalEntryIndex(name: cstring): int =
+  if name == nil or not appfsReady:
+    return -1
+
+  var i = 0
+  while i < int(appfsEntryCount):
+    if appfsEntryIsHidden(addr appfsEntries[i]) and appfsNameEq(addr appfsEntries[i], name):
+      return i
+    inc i
+  -1
+
+
+## Reads an internal appfs entry by raw appfs name.
+proc appfsReadInternalEntry(name: cstring, dst: pointer, capacity: U64): int =
+  if dst == nil:
+    return -1
+
+  let idx = appfsInternalEntryIndex(name)
+  if idx < 0:
+    return -1
+
+  let size = U64(appfsEntries[idx].size)
+  if size > capacity:
+    return -1
+
+  let base = appfsStartBlock * blockdev.BlockSize + U64(appfsEntries[idx].dataOff)
+  if appfsReadBytes(base, dst, size) < 0:
+    return -1
+
+  int(size)
+
+
 ## Resolves appfs path.
 proc resolveAppfsPath(path: cstring): int =
   if path == nil or not appfsReady:
@@ -58,7 +112,7 @@ proc resolveAppfsPath(path: cstring): int =
 
   var i = 0
   while i < int(appfsEntryCount):
-    if appfsNameEq(addr appfsEntries[i], name):
+    if not appfsEntryIsHidden(addr appfsEntries[i]) and appfsNameEq(addr appfsEntries[i], name):
       return i
     inc i
   -1

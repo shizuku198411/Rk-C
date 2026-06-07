@@ -261,15 +261,18 @@ When adding a new capability:
 1. Add the bit constant and name constant to `src/lib/syscall_caps.nim`.
 2. Include the bit in `SysCapAllKnown`.
 3. Add or update policy in `src/kernel/syscall/syscall_cap.nim`.
-4. Add a trusted grant in `trustedCapsForPath()` if an executable should receive
-   the capability.
+4. Add a trusted path grant to `src/kernel/task/trusted_caps.nim` if an
+   executable should receive the capability.
 5. Add the capability name to the relevant app or server `rkx.toml`.
-6. Update user-facing capability formatters if needed.
-7. Add tests for both grant and denial behavior.
+6. Run `make check-rkx-caps` to verify production `rkx.toml` requests and the
+   kernel trusted grant table still match.
+7. Update shared user-facing capability formatters in
+   `src/user/lib/core/cap_names.nim` if the new bit should be displayed.
+8. Add tests for both grant and denial behavior.
 
-Today, `procfsd` and `rkxinfo` each decode capability names for display. If
-capability formatting grows further, moving that formatter into a shared
-user/kernel-safe helper would reduce update points.
+`scripts/make_rkx.py` and `scripts/validate_rkx_caps.py` share RKX metadata
+parsing through `scripts/rkx_metadata.py`. This keeps packaging and policy
+validation aligned when metadata fields or capability names change.
 
 ## Security Notes
 

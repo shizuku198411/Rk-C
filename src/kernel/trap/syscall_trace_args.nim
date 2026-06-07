@@ -200,6 +200,10 @@ proc printSyscallArgs*(frame: ptr TrapFrame, verbose: bool) =
     printNamedPtr("buf", frame.a0)
     print(", ")
     printNamedU64("capacity", frame.a1)
+  of SysRkxTrustList:
+    printNamedPtr("entries", frame.a0)
+    print(", ")
+    printNamedU64("max", frame.a1)
   of SysRawNetMac:
     printNamedPtr("mac", frame.a0)
   of SysRawNetRecv:

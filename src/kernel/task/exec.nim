@@ -8,8 +8,10 @@ import ../../lib/user_ids
 import ../dev/console
 import ../mm/memory
 import ../mm/paging
+import ../security/rkx_trust
 import ../task/process
 import ../task/rkx_loader
+import ../task/trusted_caps
 import ../../platform/mmio_map
 import ../../platform/service_policy
 
@@ -64,44 +66,12 @@ proc stackPagesFromHeader(hdr: ptr RkxHeader): U64 =
   U64(hdr.stackPages)
 
 
-## Implements the trusted caps for path kernel helper.
-proc trustedCapsForPath(path: cstring): U32 =
-  if cstringEq(path, "/bin/svcmgtd"):
-    return SysCapServiceManager or SysCapProcessList or SysCapProcessKill
-
-  if cstringEq(path, "/bin/procmgtd"):
-    return SysCapProcessList or SysCapProcessKill
-
-  if cstringEq(path, "/bin/procfsd"):
-    return SysCapProcessList
-
-  if cstringEq(path, "/bin/fsd"):
-    return SysCapRawFs
-
-  if cstringEq(path, "/bin/blockd"):
-    return SysCapRawBlock
-
-  if cstringEq(path, "/bin/netd"):
-    return SysCapRawNet
-
-  if cstringEq(path, "/bin/stracectl"):
-    return SysCapTrace
-
-  if cstringEq(path, "/bin/kill"):
-    return SysCapProcessKill
-
-  if cstringEq(path, "/bin/shutdown"):
-    return SysCapShutdown
-
-  if cstringEq(path, "/bin/svc"):
-    return SysCapServiceManager
-
-  SysCapNone
-
-
 ## Implements the granted caps for image kernel helper.
 proc grantedCapsForImage(path: cstring, hdr: ptr RkxHeader): U32 =
   if hdr == nil:
+    return SysCapNone
+
+  if not rkxPathIntegrityVerified(path):
     return SysCapNone
 
   hdr.capabilityMask and trustedCapsForPath(path)

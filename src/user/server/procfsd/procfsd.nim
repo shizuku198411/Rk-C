@@ -5,19 +5,19 @@ import ../../lib/runtime/orc_osalloc
 import ../../lib/core/io
 import ../../lib/core/syscall
 import ../../lib/core/strutils
+import ../../lib/core/cap_names
 import ../../lib/core/passwd
 import ../../lib/core/group
 import ../../lib/core/userdb
 import ../../../lib/mem
 import ../../../lib/service_catalog
-import ../../../lib/syscall_caps
 import ../lib/service_ready
 
 
 const
   ProcFsChunkMax = U32(SysIpcMessageMax)
   ProcFsBufSize = U32(SysKmsgMax)
-  ProcFsEntryCount = 9
+  ProcFsEntryCount = 10
   ProcFsPageSize = U64(4096)
   ProcFsTickMillis = U64(20)
 
@@ -32,6 +32,7 @@ let procEntries = [
   cstring("kmsg"),
   cstring("fsinfo"),
   cstring("tty"),
+  cstring("rkx_trust"),
 ]
 
 var
@@ -53,6 +54,7 @@ var
   cpuInfo: SysCpuInfo
   cpuStaticInfo: SysCpuStaticInfo
   consoleInfo: SysConsoleInfo
+  rkxTrustInfos: seq[SysRkxTrustInfo] = @[]
   fsInfos: seq[SysFsInfoEntry] = @[]
   fdInfos: seq[SysFdInfo] = @[]
   measuringOutput = false
@@ -65,11 +67,13 @@ var
 proc initManagedStorage(): bool =
   procInfos = newSeq[SysProcessInfo](int(SysProcessMaxSlots))
   services = newSeq[SysServiceInfo](SysServiceRegistryCount)
+  rkxTrustInfos = newSeq[SysRkxTrustInfo](int(SysRkxTrustMaxEntries))
   fsInfos = newSeq[SysFsInfoEntry](int(SysFsInfoMaxEntries))
   fdInfos = newSeq[SysFdInfo](int(SysFdMax))
 
   procInfos.len == int(SysProcessMaxSlots) and
     services.len == SysServiceRegistryCount and
+    rkxTrustInfos.len == int(SysRkxTrustMaxEntries) and
     fsInfos.len == int(SysFsInfoMaxEntries) and
     fdInfos.len == int(SysFdMax)
 
@@ -165,6 +169,9 @@ proc renderRead(path: cstring): U32 =
 
   if cstringEq(path, cstring"/proc/tty"):
     return renderTty()
+
+  if cstringEq(path, cstring"/proc/rkx_trust"):
+    return renderRkxTrust()
 
   clearOut()
   U32(0)

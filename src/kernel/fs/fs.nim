@@ -204,3 +204,8 @@ proc fsAppfsFileSize*(path: cstring): int =
     return -1
 
   int(appfsEntries[idx].size)
+
+
+## Reads a kernel-internal appfs metadata entry by raw appfs name.
+proc fsReadAppfsInternal*(name: cstring, dst: pointer, capacity: U64): int =
+  appfsReadInternalEntry(name, dst, capacity)
