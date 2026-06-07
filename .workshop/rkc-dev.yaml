@@ -34,10 +34,280 @@ actions:
     cd /project
     make run
 
-  debug: |
+  debug-qemu: |
     set -eux
     cd /project
     make qemu-debug
+  
+  debug-gdb: |
+    set -eux
+    cd /project
+    gdb-multiarch bin/kernel.elf \
+      -ex "set architecture riscv:rv64" \
+      -ex "set pagination off" \
+      -ex "set confirmation off" \
+      -ex "target remote localhost:1234"
+
+
+  objdump: |
+    set -eux
+    cd /project
+
+    target="${1:-bin/kernel.elf}"
+
+    if [ ! -f "$target" ]; then
+      echo "objdump target not found: $target" >&2
+      exit 1
+    fi
+
+    tmp="$(mktemp)"
+    trap 'rm -f "$tmp"' EXIT
+
+    llvm-objdump \
+      -d \
+      --source \
+      --line-numbers \
+      "$target" > "$tmp"
+
+    if [ -t 1 ]; then
+      less -R "$tmp"
+    else
+      cat "$tmp"
+    fi
+
+
+  objdump-headers: |
+    set -eux
+    cd /project
+
+    target="${1:-bin/kernel.elf}"
+
+    if [ ! -f "$target" ]; then
+      echo "objdump target not found: $target" >&2
+      exit 1
+    fi
+
+    tmp="$(mktemp)"
+    trap 'rm -f "$tmp"' EXIT
+
+    llvm-objdump \
+      -h \
+      -t \
+      "$target" > "$tmp"
+
+    if [ -t 1 ]; then
+      less -R "$tmp"
+    else
+      cat "$tmp"
+    fi
+
+
+  addr2line: |
+    set -eux
+    cd /project
+
+    default_target="bin/kernel.elf"
+
+    if [ "$#" -eq 0 ]; then
+      echo "usage: workshop run rkc-dev -- addr2line [elf-file] <address> [address...]" >&2
+      echo "example: workshop run rkc-dev -- addr2line 0x80200000" >&2
+      echo "example: workshop run rkc-dev -- addr2line bin/kernel.elf 0x80200000" >&2
+      exit 1
+    fi
+
+    if [ -f "$1" ]; then
+      target="$1"
+      shift
+    else
+      target="$default_target"
+    fi
+
+    if [ ! -f "$target" ]; then
+      echo "addr2line target not found: $target" >&2
+      exit 1
+    fi
+
+    if [ "$#" -eq 0 ]; then
+      echo "addr2line address is required" >&2
+      exit 1
+    fi
+
+    llvm-addr2line \
+      -e "$target" \
+      -f \
+      -C \
+      -p \
+      "$@"
+
+
+  nm: |
+    set -eux
+    cd /project
+
+    target="${1:-bin/kernel.elf}"
+
+    if [ ! -f "$target" ]; then
+      echo "nm target not found: $target" >&2
+      exit 1
+    fi
+
+    tmp="$(mktemp)"
+    trap 'rm -f "$tmp"' EXIT
+
+    llvm-nm \
+      -n \
+      -C \
+      "$target" > "$tmp"
+
+    if [ -t 1 ]; then
+      less -R "$tmp"
+    else
+      cat "$tmp"
+    fi
+
+
+  readelf: |
+    set -eux
+    cd /project
+
+    target="${1:-bin/kernel.elf}"
+
+    if [ ! -f "$target" ]; then
+      echo "readelf target not found: $target" >&2
+      exit 1
+    fi
+
+    tmp="$(mktemp)"
+    trap 'rm -f "$tmp"' EXIT
+
+    llvm-readelf \
+      -h \
+      -l \
+      -S \
+      "$target" > "$tmp"
+
+    if [ -t 1 ]; then
+      less -R "$tmp"
+    else
+      cat "$tmp"
+    fi
+
+
+  size: |
+    set -eux
+    cd /project
+
+    target="${1:-bin/kernel.elf}"
+
+    if [ ! -f "$target" ]; then
+      echo "size target not found: $target" >&2
+      exit 1
+    fi
+
+    llvm-size \
+      -A \
+      -x \
+      "$target"
+
+
+  strings: |
+    set -eux
+    cd /project
+
+    target="${1:-bin/kernel.elf}"
+
+    if [ ! -f "$target" ]; then
+      echo "strings target not found: $target" >&2
+      exit 1
+    fi
+
+    tmp="$(mktemp)"
+    trap 'rm -f "$tmp"' EXIT
+
+    strings "$target" > "$tmp"
+
+    if [ -t 1 ]; then
+      less -R "$tmp"
+    else
+      cat "$tmp"
+    fi
+
+
+  symbols-grep: |
+    set -eux
+    cd /project
+
+    pattern="${1:-}"
+
+    if [ -z "$pattern" ]; then
+      echo "usage: workshop run rkc-dev -- symbols-grep <pattern> [elf-file]" >&2
+      exit 1
+    fi
+
+    target="${2:-bin/kernel.elf}"
+
+    if [ ! -f "$target" ]; then
+      echo "symbols-grep target not found: $target" >&2
+      exit 1
+    fi
+
+    llvm-nm \
+      -n \
+      -C \
+      "$target" | grep -i -- "$pattern"
+
+
+  disasm-symbol: |
+    set -eux
+    cd /project
+
+    symbol="${1:-}"
+    target="${2:-bin/kernel.elf}"
+
+    if [ -z "$symbol" ]; then
+      echo "usage: workshop run rkc-dev -- disasm-symbol <symbol> [elf-file]" >&2
+      exit 1
+    fi
+
+    if [ ! -f "$target" ]; then
+      echo "disasm-symbol target not found: $target" >&2
+      exit 1
+    fi
+
+    tmp="$(mktemp)"
+    trap 'rm -f "$tmp"' EXIT
+
+    llvm-objdump \
+      -d \
+      --source \
+      --line-numbers \
+      --disassemble-symbols="$symbol" \
+      "$target" > "$tmp"
+
+    if [ -t 1 ]; then
+      less -R "$tmp"
+    else
+      cat "$tmp"
+    fi
+
+
+  log: |
+    set -eux
+    cd /project
+
+    log="${1:-build/test_apps_qemu.log}"
+
+    if [ ! -f "$log" ]; then
+      echo "log file not found: $log" >&2
+      exit 1
+    fi
+
+    if [ -t 1 ]; then
+      less -R "$log"
+    else
+      tail -n 300 "$log"
+    fi
+
 
   clean: |
     set -eux

@@ -9,8 +9,7 @@ sudo apt-get install -y \
   curl \
   ca-certificates \
   git \
-  make \
-  curl \
+  make
 
 ## == install act ==
 curl -s https://raw.githubusercontent.com/nektos/act/master/install.sh | sudo bash -s -- -b /usr/local/bin
