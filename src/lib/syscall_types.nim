@@ -20,6 +20,9 @@ const
   SysNetPacketMax* = 1514
   SysKmsgMax* = U32(16384)
   SysCpuTextMax* = U32(64)
+  SysRkxTrustPathMax* = U32(64)
+  SysRkxTrustHashBytes* = U32(32)
+  SysRkxTrustMaxEntries* = U32(64)
 
   SysFsOpLs* = U32(1)
   SysFsOpMkdir* = U32(2)
@@ -243,6 +246,12 @@ type
     dropped*: U64
     overrunErrors*: U64
     lineErrors*: U64
+
+  SysRkxTrustInfo* {.packed.} = object
+    used*: U32
+    verified*: U32
+    path*: array[SysRkxTrustPathMax, char]
+    hash*: array[SysRkxTrustHashBytes, U8]
 
   SysPollEvent* {.packed.} = object
     target*: I32

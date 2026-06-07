@@ -38,6 +38,11 @@ proc sysKmsg*(buf: pointer, capacity: U64): I32 =
   I32(rawSyscall3(SysKmsg, cast[U64](buf), capacity, 0))
 
 
+## Invokes the RKX trust list syscall wrapper.
+proc sysRkxTrustList*(entries: ptr SysRkxTrustInfo, maxEntries: U64): I32 =
+  I32(rawSyscall3(SysRkxTrustList, cast[U64](entries), maxEntries, 0))
+
+
 ## Invokes the traps syscall wrapper.
 proc sysTraps*(entries: ptr SysTrapCount): U64 =
   rawSyscall3(SysTraps, cast[U64](entries), 0, 0)

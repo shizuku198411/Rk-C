@@ -154,6 +154,54 @@ proc renderTty(): U32 =
   pos
 
 
+proc appendHexNibble(pos: var U32, value: U8) =
+  let digit = int(value and U8(0xf))
+  if digit < 10:
+    appendChar(pos, char(ord('0') + digit))
+  else:
+    appendChar(pos, char(ord('a') + digit - 10))
+
+
+proc appendHexByte(pos: var U32, value: U8) =
+  appendHexNibble(pos, value shr 4)
+  appendHexNibble(pos, value)
+
+
+proc renderRkxTrust(): U32 =
+  clearOut()
+  var pos = U32(0)
+
+  let count = sysRkxTrustList(addr rkxTrustInfos[0], U64(SysRkxTrustMaxEntries))
+  if count < 0:
+    appendStr(pos, cstring("error\n"))
+    return pos
+
+  appendStr(pos, cstring("path\tintegrity\tsha256\n"))
+
+  var i = 0
+  while i < int(count) and i < int(SysRkxTrustMaxEntries):
+    if rkxTrustInfos[i].used != U32(0):
+      appendStr(pos, cast[cstring](addr rkxTrustInfos[i].path[0]))
+      appendChar(pos, '\t')
+
+      if rkxTrustInfos[i].verified != U32(0):
+        appendStr(pos, cstring("verified"))
+      else:
+        appendStr(pos, cstring("untrusted"))
+      appendChar(pos, '\t')
+
+      var h = U32(0)
+      while h < SysRkxTrustHashBytes:
+        appendHexByte(pos, rkxTrustInfos[i].hash[h])
+        inc h
+
+      appendChar(pos, '\n')
+
+    inc i
+
+  pos
+
+
 proc userName(user: U32): cstring =
   if user == 0:
     cstring("kernel")

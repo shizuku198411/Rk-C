@@ -96,9 +96,10 @@ proc fsReadDirEntry*(path: cstring, entryIndex: U64, outEntry: ptr FsDirEntry): 
       fillVirtualDirEntry("..", outEntry)
       return 1
     realEntryIndex -= U64(2)
-    if realEntryIndex >= U64(appfsEntryCount):
+    let appfsIdx = appfsVisibleEntryIndex(realEntryIndex)
+    if appfsIdx < 0:
       return 0
-    fillAppfsEntry(int(realEntryIndex), outEntry)
+    fillAppfsEntry(appfsIdx, outEntry)
     return 1
 
   if isDevRoot(path):
@@ -222,5 +223,4 @@ proc fsFileSize*(path: cstring): int =
     return -1
 
   int(superBlock.nodes[idx].size)
-
 

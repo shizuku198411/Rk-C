@@ -14,6 +14,7 @@ proc syscallName*(num: U64): cstring =
   of SysCpuStaticInfo: cstring("cpu_static_info")
   of SysConsoleInfo: cstring("console_info")
   of SysKmsg: cstring("kmsg")
+  of SysRkxTrustList: cstring("rkx_trust_list")
   of SysPoll: cstring("poll")
   of SysExit: cstring("exit")
   of SysLs: cstring("ls")

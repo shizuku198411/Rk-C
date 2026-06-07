@@ -8,6 +8,7 @@ import ../../lib/user_ids
 import ../dev/console
 import ../mm/memory
 import ../mm/paging
+import ../security/rkx_trust
 import ../task/process
 import ../task/rkx_loader
 import ../task/trusted_caps
@@ -68,6 +69,9 @@ proc stackPagesFromHeader(hdr: ptr RkxHeader): U64 =
 ## Implements the granted caps for image kernel helper.
 proc grantedCapsForImage(path: cstring, hdr: ptr RkxHeader): U32 =
   if hdr == nil:
+    return SysCapNone
+
+  if not rkxPathIntegrityVerified(path):
     return SysCapNone
 
   hdr.capabilityMask and trustedCapsForPath(path)

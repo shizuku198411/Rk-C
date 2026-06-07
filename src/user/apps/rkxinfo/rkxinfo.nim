@@ -9,6 +9,7 @@ import ../../lib/core/cap_names
 import ../../lib/core/io
 import ../../lib/core/path_buffer
 import ../../lib/core/pathutils
+import ../../lib/core/strutils
 import ../../lib/core/syscall
 
 const
@@ -17,6 +18,7 @@ const
 var
   parsedArgs: UserArgs
   header: RkxHeader
+  trustEntries: array[SysRkxTrustMaxEntries, SysRkxTrustInfo]
 
   ## ORC-managed text used for output rendering.
   renderedText: string = ""
@@ -178,6 +180,21 @@ proc appendHex32Value(value: U32) =
   appendHexValue(U64(value))
 
 
+## Appends one lower-case hex nibble to the ORC-owned output buffer.
+proc appendHexNibble(value: U8) =
+  let digit = int(value and U8(0xf))
+  if digit < 10:
+    appendChar(char(ord('0') + digit))
+  else:
+    appendChar(char(ord('a') + digit - 10))
+
+
+## Appends one byte as two lower-case hex characters.
+proc appendHexByte(value: U8) =
+  appendHexNibble(value shr 4)
+  appendHexNibble(value)
+
+
 ## Flushes the ORC-owned output buffer to stdout.
 proc flushRenderedText() =
   if renderedText.len == 0:
@@ -250,6 +267,37 @@ proc appendSegment(name: cstring, va, off, fileSize, memSize: U64) =
   appendChar('\n')
 
 
+## Appends the boot-time trust manifest integrity status for this path.
+proc appendIntegrity(path: cstring) =
+  let count = sysRkxTrustList(addr trustEntries[0], U64(SysRkxTrustMaxEntries))
+  if count < 0:
+    appendText(cstring("integrity: unavailable\n"))
+    return
+
+  var i = U32(0)
+  while i < U32(count) and i < SysRkxTrustMaxEntries:
+    if trustEntries[i].used != U32(0) and
+        cstringEq(cast[cstring](addr trustEntries[i].path[0]), path):
+      appendText(cstring("integrity: "))
+      if trustEntries[i].verified != U32(0):
+        appendText(cstring("verified"))
+      else:
+        appendText(cstring("untrusted"))
+      appendChar('\n')
+
+      appendText(cstring("trusted_sha256: "))
+      var h = U32(0)
+      while h < SysRkxTrustHashBytes:
+        appendHexByte(trustEntries[i].hash[h])
+        inc h
+      appendChar('\n')
+      return
+
+    inc i
+
+  appendText(cstring("integrity: not_manifested\n"))
+
+
 ## Prints all decoded RKX header fields.
 proc printHeader(path: cstring) =
   clearRenderedText()
@@ -317,6 +365,7 @@ proc printHeader(path: cstring) =
   appendChar('\n')
 
   appendHexField(cstring("flags"), U64(header.flags))
+  appendIntegrity(path)
 
   flushRenderedText()
 

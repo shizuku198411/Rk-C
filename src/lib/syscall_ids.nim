@@ -90,3 +90,4 @@ const
   SysRawWriteRange* = U64(88)
   SysConsoleInfo* = U64(89)
   SysCpuStaticInfo* = U64(90)
+  SysRkxTrustList* = U64(91)

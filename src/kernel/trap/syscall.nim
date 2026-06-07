@@ -52,6 +52,9 @@ proc handleSyscall*(frame: ptr TrapFrame) =
 
   of SysKmsg:
     frame.a0 = syscallKmsg(frame.a0, frame.a1)
+
+  of SysRkxTrustList:
+    frame.a0 = syscallRkxTrustList(frame.a0, frame.a1)
   
   of SysTraps:
     frame.a0 = syscallTrapCount(frame.a0)
