@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd /project
+
+missing=0
+
+command -v qemu-system-riscv64 >/dev/null || missing=1
+command -v clang >/dev/null || missing=1
+command -v llvm-objdump >/dev/null || missing=1
+command -v llvm-objcopy >/dev/null || missing=1
+command -v python3 >/dev/null || missing=1
+
+if [ ! -x "/home/workshop/nim-2.2.10/bin/nim" ]; then
+  missing=1
+fi
+
+if [ ! -f opensbi/build/platform/generic/firmware/fw_jump.bin ]; then
+  missing=1
+fi
+
+if [ "$missing" -eq 0 ]; then
+  workshopctl set-health okay
+else
+  workshopctl set-health waiting "Rk-C environment is still missing toolchain artifacts"
+fi

@@ -79,6 +79,7 @@ scripts/
 
 docs/
   qemu.md              QEMU build and execution guide
+  debugging.md         Kernel debugging guide
   milkv-duo256m.md     Milk-V Duo 256M real-hardware execution guide
   testing.md           Test execution guide
   design/              Subsystem design notes
@@ -91,6 +92,7 @@ docs/
 ## Documentation
 
 * [QEMU environment execution guide](docs/qemu.md)
+* [Kernel debugging guide](docs/debugging.md)
 * [Milk-V Duo 256M real-hardware execution guide](docs/milkv-duo256m.md)
 * [Test execution guide](docs/testing.md)
 * [Design notes](docs/design/README.md)

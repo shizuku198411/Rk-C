@@ -14,7 +14,8 @@ sudo apt-get install -y \
   build-essential \
   libglib2.0-dev \
   libpixman-1-dev \
-  gcc-riscv64-linux-gnu
+  gcc-riscv64-linux-gnu \
+  gdb-multiarch
 
 ## == verify versions ==
 qemu-system-riscv64 --version

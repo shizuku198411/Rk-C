@@ -172,7 +172,7 @@ make net-host-help
 Start QEMU paused with a GDB server:
 
 ```bash
-workshop run rkc-dev -- debug
+workshop run rkc-dev -- debug-qemu
 ```
 
 Equivalent direct command:
@@ -186,6 +186,8 @@ By default, the GDB server listens on:
 ```text
 localhost:1234
 ```
+
+See [Kernel Debugging Guide](debugging.md) for the full two-terminal QEMU and GDB workflow.
 
 ## Clean
 
