@@ -11,3 +11,4 @@ rkc_doc/
 src/generated/
 .workshop.lock
 tmp/
+.github/skills/
