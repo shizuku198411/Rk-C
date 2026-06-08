@@ -45,6 +45,12 @@ The test boots QEMU, waits for the Rk-C shell, runs app-level smoke cases, and w
 build/test_apps_qemu.log
 ```
 
+It also writes a structured JSON summary under:
+
+```text
+build/test_apps_summary.json
+```
+
 ## Run Tests Directly
 
 From a prepared development environment:
@@ -96,6 +102,8 @@ Network smoke tests may need TAP networking for ICMP behavior. Under user networ
 --boot-timeout SECONDS           boot wait timeout
 --command-recover-timeout SEC    prompt recovery timeout after command timeout
 --log PATH                       QEMU log path
+--summary PATH                   structured JSON summary path
+--no-summary                     skip writing the JSON summary
 --base-disk PATH                 source disk image
 --test-disk PATH                 temporary test disk path
 --keep-test-disk                 keep the temporary test disk
@@ -103,6 +111,10 @@ Network smoke tests may need TAP networking for ICMP behavior. Under user networ
 --skip-network-smoke             skip network smoke tests
 --network-test-delay SECONDS     delay before network smoke tests
 --allowed-failures N             allow up to N failed cases
+--section SECTION                run only matching section(s)
+--start-at CASE                  start at a matching case number, name, or command
+--stop-after CASE                stop after a matching case number, name, or command
+--list-tests                     list selected tests without booting QEMU
 ```
 
 Example:
@@ -113,6 +125,59 @@ python3 scripts/test_apps.py \
   --skip-network-smoke \
   --boot-timeout 60 \
   --command-recover-timeout 30
+```
+
+## Flake Triage and Reproduction
+
+List the ordered smoke test cases without booting QEMU:
+
+```bash
+python3 scripts/test_apps.py --skip-network-smoke --list-tests
+```
+
+Run one section:
+
+```bash
+python3 scripts/test_apps.py --no-build --skip-network-smoke --section "filesystem tests"
+```
+
+Run a section only up to a target case:
+
+```bash
+python3 scripts/test_apps.py --no-build --skip-network-smoke --section "filesystem tests" --stop-after "cat redirected file"
+```
+
+Start from a target case when its setup does not depend on earlier cases:
+
+```bash
+python3 scripts/test_apps.py --no-build --skip-network-smoke --start-at "svc list" --stop-after "svc list"
+```
+
+When a case fails, the JSON summary records:
+
+```text
+section
+case number
+case name
+command
+status
+failure category
+expected output summary
+actual output summary
+rerun command
+```
+
+Failure categories include:
+
+```text
+boot
+timeout
+prompt_recovery
+qemu_exit
+console_desync
+validation_missing
+validation_unexpected
+exception
 ```
 
 ## Build Test Binaries
@@ -187,7 +252,7 @@ In CI, the workflow:
 1. checks out the repository,
 2. launches the `rkc-dev` Workshop,
 3. runs `workshop run rkc-dev -- test`,
-4. uploads `build/test_apps_qemu.log` as an artifact when available.
+4. uploads `build/test_apps_qemu.log` and `build/test_apps_summary.json` as artifacts when available.
 
 ## Clean Before Retesting
 

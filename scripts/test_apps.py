@@ -2,11 +2,13 @@
 """Boots Rk-C on QEMU and executes categorized application smoke tests."""
 import argparse
 import importlib.util
+import json
 import os
 import re
 import selectors
 import signal
 import subprocess
+import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -34,6 +36,24 @@ class CommandResult:
     output: str
     errors: list[str]
     fatal: bool = False
+
+
+@dataclass
+class TestRecord:
+    """Stores one executed test result for the structured summary."""
+
+    number: int
+    section: str
+    name: str
+    command: str
+    status: str
+    category: str
+    duration_sec: float
+    errors: list[str]
+    fatal: bool
+    expected: str
+    actual: str
+    rerun_command: str
 
 
 class QemuConsole:
@@ -224,6 +244,204 @@ def actual_summary(output: str, limit: int = 420) -> str:
     return text
 
 
+def shell_quote(value: str) -> str:
+    """Quotes one shell argument without importing shell-specific helpers."""
+    if re.fullmatch(r"[A-Za-z0-9_./:=+-]+", value):
+        return value
+    return "'" + value.replace("'", "'\"'\"'") + "'"
+
+
+def classify_failure(case: TestCase, errors: list[str], fatal: bool) -> str:
+    """Assigns a stable failure category for summary filtering."""
+    if case.name == "boot":
+        return "boot"
+    joined = "\n".join(errors)
+    if "recovery failed" in joined:
+        return "prompt_recovery"
+    if "timed out waiting" in joined:
+        return "timeout"
+    if "QEMU exited with status" in joined:
+        return "qemu_exit"
+    if fatal:
+        return "console_desync"
+    if "missing substring" in joined or "missing regex" in joined or "missing one of" in joined:
+        return "validation_missing"
+    if "unexpected substring" in joined:
+        return "validation_unexpected"
+    return "exception"
+
+
+def normalize_filter_text(text: str) -> str:
+    """Normalizes section and case filter text for forgiving matching."""
+    return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
+
+
+def matches_filter(value: str, filters: list[str]) -> bool:
+    """Returns whether a value matches any exact, normalized, or substring filter."""
+    if not filters:
+        return True
+    normalized_value = normalize_filter_text(value)
+    lowered_value = value.lower()
+    for raw_filter in filters:
+        normalized_filter = normalize_filter_text(raw_filter)
+        lowered_filter = raw_filter.lower()
+        if normalized_filter == normalized_value:
+            return True
+        if lowered_filter in lowered_value:
+            return True
+    return False
+
+
+def case_matches_selector(case: TestCase, selector: str) -> bool:
+    """Matches a case by number, exact/normalized name, substring, or command."""
+    if selector.isdigit() and case.number == int(selector):
+        return True
+    normalized_selector = normalize_filter_text(selector)
+    if normalized_selector == normalize_filter_text(case.name):
+        return True
+    lowered_selector = selector.lower()
+    return lowered_selector in case.name.lower() or lowered_selector in case.command.lower()
+
+
+def select_sections(
+    sections: list[TestSection],
+    section_filters: list[str],
+    start_at: str | None,
+    stop_after: str | None,
+) -> list[TestSection]:
+    """Applies section and case-range filters while preserving section order."""
+    selected_sections = []
+    found_start = start_at is None
+    found_stop = False
+
+    for section in sections:
+        if not matches_filter(section.name, section_filters):
+            continue
+
+        selected_tests = []
+        for case in section.tests:
+            if not found_start:
+                if case_matches_selector(case, start_at or ""):
+                    found_start = True
+                else:
+                    continue
+
+            selected_tests.append(case)
+
+            if stop_after is not None and case_matches_selector(case, stop_after):
+                found_stop = True
+                break
+
+        if selected_tests:
+            selected_sections.append(TestSection(section.name, selected_tests))
+
+        if found_stop:
+            break
+
+    if start_at is not None and not found_start:
+        raise ValueError(f"--start-at did not match any test case: {start_at}")
+    if stop_after is not None and not found_stop:
+        raise ValueError(f"--stop-after did not match any selected test case: {stop_after}")
+    return selected_sections
+
+
+def assign_case_numbers(sections: list[TestSection]) -> None:
+    """Assigns stable case numbers in the full dependency-preserving order."""
+    case_number = 1
+    for section in sections:
+        for case in section.tests:
+            case.number = case_number
+            case_number += 1
+
+
+def make_rerun_command(args: argparse.Namespace, section: str, case: TestCase) -> str:
+    """Builds a command that reruns a section up to the target case."""
+    command = [
+        "python3",
+        "scripts/test_apps.py",
+        "--no-build",
+        "--qemu-net",
+        args.qemu_net,
+        "--boot-timeout",
+        str(args.boot_timeout),
+        "--command-recover-timeout",
+        str(args.command_recover_timeout),
+    ]
+    if section != "boot":
+        command.extend(["--section", section, "--stop-after", str(case.number)])
+    if args.tap_if is not None:
+        command.extend(["--tap-if", args.tap_if])
+    if args.skip_network_smoke:
+        command.append("--skip-network-smoke")
+    if args.keep_test_disk:
+        command.append("--keep-test-disk")
+    if args.network_test_delay != 1.0:
+        command.extend(["--network-test-delay", str(args.network_test_delay)])
+    if args.host_ip != "10.0.1.1":
+        command.extend(["--host-ip", args.host_ip])
+    return " ".join(shell_quote(item) for item in command)
+
+
+def record_result(
+    args: argparse.Namespace,
+    records: list[TestRecord],
+    section: str,
+    case: TestCase,
+    status: str,
+    result: CommandResult,
+    duration_sec: float,
+) -> None:
+    """Appends one result to the structured summary records."""
+    category = "pass" if status == "PASS" else classify_failure(case, result.errors, result.fatal)
+    records.append(
+        TestRecord(
+            number=case.number,
+            section=section,
+            name=case.name,
+            command=case.command,
+            status=status.lower(),
+            category=category,
+            duration_sec=round(duration_sec, 3),
+            errors=result.errors,
+            fatal=result.fatal,
+            expected=expected_summary(case),
+            actual=actual_summary(result.output),
+            rerun_command=make_rerun_command(args, section, case),
+        )
+    )
+
+
+def write_summary(
+    path: Path,
+    args: argparse.Namespace,
+    qemu_command: list[str],
+    records: list[TestRecord],
+    failures: int,
+    elapsed_sec: float,
+) -> None:
+    """Writes a structured test summary for flaky failure triage."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    summary = {
+        "status": "fail" if failures else "pass",
+        "failures": failures,
+        "elapsed_sec": round(elapsed_sec, 3),
+        "qemu_command": qemu_command,
+        "options": {
+            "qemu_net": args.qemu_net,
+            "tap_if": args.tap_if,
+            "skip_network_smoke": args.skip_network_smoke,
+            "boot_timeout": args.boot_timeout,
+            "command_recover_timeout": args.command_recover_timeout,
+            "section": args.section,
+            "start_at": args.start_at,
+            "stop_after": args.stop_after,
+        },
+        "results": [record.__dict__ for record in records],
+        "failed_results": [record.__dict__ for record in records if record.status != "pass"],
+    }
+    path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
 def print_result(status: str, case: TestCase, output: str) -> None:
     """Prints one PASS or FAIL test result with a concise output summary."""
     label = case.name
@@ -321,6 +539,15 @@ def build_sections(include_network: bool, host_ip: str, network_delay: float) ->
     return sections
 
 
+def print_test_list(sections: list[TestSection]) -> None:
+    """Prints the ordered test list without booting QEMU."""
+    for section in sections:
+        print_section(section.name)
+        for case in section.tests:
+            print(f"#{case.number:03d} {case.name}")
+            print(f"       command: {case.command}")
+
+
 def main() -> int:
     """Parses test options, boots QEMU, and reports categorized test results."""
     parser = argparse.ArgumentParser(description="Boot QEMU and smoke-test all user apps.")
@@ -329,6 +556,12 @@ def main() -> int:
     parser.add_argument("--tap-if", default=None, help="QEMU_TAP_IF value when --qemu-net=tap")
     parser.add_argument("--boot-timeout", type=float, default=25.0)
     parser.add_argument("--log", default="build/test_apps_qemu.log")
+    parser.add_argument(
+        "--summary",
+        default="build/test_apps_summary.json",
+        help="write a structured JSON result summary to this path",
+    )
+    parser.add_argument("--no-summary", action="store_true", help="do not write a JSON summary")
     parser.add_argument("--base-disk", default="bin/disk.img")
     parser.add_argument("--test-disk", default="bin/test-disk.img")
     parser.add_argument("--keep-test-disk", action="store_true")
@@ -352,7 +585,43 @@ def main() -> int:
         default=0,
         help="allow up to this many failed test cases before returning a failing status",
     )
+    parser.add_argument(
+        "--section",
+        action="append",
+        default=[],
+        help="run only matching section(s); accepts exact, normalized, or substring matches",
+    )
+    parser.add_argument(
+        "--start-at",
+        default=None,
+        help="start execution at a matching case number, name, or command substring",
+    )
+    parser.add_argument(
+        "--stop-after",
+        default=None,
+        help="stop after a matching case number, name, or command substring",
+    )
+    parser.add_argument("--list-tests", action="store_true", help="list selected tests and exit")
     args = parser.parse_args()
+
+    sections = build_sections(
+        not args.skip_network_smoke,
+        args.host_ip,
+        args.network_test_delay,
+    )
+    assign_case_numbers(sections)
+    try:
+        sections = select_sections(sections, args.section, args.start_at, args.stop_after)
+    except ValueError as exc:
+        print(f"test selection error: {exc}", file=sys.stderr)
+        return 2
+    if not sections:
+        print("test selection error: no test cases selected", file=sys.stderr)
+        return 2
+
+    if args.list_tests:
+        print_test_list(sections)
+        return 0
 
     test_disk = Path(args.test_disk)
     prepare_test_disk(test_disk, Path(args.base_disk), args.no_build)
@@ -365,25 +634,62 @@ def main() -> int:
     qemu = QemuConsole(command, Path(args.log))
     failures = 0
     failed_cases: list[TestCase] = []
-    case_number = 1
+    records: list[TestRecord] = []
+    started_at = time.monotonic()
     try:
+        boot_failed = False
         qemu.start()
-        boot = qemu.login("root", "root", args.boot_timeout)
-        boot_clean = strip_ansi(boot)
-        boot_errors = []
-        for expected in ["service ready procmgtd", "service ready blockd", "service ready fsd"]:
-            if expected not in boot_clean:
-                boot_errors.append(f"missing boot substring {expected!r}")
-        if not args.skip_network_smoke and "service ready netd" not in boot_clean:
-            boot_errors.append("missing boot substring 'service ready netd'")
-
-        if boot_errors:
-            print_failure(TestCase("boot", ""), boot, boot_errors)
+        boot_start = time.monotonic()
+        try:
+            boot = qemu.login("root", "root", args.boot_timeout)
+        except Exception as exc:
+            boot = qemu.buffer
+            boot_case = TestCase("boot", "")
+            boot_case.number = 0
+            boot_errors = [str(exc)]
+            print_failure(boot_case, boot, boot_errors)
             failures += 1
+            failed_cases.append(boot_case)
+            record_result(
+                args,
+                records,
+                "boot",
+                boot_case,
+                "FAIL",
+                CommandResult(boot, boot_errors, fatal=True),
+                time.monotonic() - boot_start,
+            )
+            boot_failed = True
+
+        if boot_failed:
+            sections = []
         else:
-            print_result(
-                "PASS",
-                TestCase(
+            boot_clean = strip_ansi(boot)
+            boot_errors = []
+            for expected in ["service ready procmgtd", "service ready blockd", "service ready fsd"]:
+                if expected not in boot_clean:
+                    boot_errors.append(f"missing boot substring {expected!r}")
+            if not args.skip_network_smoke and "service ready netd" not in boot_clean:
+                boot_errors.append("missing boot substring 'service ready netd'")
+
+            if boot_errors:
+                boot_case = TestCase("boot", "")
+                boot_case.number = 0
+                print_failure(boot_case, boot, boot_errors)
+                failures += 1
+                failed_cases.append(boot_case)
+                record_result(
+                    args,
+                    records,
+                    "boot",
+                    boot_case,
+                    "FAIL",
+                    CommandResult(boot, boot_errors, fatal=True),
+                    time.monotonic() - boot_start,
+                )
+                sections = []
+            else:
+                boot_case = TestCase(
                     "boot",
                     "",
                     [
@@ -392,16 +698,24 @@ def main() -> int:
                         "service ready fsd",
                         *(["service ready netd"] if not args.skip_network_smoke else []),
                     ],
-                ),
-                boot,
-            )
+                )
+                boot_case.number = 0
+                print_result(
+                    "PASS",
+                    boot_case,
+                    boot,
+                )
+                record_result(
+                    args,
+                    records,
+                    "boot",
+                    boot_case,
+                    "PASS",
+                    CommandResult(boot, []),
+                    time.monotonic() - boot_start,
+                )
 
-        qemu.buffer = ""
-        sections = build_sections(
-            not args.skip_network_smoke,
-            args.host_ip,
-            args.network_test_delay,
-        )
+            qemu.buffer = ""
 
         stop = False
         for section in sections:
@@ -409,36 +723,51 @@ def main() -> int:
                 break
             print_section(section.name)
             for case in section.tests:
-                case.number = case_number
-                case_number += 1
+                case_start = time.monotonic()
                 result = run_and_validate(qemu, case, args.command_recover_timeout)
+                duration_sec = time.monotonic() - case_start
 
                 if result.errors:
                     print_failure(case, result.output, result.errors)
                     failures += 1
                     failed_cases.append(case)
+                    record_result(args, records, section.name, case, "FAIL", result, duration_sec)
                     if result.fatal:
                         print("fatal console desync; stopping remaining tests")
                         stop = True
                         break
                 else:
                     print_result("PASS", case, result.output)
+                    record_result(args, records, section.name, case, "PASS", result, duration_sec)
     finally:
         qemu.close()
         if not args.keep_test_disk:
             test_disk.unlink(missing_ok=True)
+        if not args.no_summary:
+            write_summary(
+                Path(args.summary),
+                args,
+                command,
+                records,
+                failures,
+                time.monotonic() - started_at,
+            )
 
     if failures:
         print(f"{failures} test(s) failed")
         print("failed test cases:")
         for case in failed_cases:
             print(f"  #{case.number:03d} {case.command}")
+        if not args.no_summary:
+            print(f"structured summary: {args.summary}")
         if failures <= args.allowed_failures:
             print(f"allowing {failures} failure(s); threshold is {args.allowed_failures}")
             return 0
         return 1
 
     print("all app smoke tests passed")
+    if not args.no_summary:
+        print(f"structured summary: {args.summary}")
     return 0
 
 

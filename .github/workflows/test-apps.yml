@@ -66,8 +66,16 @@ jobs:
 
       - name: Upload QEMU log
         if: ${{ !env.ACT }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: qemu-test-log
           path: build/test_apps_qemu.log
+          if-no-files-found: ignore
+
+      - name: Upload test summary
+        if: ${{ !env.ACT }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: qemu-test-summary
+          path: build/test_apps_summary.json
           if-no-files-found: ignore
