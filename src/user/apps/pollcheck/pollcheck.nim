@@ -94,6 +94,35 @@ proc runCheck() =
   discard sysClose(fds[0])
   discard sysClose(fds[1])
 
+  if sysPipe(addr fds[0]) != 0:
+    fail(cstring("exit pipe create"))
+
+  let child = sysExec(cstring("/bin/date"), nil, false)
+  if child < 0:
+    discard sysClose(fds[0])
+    discard sysClose(fds[1])
+    fail(cstring("exit pipe child exec"))
+
+  discard sysClose(fds[1])
+
+  resetEvents()
+  events[0].target = fds[0]
+  events[0].events = SysPollFdRead
+  if sysPoll(addr events[0], U64(1), U64(20)) != 1:
+    discard sysWait(child)
+    discard sysClose(fds[0])
+    fail(cstring("pipe writer exit eof ready"))
+  expectEvent(U32(0), SysPollFdRead, cstring("pipe writer exit eof ready"))
+
+  if sysReadFd(fds[0], addr byteBuf[0], U64(1)) != 0:
+    discard sysWait(child)
+    discard sysClose(fds[0])
+    fail(cstring("pipe writer exit eof read"))
+  write("pollcheck: pipe writer exit eof read ok\n")
+
+  discard sysWait(child)
+  discard sysClose(fds[0])
+
   write("pollcheck: ok\n")
   sysExit(0)
 

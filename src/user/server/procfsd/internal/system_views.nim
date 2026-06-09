@@ -35,6 +35,10 @@ proc renderMeminfo(): U32 =
   appendU64(pos, bitmap.free)
   appendStr(pos, cstring(" pages\n"))
 
+  appendStr(pos, cstring("next_free_hint: "))
+  appendU64(pos, bitmap.nextFreeHint)
+  appendStr(pos, cstring(" pages\n"))
+
   pos
 
 

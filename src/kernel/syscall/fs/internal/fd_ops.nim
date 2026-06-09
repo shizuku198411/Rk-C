@@ -73,7 +73,12 @@ proc syscallReadFd*(fdVal, bufVal, len: U64): U64 =
   if entry.kind == SysFdKindTty:
     return syscallTtyRead(entry.ttyId, bufVal, len)
   if entry.kind == SysFdKindPipe:
-    let readLen = pipeReadKernel(entry.pipeId, cast[ptr UncheckedArray[U8]](addr fdFileBuf[0]), len)
+    let readLen = pipeReadKernel(
+      entry.pipeId,
+      entry.pipeGeneration,
+      cast[ptr UncheckedArray[U8]](addr fdFileBuf[0]),
+      len,
+    )
     if readLen < 0:
       return U64(-1'i64)
     if readLen == 0:
@@ -128,7 +133,12 @@ proc syscallWriteFd*(fdVal, bufVal, len: U64): U64 =
     if copyFromUser(addr fdFileBuf[0], bufVal, len) != 0:
       return U64(-1'i64)
 
-    let written = pipeWriteKernel(entry.pipeId, cast[ptr UncheckedArray[U8]](addr fdFileBuf[0]), len)
+    let written = pipeWriteKernel(
+      entry.pipeId,
+      entry.pipeGeneration,
+      cast[ptr UncheckedArray[U8]](addr fdFileBuf[0]),
+      len,
+    )
     if written < 0:
       return U64(-1'i64)
 
@@ -198,6 +208,7 @@ proc syscallPipe*(fdsVal: U64): U64 =
   readEntry.kind = SysFdKindPipe
   readEntry.flags = SysOpenRead
   readEntry.pipeId = pipeId
+  readEntry.pipeGeneration = pipeGeneration(pipeId)
   copyFdPath(readEntry, "/dev/pipe")
 
   var writeEntry = FdEntry()
@@ -205,6 +216,7 @@ proc syscallPipe*(fdsVal: U64): U64 =
   writeEntry.kind = SysFdKindPipe
   writeEntry.flags = SysOpenWrite
   writeEntry.pipeId = pipeId
+  writeEntry.pipeGeneration = readEntry.pipeGeneration
   copyFdPath(writeEntry, "/dev/pipe")
 
   currentProc.files.entries[U32(readFd)] = readEntry

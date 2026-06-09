@@ -3,9 +3,10 @@ import ../../../lib/syscall_types
 import ../../../lib/types
 import ../../mm/usercopy
 import ../../task/process
+import ../scratch
 import ../syscall_cap
 
-var sendBuf: array[SysIpcMessageMax, char]
+template sendBuf: untyped = ipcScratch.sendBuf
 
 
 ## Implements the enqueue ipc kernel helper.

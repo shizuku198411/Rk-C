@@ -11,14 +11,14 @@ import ../../mm/usercopy
 import ../../task/exec
 import ../../task/process
 import ../fs/fs_service_ops
+import ../scratch
 import ../syscall_cap
 
-var
-  processEntries: array[MaxProcs, SysProcessInfo]
-  pathBuf: array[UserCStringMax, char]
-  argBuf: array[UserCStringMax, char]
-  cwdCheckEntries: array[2, FsDirEntry]
-  fdInfoEntries: array[SysFdMax, SysFdInfo]
+template processEntries: untyped = processScratch.processEntries
+template pathBuf: untyped = processScratch.pathBuf
+template argBuf: untyped = processScratch.argBuf
+template cwdCheckEntries: untyped = processScratch.cwdCheckEntries
+template fdInfoEntries: untyped = processScratch.fdInfoEntries
 
 
 ## Implements the process state value kernel helper.
@@ -29,6 +29,21 @@ proc processStateValue(state: ProcessState): U32 =
   of procRunning: SysProcessRunning
   of procSleeping: SysProcessSleeping
   of procZombie: SysProcessZombie
+
+
+## Implements the wait target value kernel helper.
+proc waitKindValue(kind: WaitKind): U32 =
+  case kind
+  of waitNone: SysWaitNone
+  of waitTtyRead: SysWaitTtyRead
+  of waitIpc: SysWaitIpc
+  of waitPid: SysWaitPid
+  of waitFsReq: SysWaitFsReq
+  of waitBlockReq: SysWaitBlockReq
+  of waitTimer: SysWaitTimer
+  of waitPipeRead: SysWaitPipeRead
+  of waitPipeWrite: SysWaitPipeWrite
+  of waitPoll: SysWaitPoll
 
 
 ## Fills process info.
@@ -68,6 +83,8 @@ proc fillProcessInfo(entry: var SysProcessInfo, p: ptr Process) =
   entry.requestedCapabilityMask = p.user.requestedCapabilityMask
   entry.capabilityMask = p.user.capabilityMask
   entry.pendingSignals = p.pendingSignals
+  entry.waitKind = waitKindValue(p.wait.kind)
+  entry.waitValue = p.wait.value
   if p.user.active:
     entry.isUser = 1
   else:

@@ -13,22 +13,21 @@ import ../../syscall/fs/fs_service_ops
 import ../../syscall/io/tty_ops
 import ../../mm/usercopy
 import ../../task/process
+import ../scratch
 
 const
-  SysPathMax = U64(128)
-  SysDirEntryMax = U64(32)
-  SysFileIoMax = U64(4096)
+  SysDirEntryMax = SysScratchDirEntryMax
+  SysFileIoMax = SysScratchFileIoMax
   KnownOpenFlags = SysOpenRead or SysOpenWrite or SysOpenCreate or
     SysOpenTrunc or SysOpenAppend
   KnownPollEvents = SysPollFdRead or SysPollFdWrite or SysPollIpcRead or
     SysPollPidExit or SysPollTimer
 
-var
-  pathBuf: array[SysPathMax, char]
-  fileBuf: array[SysFileIoMax, U8]
-  fdFileBuf: array[SysFileIoMax, U8]
-  pollEvents: array[SysPollMaxEvents, SysPollEvent]
-  renamePathBuf: array[SysPathMax, char]
+template pathBuf: untyped = fsScratch.pathBuf
+template fileBuf: untyped = fsScratch.fileBuf
+template fdFileBuf: untyped = fsScratch.fdFileBuf
+template pollEvents: untyped = fsScratch.pollEvents
+template renamePathBuf: untyped = fsScratch.renamePathBuf
 
 
 ## Includes handles path-oriented filesystem syscalls and access checks.

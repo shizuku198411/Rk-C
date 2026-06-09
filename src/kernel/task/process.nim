@@ -75,6 +75,7 @@ type
     offset*: U64
     size*: U64
     pipeId*: I32
+    pipeGeneration*: U32
     ttyId*: I32
     path*: array[SysFdPathMax, char]
 
@@ -87,6 +88,7 @@ type
 
   PipeState* {.bycopy.} = object
     used*: bool
+    generation*: U32
     readers*: U32
     writers*: U32
     head*: U32
@@ -145,6 +147,7 @@ var
   idleProc: ptr Process
   kernelPageTable: PageTable
   pipes: array[SysPipeMax, PipeState]
+  nextPipeGeneration: U32
 
   # Cached wait state
   waitKindMasks: array[WaitKind, U64]
@@ -178,9 +181,9 @@ proc sleepCurrentForPid*(pid: int32)
 ## Puts the current process to sleep for current until tick.
 proc sleepCurrentUntilTick*(tick: U64)
 ## Puts the current process to sleep for current for pipe read.
-proc sleepCurrentForPipeRead*(pipeId: I32)
+proc sleepCurrentForPipeRead*(pipeId: I32, pipeGeneration: U32)
 ## Puts the current process to sleep for current for pipe write.
-proc sleepCurrentForPipeWrite*(pipeId: I32)
+proc sleepCurrentForPipeWrite*(pipeId: I32, pipeGeneration: U32)
 ## Puts the current process to sleep for current for poll.
 proc sleepCurrentForPoll*(deadlineTick: U64)
 ## Wakes processes waiting to read from a TTY.
@@ -196,9 +199,9 @@ proc wakePidWaiters*(pid: int32)
 ## Wakes processes waiting for timer waiters.
 proc wakeTimerWaiters*(tick: U64)
 ## Wakes processes waiting for pipe readers.
-proc wakePipeReaders*(pipeId: I32)
+proc wakePipeReaders*(pipeId: I32, pipeGeneration: U32)
 ## Wakes processes waiting for pipe writers.
-proc wakePipeWriters*(pipeId: I32)
+proc wakePipeWriters*(pipeId: I32, pipeGeneration: U32)
 ## Wakes processes waiting for poll waiters.
 proc wakePollWaiters*()
 ## Clears wait.

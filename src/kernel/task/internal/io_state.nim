@@ -5,9 +5,36 @@ proc pipeNext(index: U32): U32 =
   (index + 1) mod SysPipeBufSize
 
 
+## Encodes a pipe id plus generation for wait target matching.
+proc pipeWaitValue(pipeId: I32, pipeGeneration: U32): U64 =
+  (U64(pipeGeneration) shl U64(32)) or U64(U32(pipeId))
+
+
 ## Returns whether pipe id is valid.
 proc validPipeId(pipeId: I32): bool =
   pipeId >= 0 and pipeId < I32(SysPipeMax) and pipes[U32(pipeId)].used
+
+
+## Returns whether pipe id and generation still refer to the same pipe lifetime.
+proc validPipeRef(pipeId: I32, pipeGeneration: U32): bool =
+  validPipeId(pipeId) and pipes[U32(pipeId)].generation == pipeGeneration
+
+
+## Returns the generation for a currently allocated pipe.
+proc pipeGeneration*(pipeId: I32): U32 =
+  if not validPipeId(pipeId):
+    return U32(0)
+
+  pipes[U32(pipeId)].generation
+
+
+## Allocates the next non-zero pipe generation.
+proc allocPipeGeneration(): U32 =
+  inc nextPipeGeneration
+  if nextPipeGeneration == U32(0):
+    inc nextPipeGeneration
+
+  nextPipeGeneration
 
 
 ## Allocates pipe.
@@ -17,6 +44,7 @@ proc allocPipe*(): I32 =
     if not pipes[i].used:
       pipes[i] = PipeState()
       pipes[i].used = true
+      pipes[i].generation = allocPipeGeneration()
       pipes[i].readers = 1
       pipes[i].writers = 1
       return I32(i)
@@ -34,7 +62,8 @@ proc freePipe*(pipeId: I32) =
 
 ## Retains fd entry.
 proc retainFdEntry*(entry: FdEntry) =
-  if entry.used and entry.kind == SysFdKindPipe and validPipeId(entry.pipeId):
+  if entry.used and entry.kind == SysFdKindPipe and
+      validPipeRef(entry.pipeId, entry.pipeGeneration):
     if (entry.flags and SysOpenRead) != 0:
       inc pipes[U32(entry.pipeId)].readers
     if (entry.flags and SysOpenWrite) != 0:
@@ -43,24 +72,26 @@ proc retainFdEntry*(entry: FdEntry) =
 
 ## Releases fd entry.
 proc releaseFdEntry*(entry: FdEntry) =
-  if not entry.used or entry.kind != SysFdKindPipe or not validPipeId(entry.pipeId):
+  if not entry.used or entry.kind != SysFdKindPipe or
+      not validPipeRef(entry.pipeId, entry.pipeGeneration):
     return
 
   let pipe = addr pipes[U32(entry.pipeId)]
   if (entry.flags and SysOpenRead) != 0 and pipe.readers > 0:
     dec pipe.readers
-    wakePipeWriters(entry.pipeId)
+    wakePipeWriters(entry.pipeId, entry.pipeGeneration)
   if (entry.flags and SysOpenWrite) != 0 and pipe.writers > 0:
     dec pipe.writers
-    wakePipeReaders(entry.pipeId)
+    wakePipeReaders(entry.pipeId, entry.pipeGeneration)
 
   if pipe.readers == 0 and pipe.writers == 0:
     pipe[] = PipeState()
 
 
 ## Implements the pipe read kernel kernel helper.
-proc pipeReadKernel*(pipeId: I32, dst: ptr UncheckedArray[U8], len: U64): I32 =
-  if dst == nil or not validPipeId(pipeId):
+proc pipeReadKernel*(pipeId: I32, pipeGeneration: U32, dst: ptr UncheckedArray[U8],
+                     len: U64): I32 =
+  if dst == nil or not validPipeRef(pipeId, pipeGeneration):
     return -1
 
   let pipe = addr pipes[U32(pipeId)]
@@ -69,22 +100,23 @@ proc pipeReadKernel*(pipeId: I32, dst: ptr UncheckedArray[U8], len: U64): I32 =
     while pipe.count == 0:
       if pipe.writers == 0:
         return I32(readLen)
-      sleepCurrentForPipeRead(pipeId)
-      if not validPipeId(pipeId):
+      sleepCurrentForPipeRead(pipeId, pipeGeneration)
+      if not validPipeRef(pipeId, pipeGeneration):
         return -1
 
     dst[readLen] = pipe.data[pipe.head]
     pipe.head = pipeNext(pipe.head)
     dec pipe.count
     inc readLen
-    wakePipeWriters(pipeId)
+    wakePipeWriters(pipeId, pipeGeneration)
 
   I32(readLen)
 
 
 ## Implements the pipe write kernel kernel helper.
-proc pipeWriteKernel*(pipeId: I32, src: ptr UncheckedArray[U8], len: U64): I32 =
-  if src == nil or not validPipeId(pipeId):
+proc pipeWriteKernel*(pipeId: I32, pipeGeneration: U32, src: ptr UncheckedArray[U8],
+                      len: U64): I32 =
+  if src == nil or not validPipeRef(pipeId, pipeGeneration):
     return -1
 
   let pipe = addr pipes[U32(pipeId)]
@@ -96,22 +128,22 @@ proc pipeWriteKernel*(pipeId: I32, src: ptr UncheckedArray[U8], len: U64): I32 =
     while pipe.count == SysPipeBufSize:
       if pipe.readers == 0:
         return -1
-      sleepCurrentForPipeWrite(pipeId)
-      if not validPipeId(pipeId):
+      sleepCurrentForPipeWrite(pipeId, pipeGeneration)
+      if not validPipeRef(pipeId, pipeGeneration):
         return -1
 
     pipe.data[pipe.tail] = src[written]
     pipe.tail = pipeNext(pipe.tail)
     inc pipe.count
     inc written
-    wakePipeReaders(pipeId)
+    wakePipeReaders(pipeId, pipeGeneration)
 
   I32(written)
 
 
 ## Implements the pipe readable kernel helper.
-proc pipeReadable*(pipeId: I32): bool =
-  if not validPipeId(pipeId):
+proc pipeReadable*(pipeId: I32, pipeGeneration: U32): bool =
+  if not validPipeRef(pipeId, pipeGeneration):
     return false
 
   let pipe = addr pipes[U32(pipeId)]
@@ -119,8 +151,8 @@ proc pipeReadable*(pipeId: I32): bool =
 
 
 ## Implements the pipe writable kernel helper.
-proc pipeWritable*(pipeId: I32): bool =
-  if not validPipeId(pipeId):
+proc pipeWritable*(pipeId: I32, pipeGeneration: U32): bool =
+  if not validPipeRef(pipeId, pipeGeneration):
     return false
 
   let pipe = addr pipes[U32(pipeId)]
@@ -179,4 +211,3 @@ proc copyFileState(dst, src: ptr Process) =
   while i < SysFdMax:
     retainFdEntry(dst.files.entries[i])
     inc i
-

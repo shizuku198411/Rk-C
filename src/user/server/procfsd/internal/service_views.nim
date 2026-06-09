@@ -33,6 +33,35 @@ proc renderServices(): U32 =
   pos
 
 
+proc renderMounts(): U32 =
+  clearOut()
+  var pos = U32(0)
+
+  let count = sysFsInfo(addr fsInfos[0], U64(SysFsInfoMaxEntries))
+  if count < 0:
+    appendStr(pos, cstring("error\n"))
+    return pos
+
+  appendStr(pos, cstring("name\tfs\tmount\tflags\n"))
+
+  var i = I32(0)
+  while i < count and i < I32(SysFsInfoMaxEntries):
+    appendStr(pos, cast[cstring](addr fsInfos[i].name[0]))
+    appendChar(pos, '\t')
+    appendStr(pos, cast[cstring](addr fsInfos[i].fsType[0]))
+    appendChar(pos, '\t')
+    appendStr(pos, cast[cstring](addr fsInfos[i].mount[0]))
+    appendChar(pos, '\t')
+    if fsInfos[i].readonly != U32(0):
+      appendStr(pos, cstring("ro"))
+    else:
+      appendStr(pos, cstring("rw"))
+    appendChar(pos, '\n')
+    inc i
+
+  pos
+
+
 proc renderTraps(): U32 =
   clearOut()
   var pos = U32(0)
