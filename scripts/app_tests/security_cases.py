@@ -28,6 +28,8 @@ def security_tests() -> list[TestCase]:
                 "pollcheck: pipe write ready ok",
                 "pollcheck: pipe read ready ok",
                 "pollcheck: invalid fd error ok",
+                "pollcheck: pipe writer exit eof ready ok",
+                "pollcheck: pipe writer exit eof read ok",
                 "pollcheck: ok",
             ],
             timeout=12.0,

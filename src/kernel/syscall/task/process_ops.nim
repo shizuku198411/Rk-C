@@ -11,14 +11,14 @@ import ../../mm/usercopy
 import ../../task/exec
 import ../../task/process
 import ../fs/fs_service_ops
+import ../scratch
 import ../syscall_cap
 
-var
-  processEntries: array[MaxProcs, SysProcessInfo]
-  pathBuf: array[UserCStringMax, char]
-  argBuf: array[UserCStringMax, char]
-  cwdCheckEntries: array[2, FsDirEntry]
-  fdInfoEntries: array[SysFdMax, SysFdInfo]
+template processEntries: untyped = processScratch.processEntries
+template pathBuf: untyped = processScratch.pathBuf
+template argBuf: untyped = processScratch.argBuf
+template cwdCheckEntries: untyped = processScratch.cwdCheckEntries
+template fdInfoEntries: untyped = processScratch.fdInfoEntries
 
 
 ## Implements the process state value kernel helper.

@@ -10,7 +10,7 @@ proc fdReadReady(fd: I32): bool =
     return false
 
   if entry.kind == SysFdKindPipe:
-    return pipeReadable(entry.pipeId)
+    return pipeReadable(entry.pipeId, entry.pipeGeneration)
   if entry.kind == SysFdKindTty:
     return syscallTtyReadReady(entry.ttyId)
   if entry.kind == SysFdKindFile:
@@ -29,7 +29,7 @@ proc fdWriteReady(fd: I32): bool =
     return false
 
   if entry.kind == SysFdKindPipe:
-    return pipeWritable(entry.pipeId)
+    return pipeWritable(entry.pipeId, entry.pipeGeneration)
   if entry.kind == SysFdKindTty or entry.kind == SysFdKindFile:
     return true
 

@@ -299,6 +299,7 @@ proc processInit*() =
   needResched = false
   idleProc = nil
   kernelPageTable = nil
+  nextPipeGeneration = U32(0)
   var waitKindIndex = int(low(WaitKind))
   while waitKindIndex <= int(high(WaitKind)):
     waitKindMasks[WaitKind(waitKindIndex)] = U64(0)

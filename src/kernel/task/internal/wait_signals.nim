@@ -59,13 +59,13 @@ proc sleepCurrentUntilTick*(tick: U64) =
 
 
 ## Puts the current process to sleep for current for pipe read.
-proc sleepCurrentForPipeRead*(pipeId: I32) =
-  sleepCurrentFor(waitPipeRead, U64(pipeId))
+proc sleepCurrentForPipeRead*(pipeId: I32, pipeGeneration: U32) =
+  sleepCurrentFor(waitPipeRead, pipeWaitValue(pipeId, pipeGeneration))
 
 
 ## Puts the current process to sleep for current for pipe write.
-proc sleepCurrentForPipeWrite*(pipeId: I32) =
-  sleepCurrentFor(waitPipeWrite, U64(pipeId))
+proc sleepCurrentForPipeWrite*(pipeId: I32, pipeGeneration: U32) =
+  sleepCurrentFor(waitPipeWrite, pipeWaitValue(pipeId, pipeGeneration))
 
 
 ## Puts the current process to sleep for current for poll.
@@ -154,14 +154,14 @@ proc wakeTimerWaiters*(tick: U64) =
 
 
 ## Wakes processes waiting for pipe readers.
-proc wakePipeReaders*(pipeId: I32) =
-  wakeWaiters(waitPipeRead, U64(pipeId), true)
+proc wakePipeReaders*(pipeId: I32, pipeGeneration: U32) =
+  wakeWaiters(waitPipeRead, pipeWaitValue(pipeId, pipeGeneration), true)
   wakePollWaiters()
 
 
 ## Wakes processes waiting for pipe writers.
-proc wakePipeWriters*(pipeId: I32) =
-  wakeWaiters(waitPipeWrite, U64(pipeId), true)
+proc wakePipeWriters*(pipeId: I32, pipeGeneration: U32) =
+  wakeWaiters(waitPipeWrite, pipeWaitValue(pipeId, pipeGeneration), true)
   wakePollWaiters()
 
 
