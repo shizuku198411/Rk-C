@@ -17,7 +17,7 @@ import ../lib/service_ready
 const
   ProcFsChunkMax = U32(SysIpcMessageMax)
   ProcFsBufSize = U32(SysKmsgMax)
-  ProcFsEntryCount = 10
+  ProcFsEntryCount = 11
   ProcFsPageSize = U64(4096)
   ProcFsTickMillis = U64(20)
 
@@ -28,6 +28,7 @@ let procEntries = [
   cstring("cpuinfo"),
   cstring("processes"),
   cstring("services"),
+  cstring("mounts"),
   cstring("traps"),
   cstring("kmsg"),
   cstring("fsinfo"),
@@ -140,6 +141,9 @@ proc renderRead(path: cstring): U32 =
   if parseStatusPath(path, pid):
     return renderStatus(pid)
 
+  if parseWaitPath(path, pid):
+    return renderWait(pid)
+
   if parseRkxMapPath(path, pid):
     return renderRkxMap(pid)
 
@@ -157,6 +161,9 @@ proc renderRead(path: cstring): U32 =
 
   if cstringEq(path, cstring"/proc/services"):
     return renderServices()
+
+  if cstringEq(path, cstring"/proc/mounts"):
+    return renderMounts()
 
   if cstringEq(path, cstring"/proc/traps"):
     return renderTraps()

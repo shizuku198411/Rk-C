@@ -53,7 +53,12 @@ proc syscallGetBitMap*(outInfo: U64): U64 =
     return U64(-1'i64)
 
   let info = bitmapInfo()
-  var bitmapOut = SysBitmapInfo(total: info.total, used: info.used, free: info.free)
+  var bitmapOut = SysBitmapInfo(
+    total: info.total,
+    used: info.used,
+    free: info.free,
+    nextFreeHint: allocatorNextFreeHint(),
+  )
   if not copyOutObject(outInfo, bitmapOut):
     return U64(-1'i64)
 

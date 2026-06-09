@@ -39,6 +39,10 @@ proc parseRkxMapPath(path: cstring, pid: var I32): bool =
   parseProcChildPath(path, cstring"rkx_map", pid)
 
 
+proc parseWaitPath(path: cstring, pid: var I32): bool =
+  parseProcChildPath(path, cstring"wait", pid)
+
+
 proc parseFdDirPath(path: cstring, pid: var I32): bool =
   parseProcChildPath(path, cstring"fd", pid)
 
@@ -145,6 +149,41 @@ proc processExists(pid: I32): bool =
   false
 
 
+proc waitKindName(kind: U32): cstring =
+  if kind == SysWaitNone:
+    cstring"none"
+  elif kind == SysWaitTtyRead:
+    cstring"tty_read"
+  elif kind == SysWaitIpc:
+    cstring"ipc"
+  elif kind == SysWaitPid:
+    cstring"pid"
+  elif kind == SysWaitFsReq:
+    cstring"fs_req"
+  elif kind == SysWaitBlockReq:
+    cstring"block_req"
+  elif kind == SysWaitTimer:
+    cstring"timer"
+  elif kind == SysWaitPipeRead:
+    cstring"pipe_read"
+  elif kind == SysWaitPipeWrite:
+    cstring"pipe_write"
+  elif kind == SysWaitPoll:
+    cstring"poll"
+  else:
+    cstring"unknown"
+
+
+proc appendWaitInfo(pos: var U32, entry: ptr SysProcessInfo) =
+  appendStr(pos, cstring("wait: "))
+  appendStr(pos, waitKindName(entry.waitKind))
+  appendChar(pos, '\n')
+
+  appendStr(pos, cstring("wait_value: "))
+  appendU64(pos, entry.waitValue)
+  appendChar(pos, '\n')
+
+
 proc renderStatus(pid: I32): U32 =
   clearOut()
   var pos = U32(0)
@@ -196,10 +235,37 @@ proc renderStatus(pid: I32): U32 =
       appendCapMaskLine(pos, cstring("requested_caps"), procInfos[i].requestedCapabilityMask)
       appendCapMaskLine(pos, cstring("caps"), procInfos[i].capabilityMask)
       appendSignalMaskLine(pos, cstring("pending_signals"), procInfos[i].pendingSignals)
+      appendWaitInfo(pos, addr procInfos[i])
 
       appendStr(pos, cstring("exe: "))
       appendStr(pos, cast[cstring](addr procInfos[i].exePath[0]))
       appendChar(pos, '\n')
+      return pos
+    inc i
+
+  appendStr(pos, cstring("not found\n"))
+  pos
+
+
+proc renderWait(pid: I32): U32 =
+  clearOut()
+  var pos = U32(0)
+
+  let count = sysPs(addr procInfos[0], U64(SysProcessMaxSlots), SysProcListAllSlots)
+  if count < 0:
+    appendStr(pos, cstring("error\n"))
+    return pos
+
+  var i = I32(0)
+  while i < count:
+    if procInfos[i].state != SysProcessUnused and procInfos[i].pid == pid:
+      appendStr(pos, cstring("pid: "))
+      appendI32(pos, procInfos[i].pid)
+      appendChar(pos, '\n')
+      appendStr(pos, cstring("state: "))
+      appendStr(pos, stateName(procInfos[i].state))
+      appendChar(pos, '\n')
+      appendWaitInfo(pos, addr procInfos[i])
       return pos
     inc i
 
@@ -247,5 +313,4 @@ proc renderRkxMap(pid: I32): U32 =
 
   appendStr(pos, cstring("not found\n"))
   pos
-
 

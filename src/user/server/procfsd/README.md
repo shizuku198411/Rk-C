@@ -14,9 +14,10 @@ remain fixed-size objects because their layout is the IPC ABI shared with `fsd`.
 ## Responsibilities
 
 - Serve `/proc` directory listings
-- Render process, service, memory, CPU, trap, uptime, and kernel log views
+- Render process, service, memory, CPU, mount, trap, uptime, and kernel log views
 - Render per-process status files
 - Render per-process RKX mapping files
+- Render per-process wait and fd diagnostic files
 - Notify `svcmgtd` with a service ready ACK after startup
 
 ## RKX Metadata
@@ -26,7 +27,7 @@ remain fixed-size objects because their layout is the IPC ABI shared with `fsd`.
   - `sys_process_list`
 
 `procfsd` needs process-list access so it can render `/proc/processes`,
-`/proc/<pid>/status`, and `/proc/<pid>/rkx_map`.
+`/proc/<pid>/status`, `/proc/<pid>/wait`, and `/proc/<pid>/rkx_map`.
 
 ## Provided Paths
 
@@ -36,10 +37,17 @@ remain fixed-size objects because their layout is the IPC ABI shared with `fsd`.
 /proc/cpuinfo
 /proc/processes
 /proc/services
+/proc/mounts
 /proc/traps
 /proc/kmsg
+/proc/fsinfo
+/proc/tty
+/proc/rkx_trust
 /proc/<pid>/status
+/proc/<pid>/wait
 /proc/<pid>/rkx_map
+/proc/<pid>/fd
+/proc/<pid>/fd/<fd>
 ```
 
 ## Request Flow
@@ -57,3 +65,4 @@ remain fixed-size objects because their layout is the IPC ABI shared with `fsd`.
 - Virtual-file formatting uses a request-local ORC-managed string capped at the fixed IPC payload size
 - `/proc` files are generated on request and are not stored on disk
 - `/proc/<pid>/rkx_map` is available only for user RKX processes
+- `/proc/<pid>/wait` reports the current wait target snapshot; runnable or zombie processes usually report `none`

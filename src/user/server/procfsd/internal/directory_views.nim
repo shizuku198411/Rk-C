@@ -118,6 +118,7 @@ proc renderLsProcPid(pid: I32): I32 =
   add(cstring"..", DirEntryTypeDir)
   add(cstring"status", DirEntryTypeFile)
   add(cstring"rkx_map", DirEntryTypeFile)
+  add(cstring"wait", DirEntryTypeFile)
   add(cstring"fd", DirEntryTypeDir)
 
   response.len = count * U32(sizeof(DirEntry))
@@ -136,5 +137,4 @@ proc renderLsProc(path: cstring): I32 =
     return renderLsProcFd(pid)
 
   -1
-
 

@@ -16,6 +16,8 @@ const
   RkxImageMaxSize* = RkxImageMaxPages * PageSize
   UserImageVaSizeLimit = U64(0x00100000)
 
+var rkxInvalidReason: cstring = cstring"unknown"
+
 
 ## Implements the checked add kernel helper.
 proc checkedAdd(a, b: U64, outValue: var U64): bool =
@@ -73,19 +75,26 @@ proc validateSegment(
   expectedBase: VAddr
 ): bool =
   if memSize == 0.U64:
-    return fileSize == 0.U64
+    if fileSize != 0.U64:
+      rkxInvalidReason = cstring"zero_mem_nonzero_file"
+      return false
+    return true
 
   if not isAligned(va, PageSize):
+    rkxInvalidReason = cstring"segment_va_unaligned"
     return false
 
   if fileSize > memSize:
+    rkxInvalidReason = cstring"segment_file_gt_mem"
     return false
 
   if not validateFileRange(fileOff, fileSize, imageSize):
+    rkxInvalidReason = cstring"segment_file_range"
     return false
 
   let imageLimit = expectedBase + UserImageVaSizeLimit
   if not rangeWithin(va, memSize, expectedBase, imageLimit):
+    rkxInvalidReason = cstring"segment_va_range"
     return false
 
   true
@@ -109,16 +118,22 @@ proc rangesOverlap(aStart, aSize, bStart, bSize: U64): bool =
 ## Returns whether validate segment layout is valid.
 proc validateSegmentLayout(hdr: ptr RkxHeader): bool =
   if rangesOverlap(hdr.textVa, hdr.textMemSize, hdr.rodataVa, hdr.rodataMemSize):
+    rkxInvalidReason = cstring"text_rodata_overlap"
     return false
   if rangesOverlap(hdr.textVa, hdr.textMemSize, hdr.dataVa, hdr.dataMemSize):
+    rkxInvalidReason = cstring"text_data_overlap"
     return false
   if rangesOverlap(hdr.textVa, hdr.textMemSize, hdr.bssVa, hdr.bssMemSize):
+    rkxInvalidReason = cstring"text_bss_overlap"
     return false
   if rangesOverlap(hdr.rodataVa, hdr.rodataMemSize, hdr.dataVa, hdr.dataMemSize):
+    rkxInvalidReason = cstring"rodata_data_overlap"
     return false
   if rangesOverlap(hdr.rodataVa, hdr.rodataMemSize, hdr.bssVa, hdr.bssMemSize):
+    rkxInvalidReason = cstring"rodata_bss_overlap"
     return false
   if rangesOverlap(hdr.dataVa, hdr.dataMemSize, hdr.bssVa, hdr.bssMemSize):
+    rkxInvalidReason = cstring"data_bss_overlap"
     return false
 
   true
@@ -126,29 +141,39 @@ proc validateSegmentLayout(hdr: ptr RkxHeader): bool =
 
 ## Returns whether validate rkx header is valid.
 proc validateRkxHeader(hdr: ptr RkxHeader, imageSize: U64, expectedBase: VAddr): bool =
+  rkxInvalidReason = cstring"unknown"
+
   if hdr == nil:
+    rkxInvalidReason = cstring"nil_header"
     return false
 
   if hdr.magic != RkxMagic:
+    rkxInvalidReason = cstring"bad_magic"
     return false
 
   if hdr.version != RkxVersion:
+    rkxInvalidReason = cstring"bad_version"
     return false
 
   if hdr.headerSize < U32(sizeof(RkxHeader)):
+    rkxInvalidReason = cstring"header_too_small"
     return false
 
   if U64(hdr.headerSize) > imageSize:
+    rkxInvalidReason = cstring"header_beyond_image"
     return false
 
   if (hdr.capabilityMask and (not SysCapAllKnown)) != U32(0):
+    rkxInvalidReason = cstring"unknown_capability"
     return false
 
   if hdr.stackPages != U32(0):
     if hdr.stackPages < RkxMinStackPages or hdr.stackPages > RkxMaxStackPages:
+      rkxInvalidReason = cstring"stack_pages_range"
       return false
 
   if hdr.allowedUidCount > U32(RkxAllowedUidMax):
+    rkxInvalidReason = cstring"allowed_uid_count"
     return false
 
   if not validateSegment(
@@ -183,10 +208,12 @@ proc validateRkxHeader(hdr: ptr RkxHeader, imageSize: U64, expectedBase: VAddr):
 
   if hdr.bssMemSize > 0.U64:
     if not isAligned(hdr.bssVa, PageSize):
+      rkxInvalidReason = cstring"bss_va_unaligned"
       return false
 
     let imageLimit = expectedBase + UserImageVaSizeLimit
     if not rangeWithin(hdr.bssVa, hdr.bssMemSize, expectedBase, imageLimit):
+      rkxInvalidReason = cstring"bss_va_range"
       return false
 
   if not validateSegmentLayout(hdr):
@@ -194,13 +221,16 @@ proc validateRkxHeader(hdr: ptr RkxHeader, imageSize: U64, expectedBase: VAddr):
 
   # entry は text 内にある必要がある。
   if hdr.textMemSize == 0.U64:
+    rkxInvalidReason = cstring"empty_text"
     return false
 
   var textEnd = U64(0)
   if not checkedRange(hdr.textVa, hdr.textMemSize, textEnd):
+    rkxInvalidReason = cstring"text_range_overflow"
     return false
 
   if hdr.entryVa < hdr.textVa or hdr.entryVa >= textEnd:
+    rkxInvalidReason = cstring"entry_outside_text"
     return false
 
   true
@@ -393,6 +423,8 @@ proc loadRkxImage*(
     printPtr(hdr.textVa)
     print(" textSize=")
     printUnsigned(hdr.textMemSize)
+    print(" reason=")
+    print(rkxInvalidReason)
     putChar('\n')
     discard pfree(imagePa, RkxImageMaxPages)
     return -1

@@ -135,6 +135,16 @@ const
   SysProcessRunning* = U32(2)
   SysProcessSleeping* = U32(3)
   SysProcessZombie* = U32(4)
+  SysWaitNone* = U32(0)
+  SysWaitTtyRead* = U32(1)
+  SysWaitIpc* = U32(2)
+  SysWaitPid* = U32(3)
+  SysWaitFsReq* = U32(4)
+  SysWaitBlockReq* = U32(5)
+  SysWaitTimer* = U32(6)
+  SysWaitPipeRead* = U32(7)
+  SysWaitPipeWrite* = U32(8)
+  SysWaitPoll* = U32(9)
   SysProcListAllSlots* = U64(1)
   SysExecNoProcess* = I32(-2)
   SysExecNoEntry* = I32(-3)
@@ -175,6 +185,8 @@ type
     requestedCapabilityMask*: U32
     capabilityMask*: U32
     pendingSignals*: U32
+    waitKind*: U32
+    waitValue*: U64
     exePath*: array[SysProcessNameMax, char]
 
   SysDateTime* {.packed.} = object
@@ -206,6 +218,7 @@ type
     total*: U64
     used*: U64
     free*: U64
+    nextFreeHint*: U64
 
   SysFsInfoEntry* {.packed.} = object
     name*: array[SysFsInfoNameMax, char]
