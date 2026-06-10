@@ -66,6 +66,7 @@ proc syscallName*(num: U64): cstring =
   of SysGetPid: cstring("get_pid")
   of SysGetUid: cstring("get_uid")
   of SysGetGid: cstring("get_gid")
+  of SysGetEnv: cstring("get_env")
   of SysSetUser: cstring("set_user")
   of SysChmod: cstring("chmod")
   of SysChown: cstring("chown")

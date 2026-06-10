@@ -281,6 +281,9 @@ proc handleSyscall*(frame: ptr TrapFrame) =
   of SysGetGid:
     frame.a0 = syscallGetGid()
 
+  of SysGetEnv:
+    frame.a0 = syscallGetEnv(frame.a0, frame.a1)
+
   of SysLastError:
     frame.a0 = syscallLastError()
 

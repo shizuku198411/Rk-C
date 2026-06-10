@@ -258,6 +258,7 @@ proc createKernelProcessInternal(
   p.lastError = SysErrOk
   clearIpcQueue(p)
   initStandardFiles(p)
+  initDefaultEnvForIdentity(p, p.identity.uid, p.identity.gid)
   p.context = Context()
   p.context.sp = stack + KernelStackPages * PageSize
   p.context.ra = cast[U64](processBootstrap)
@@ -292,6 +293,7 @@ proc processInit*() =
     procs[i].lastError = SysErrOk
     clearIpcQueue(addr procs[i])
     clearFileState(addr procs[i])
+    clearEnv(addr procs[i])
     inc i
 
   currentProc = nil
@@ -353,12 +355,15 @@ proc inheritProcessMetadata*(child, parent: ptr Process) =
     setIdentity(child, RootUid, RootGid)
     setRootCwd(child)
     initStandardFiles(child)
+    initDefaultEnvForIdentity(child, child.identity.uid, child.identity.gid)
     return
 
   child.parentPid = parent.pid
   child.identity = parent.identity
   copyCwd(child.cwd, parent.cwd)
   copyFileState(child, parent)
+  copyEnv(child, parent)
+  syncPwdEnv(child)
   # Future per-process attributes such as rootfs should be copied here.
 
 
@@ -504,6 +509,7 @@ proc discardProcess*(p: ptr Process) =
   p.cpuPercent = 0
   clearIpcQueue(p)
   clearFileState(p)
+  clearEnv(p)
 
 
 ## Creates user process.

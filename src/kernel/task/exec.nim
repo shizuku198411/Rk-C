@@ -275,6 +275,10 @@ proc execUserAppWithIdentity(path: cstring, arg: cstring, detached: bool,
   inheritProcessMetadata(child, parent)
   child.identity.uid = uid
   child.identity.gid = gid
+  if parent == nil or parent.identity.uid != uid or parent.identity.gid != gid:
+    initDefaultEnvForIdentity(child, uid, gid)
+  else:
+    syncPwdEnv(child)
   child.pid
 
 

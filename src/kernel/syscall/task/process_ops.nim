@@ -17,6 +17,8 @@ import ../syscall_cap
 template processEntries: untyped = processScratch.processEntries
 template pathBuf: untyped = processScratch.pathBuf
 template argBuf: untyped = processScratch.argBuf
+template envEntries: untyped = processScratch.envEntries
+template envKeyBuf: untyped = processScratch.envKeyBuf
 template cwdCheckEntries: untyped = processScratch.cwdCheckEntries
 template fdInfoEntries: untyped = processScratch.fdInfoEntries
 
@@ -90,6 +92,17 @@ proc fillProcessInfo(entry: var SysProcessInfo, p: ptr Process) =
   else:
     entry.isUser = 0
   discard copyCString(entry.exePath, p.exePath)
+
+
+## Fills environment info.
+proc fillEnvInfo(entry: var SysEnvEntry, src: EnvEntry) =
+  entry = SysEnvEntry()
+  if not src.used:
+    return
+
+  entry.used = U32(1)
+  copyChars(entry.key, src.key)
+  copyChars(entry.value, src.value)
 
 
 ## Handles the ps syscall operation.
@@ -347,6 +360,54 @@ proc syscallGetGid*(): U64 =
     return U64(-1'i64)
 
   U64(currentProc.identity.gid)
+
+
+## Handles the get environment syscall operation.
+proc syscallGetEnv*(outBuf, keyVal: U64): U64 =
+  if currentProc == nil:
+    setLastError(SysErrInval)
+    return U64(-1'i64)
+  if outBuf == 0:
+    setLastError(SysErrInval)
+    return U64(-1'i64)
+
+  if keyVal == 0:
+    var count = U64(0)
+    var i = U32(0)
+    while i < SysEnvMaxEntries:
+      if currentProc.env.entries[i].used:
+        fillEnvInfo(envEntries[count], currentProc.env.entries[i])
+        inc count
+      inc i
+
+    let bytes = count * U64(sizeof(SysEnvEntry))
+    if not copyOutBuffer(outBuf, addr envEntries[0], bytes):
+      setLastError(SysErrInval)
+      return U64(-1'i64)
+
+    return count
+
+  if copyUserCString(addr envKeyBuf[0], keyVal, U64(SysEnvKeyMax)) < 0:
+    setLastError(SysErrInval)
+    return U64(-1'i64)
+  if envKeyBuf[0] == '\0':
+    setLastError(SysErrInval)
+    return U64(-1'i64)
+
+  var i = U32(0)
+  while i < SysEnvMaxEntries:
+    let entry = addr currentProc.env.entries[i]
+    if entry.used and fixedCStringEq(entry.key, cast[cstring](addr envKeyBuf[0])):
+      let value = cast[cstring](addr entry.value[0])
+      let len = cstrlen(value)
+      if not copyOutBuffer(outBuf, addr entry.value[0], len + U64(1)):
+        setLastError(SysErrInval)
+        return U64(-1'i64)
+      return len
+    inc i
+
+  setLastError(SysErrNoEnt)
+  U64(-1'i64)
 
 
 ## Handles the last error syscall operation.

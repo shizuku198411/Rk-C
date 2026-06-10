@@ -91,3 +91,4 @@ const
   SysConsoleInfo* = U64(89)
   SysCpuStaticInfo* = U64(90)
   SysRkxTrustList* = U64(91)
+  SysGetEnv* = U64(92)

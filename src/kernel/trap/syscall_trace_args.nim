@@ -188,6 +188,13 @@ proc printSyscallArgs*(frame: ptr TrapFrame, verbose: bool) =
     printNamedU64("uid", frame.a0)
     print(", ")
     printNamedU64("gid", frame.a1)
+  of SysGetEnv:
+    printNamedPtr("buf", frame.a0)
+    print(", ")
+    if frame.a1 == 0:
+      printNamedPtr("key", frame.a1)
+    else:
+      printNamedCString("key", frame.a1)
   of SysServiceList:
     printNamedPtr("entries", frame.a0)
     print(", ")

@@ -4,6 +4,9 @@ import types
 const
   SysProcessNameMax* = 32
   SysProcessCwdMax* = 64
+  SysEnvMaxEntries* = U64(16)
+  SysEnvKeyMax* = U32(32)
+  SysEnvValueMax* = U32(128)
   SysIpcMessageMax* = 512
   SysIpcQueueCap* = 16
   SysFsPathMax* = 128
@@ -188,6 +191,11 @@ type
     waitKind*: U32
     waitValue*: U64
     exePath*: array[SysProcessNameMax, char]
+
+  SysEnvEntry* {.packed.} = object
+    used*: U32
+    key*: array[SysEnvKeyMax, char]
+    value*: array[SysEnvValueMax, char]
 
   SysDateTime* {.packed.} = object
     year*: U32
