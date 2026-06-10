@@ -95,6 +95,14 @@ type
     tail*: U32
     count*: U32
     data*: array[SysPipeBufSize, U8]
+  
+  EnvEntry* {.bycopy.} = object
+    used*: bool
+    key*: array[SysEnvKeyMax, char]
+    value*: array[SysEnvValueMax, char]
+  
+  EnvState* {.bycopy.} = object
+    entries*: array[SysEnvMaxEntries, EnvEntry]
 
   Context* {.bycopy.} = object
     ra*: U64
@@ -137,6 +145,7 @@ type
     cpuPercent*: U32
     ipc*: IpcState
     files*: FileState
+    env*: EnvState
 
 
 var
@@ -227,6 +236,22 @@ proc setRootCwd(p: ptr Process) =
   p.cwd[1] = '\0'
 
 
+## Sets root user cwd.
+proc setRootUserCwd(p: ptr Process) =
+  discard copyCString(p.cwd, cstring"/root")
+
+
+## Sets default cwd for identity.
+proc setDefaultCwdForIdentity(p: ptr Process, uid: U32) =
+  if p == nil:
+    return
+
+  if uid == RootUid:
+    setRootUserCwd(p)
+  else:
+    setRootCwd(p)
+
+
 ## Sets identity.
 proc setIdentity(p: ptr Process, uid, gid: U32) =
   p.identity.uid = uid
@@ -265,6 +290,117 @@ proc clearIpcQueue(p: ptr Process) =
   while i < SysIpcQueueCap:
     p.ipc.queue[i] = SysIpcPacket()
     inc i
+
+
+## Clears process environment variables.
+proc clearEnv(p: ptr Process) =
+  if p == nil:
+    return
+
+  var i = U32(0)
+  while i < SysEnvMaxEntries:
+    p.env.entries[i] = EnvEntry()
+    inc i
+
+
+## Finds a process environment entry by id.
+proc findEnvEntry(p: ptr Process, key: cstring): I32 =
+  if p == nil or key == nil:
+    return I32(-1)
+
+  var i = U32(0)
+  while i < SysEnvMaxEntries:
+    if p.env.entries[i].used and fixedCStringEq(p.env.entries[i].key, key):
+      return I32(i)
+    inc i
+  
+  I32(-1)
+
+
+## Finds a free process environment entry.
+proc findFreeEnvEntry(p: ptr Process): I32 =
+  if p == nil:
+    return I32(-1)
+
+  var i = U32(0)
+  while i < SysEnvMaxEntries:
+    if not p.env.entries[i].used:
+      return I32(i)
+    inc i
+  
+  I32(-1)
+
+
+## Sets or updates one process environment variable.
+proc setEnv*(p: ptr Process, key, value: cstring, overwrite: bool = true): bool =
+  if p == nil or key == nil or value == nil or key[0] == '\0':
+    return false
+
+  var idx = findEnvEntry(p, key)
+  if idx >= 0:
+    if not overwrite:
+      return false
+  else:
+    idx = findFreeEnvEntry(p)
+    if idx < 0:
+      return false
+    p.env.entries[U32(idx)].used = true
+    if not copyCString(p.env.entries[U32(idx)].key, key):
+      p.env.entries[U32(idx)] = EnvEntry()
+      return false
+  
+  if not copyCString(p.env.entries[U32(idx)].value, value):
+    if p.env.entries[U32(idx)].key[0] == '\0':
+      p.env.entries[U32(idx)] = EnvEntry()
+    return false
+
+  true
+
+
+## Removes one process environment variable.
+proc unsetEnv*(p: ptr Process, key: cstring): bool =
+  let idx = findEnvEntry(p, key)
+  if idx < 0:
+    return false
+
+  p.env.entries[U32(idx)] = EnvEntry()
+  true
+
+
+## Copies process environment variables.
+proc copyEnv(dst, src: ptr Process) =
+  if dst == nil:
+    return
+
+  if src == nil:
+    clearEnv(dst)
+    return
+
+  dst.env = src.env
+
+
+## Sets the PED environment variables from the process cwd.
+proc syncPwdEnv*(p: ptr Process) =
+  if p == nil:
+    return
+
+  discard setEnv(p, cstring("PWD"), cast[cstring](addr p.cwd[0]))
+
+
+## Install default environment variables for an identity.
+proc initDefaultEnvForIdentity*(p: ptr Process, uid, gid: U32) =
+  if p == nil:
+    return
+
+  clearEnv(p)
+  discard setEnv(p, cstring("PATH"), cstring("/bin"))
+  discard setEnv(p, cstring("SHELL"), cstring("/bin/shell"))
+  discard setEnv(p, cstring("TERM"), cstring("uart"))
+  if uid == RootUid:
+    discard setEnv(p, cstring("HOME"), cstring("/root"))
+  else:
+    discard setEnv(p, cstring("HOME"), cstring("/home/rkc"))
+  discard setEnv(p, cstring("PWD"), cast[cstring](addr p.cwd[0]))
 
 
 ## Implements the signal bit kernel helper.

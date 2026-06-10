@@ -10,7 +10,7 @@ const
   HistoryMax* = 50
   HistorySaveBufMax* = HistoryMax * LineMax
   HistoryPathMax* = 128
-  HistoryPath* = "/.history"
+  HistoryPath* = "/root/.history"
   CommandScratchBufferCount = 11
   CommandScratchBufferCap* = LineMax
   LineBufferOffset = 0
@@ -55,6 +55,7 @@ var
   rightPathBuf*: ptr UncheckedArray[char] = nil
 
   cwdBuf*: array[SysProcessCwdMax, char]
+  envBuf*: array[SysEnvValueMax, char]
 
   history*: array[HistoryMax, array[LineMax, char]]
   historyPos*: int32

@@ -42,11 +42,79 @@ proc copyDefaultPasswdToDb(): U32 =
       appendChar(s[i])
       inc i
 
-  appendStr(cstring"root:0:0:/")
+  appendStr(cstring"root:0:0:/root")
   appendChar(char(10))
   appendStr(cstring"rkc:1000:1000:/home/rkc")
   appendChar(char(10))
   pos
+
+
+## Migrates legacy built-in account defaults in an existing passwd file.
+proc migratePasswdDefaults(): bool =
+  clearDbBuf()
+  let n = sysReadFile(PasswdPath, addr dbBuf[0], U64(DbBufSize - 1))
+  if n <= 0:
+    return true
+
+  dbBuf[U32(n)] = '\0'
+  var
+    outBuf: array[DbBufSize, char]
+    pos = 0
+    outPos = U32(0)
+    changed = false
+
+  template appendWrittenLine(entry: PasswdEntry): bool =
+    let written = writePasswdLine(addr outBuf[outPos], U32(DbBufSize) - outPos, entry)
+    if written == U32(0) or outPos + written >= U32(DbBufSize):
+      false
+    else:
+      outPos += written
+      true
+
+  while true:
+    let len = getLine(addr dbBuf[0], int(n), pos, addr lineBuf[0], int(PasswdLineMax))
+    if len <= 0:
+      break
+
+    var entry: PasswdEntry
+    if parsePasswdLine(cast[cstring](addr lineBuf[0]), entry) and
+        cstringEq(cast[cstring](addr entry.name[0]), cstring"root") and
+        entry.uid == RootUid and
+        cstringEq(cast[cstring](addr entry.home[0]), cstring"/"):
+      discard copyCString(entry.home, cstring"/root")
+      if not appendWrittenLine(entry):
+        return false
+      changed = true
+    else:
+      var i = 0
+      while i < len:
+        if outPos + U32(1) >= U32(DbBufSize):
+          return false
+        outBuf[outPos] = lineBuf[U32(i)]
+        inc outPos
+        inc i
+      if len == 0 or lineBuf[U32(len - 1)] != char(10):
+        if outPos + U32(1) >= U32(DbBufSize):
+          return false
+        outBuf[outPos] = char(10)
+        inc outPos
+
+  if not changed:
+    return true
+
+  let rc = sysWriteFileMode(
+    PasswdPath,
+    addr outBuf[0],
+    U64(outPos),
+    SysFsWriteCreate or SysFsWriteOverwrite,
+  )
+  if rc != 0:
+    write("[userd] failed to migrate /etc/passwd rc=")
+    writeI32(rc)
+    write("\n")
+    return false
+
+  true
 
 
 ## Writes the built-in group defaults into the database buffer.
@@ -80,7 +148,7 @@ proc ensurePasswdFile(): bool =
   let n = sysReadFile(PasswdPath, addr dbBuf[0], U64(DbBufSize - 1))
   if n > 0:
     dbBuf[U32(n)] = '\0'
-    return true
+    return migratePasswdDefaults()
 
   let size = copyDefaultPasswdToDb()
   let rc = sysWriteFileMode(
@@ -316,5 +384,4 @@ proc loadGroups(): bool =
     return false
 
   true
-
 
