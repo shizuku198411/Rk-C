@@ -249,7 +249,7 @@ proc createKernelProcessInternal(
   p.entry = entry
   p.kernelStack = stack
   p.rootPageTable = nil
-  setRootCwd(p)
+  setDefaultCwdForIdentity(p, p.identity.uid)
   clearUserState(p)
   clearWait(p)
   p.detached = false
@@ -353,7 +353,7 @@ proc inheritProcessMetadata*(child, parent: ptr Process) =
   if parent == nil:
     child.parentPid = 0
     setIdentity(child, RootUid, RootGid)
-    setRootCwd(child)
+    setDefaultCwdForIdentity(child, child.identity.uid)
     initStandardFiles(child)
     initDefaultEnvForIdentity(child, child.identity.uid, child.identity.gid)
     return

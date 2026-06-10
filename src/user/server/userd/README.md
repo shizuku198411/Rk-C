@@ -38,7 +38,7 @@ The current format is PBKDF2-HMAC-SHA256:
 
 Default accounts are created when the database files do not exist:
 
-- `root`, UID 0, GID 0, home `/`
+- `root`, UID 0, GID 0, home `/root`
 - `rkc`, UID 1000, GID 1000, home `/home/rkc`
 
 ## Startup Flow

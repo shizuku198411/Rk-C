@@ -236,6 +236,22 @@ proc setRootCwd(p: ptr Process) =
   p.cwd[1] = '\0'
 
 
+## Sets root user cwd.
+proc setRootUserCwd(p: ptr Process) =
+  discard copyCString(p.cwd, cstring"/root")
+
+
+## Sets default cwd for identity.
+proc setDefaultCwdForIdentity(p: ptr Process, uid: U32) =
+  if p == nil:
+    return
+
+  if uid == RootUid:
+    setRootUserCwd(p)
+  else:
+    setRootCwd(p)
+
+
 ## Sets identity.
 proc setIdentity(p: ptr Process, uid, gid: U32) =
   p.identity.uid = uid
@@ -380,6 +396,10 @@ proc initDefaultEnvForIdentity*(p: ptr Process, uid, gid: U32) =
   discard setEnv(p, cstring("PATH"), cstring("/bin"))
   discard setEnv(p, cstring("SHELL"), cstring("/bin/shell"))
   discard setEnv(p, cstring("TERM"), cstring("uart"))
+  if uid == RootUid:
+    discard setEnv(p, cstring("HOME"), cstring("/root"))
+  else:
+    discard setEnv(p, cstring("HOME"), cstring("/home/rkc"))
   discard setEnv(p, cstring("PWD"), cast[cstring](addr p.cwd[0]))
 
 

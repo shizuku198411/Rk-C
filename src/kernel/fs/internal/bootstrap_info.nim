@@ -158,6 +158,13 @@ proc fsInit*() =
   fsChanged = ensureRootDir("dev", FsTypeDir) or fsChanged
   fsChanged = ensureRootDir("var", FsTypeDir) or fsChanged
   fsChanged = ensureRootDirOwned(
+    "root",
+    FsTypeDir,
+    RootUid,
+    RootGid,
+    FsModeDirDefault,
+  ) or fsChanged
+  fsChanged = ensureRootDirOwned(
     "home",
     FsTypeDir,
     RootUid,
