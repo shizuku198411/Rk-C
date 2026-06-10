@@ -75,6 +75,9 @@ proc user_start*(arg: cstring) {.exportc, cdecl, noreturn.} =
     if cstringEq(cmdCString(), "help"):
       printHelp()
 
+    elif setEnvironmentAssignment(cmdCString(), argCString()):
+      discard
+
     elif cstringEq(cmdCString(), "cd"):
       changeDirectory(argCString())
 

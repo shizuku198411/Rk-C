@@ -19,6 +19,7 @@ template pathBuf: untyped = processScratch.pathBuf
 template argBuf: untyped = processScratch.argBuf
 template envEntries: untyped = processScratch.envEntries
 template envKeyBuf: untyped = processScratch.envKeyBuf
+template envValueBuf: untyped = processScratch.envValueBuf
 template cwdCheckEntries: untyped = processScratch.cwdCheckEntries
 template fdInfoEntries: untyped = processScratch.fdInfoEntries
 
@@ -409,6 +410,50 @@ proc syscallGetEnv*(outBuf, keyVal: U64): U64 =
 
   setLastError(SysErrNoEnt)
   U64(-1'i64)
+
+
+## Handles the set environment syscall operation.
+proc syscallSetEnv*(key, value: U64): U64 =
+  if currentProc == nil:
+    setLastError(SysErrInval)
+    return U64(-1'i64)
+  if key == 0 or value == 0:
+    setLastError(SysErrInval)
+    return U64(-1'i64)
+
+  if copyUserCString(addr envKeyBuf[0], key, U64(SysEnvKeyMax)) < 0:
+    setLastError(SysErrInval)
+    return U64(-1'i64)
+  if envKeyBuf[0] == '\0':
+    setLastError(SysErrInval)
+    return U64(-1'i64)
+
+  if copyUserCString(addr envValueBuf[0], value, U64(SysEnvValueMax)) < 0:
+    setLastError(SysErrInval)
+    return U64(-1'i64)
+
+  var i = U32(0)
+  while i < SysEnvMaxEntries:
+    let entry = addr currentProc.env.entries[i]
+    if entry.used and fixedCStringEq(entry.key, cast[cstring](addr envKeyBuf[0])):
+      if envValueBuf[0] == '\0':
+        currentProc.env.entries[i] = EnvEntry()
+        return 0
+
+      if setEnv(currentProc, cast[cstring](addr envKeyBuf[0]), cast[cstring](addr envValueBuf[0])):
+        return 0
+      setLastError(SysErrInval)
+      return U64(-1'i64)
+    inc i
+
+  if envValueBuf[0] == '\0':
+    return 0
+
+  if not setEnv(currentProc, cast[cstring](addr envKeyBuf[0]), cast[cstring](addr envValueBuf[0])):
+    setLastError(SysErrInval)
+    return U64(-1'i64)
+
+  0
 
 
 ## Handles the last error syscall operation.

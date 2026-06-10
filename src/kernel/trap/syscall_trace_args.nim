@@ -195,6 +195,10 @@ proc printSyscallArgs*(frame: ptr TrapFrame, verbose: bool) =
       printNamedPtr("key", frame.a1)
     else:
       printNamedCString("key", frame.a1)
+  of SysSetEnv:
+    printNamedCString("key", frame.a0)
+    print(", ")
+    printNamedCString("value", frame.a1)
   of SysServiceList:
     printNamedPtr("entries", frame.a0)
     print(", ")

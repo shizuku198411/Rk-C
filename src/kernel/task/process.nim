@@ -332,7 +332,7 @@ proc findFreeEnvEntry(p: ptr Process): I32 =
 
 
 ## Sets or updates one process environment variable.
-proc setEnv(p: ptr Process, key, value: cstring, overwrite: bool = true): bool =
+proc setEnv*(p: ptr Process, key, value: cstring, overwrite: bool = true): bool =
   if p == nil or key == nil or value == nil or key[0] == '\0':
     return false
 

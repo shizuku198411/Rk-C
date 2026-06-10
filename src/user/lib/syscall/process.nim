@@ -75,6 +75,11 @@ proc sysGetEnv*(outBuf: pointer, key: cstring = nil): I32 =
   I32(rawSyscall3(SysGetEnv, cast[U64](outBuf), cast[U64](key), 0))
 
 
+## Invokes the set environment syscall wrapper.
+proc sysSetEnv*(key, value: cstring): I32 =
+  I32(rawSyscall3(SysSetEnv, cast[U64](key), cast[U64](value), 0))
+
+
 ## Invokes the set user syscall wrapper.
 proc sysSetUser*(uid, gid: U32): I32 =
   I32(rawSyscall3(SysSetUser, U64(uid), U64(gid), 0))

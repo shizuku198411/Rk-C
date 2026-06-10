@@ -29,6 +29,32 @@ proc changeDirectory*(path: cstring) =
     write("cd: failed\n")
 
 
+## Sets or unsets an environment variable from a KEY=VALUE assignment.
+proc setEnvironmentAssignment*(assignment, extraArg: cstring): bool =
+  if assignment == nil:
+    return false
+
+  var eqPos = 0
+  while assignment[eqPos] != '\0' and assignment[eqPos] != '=':
+    inc eqPos
+
+  if assignment[eqPos] != '=':
+    return false
+
+  if eqPos == 0 or not isEmpty(extraArg):
+    write("env: invalid assignment\n")
+    return true
+
+  cmdBuf[eqPos] = '\0'
+  if sysSetEnv(
+    cast[cstring](addr cmdBuf[0]),
+    cast[cstring](addr cmdBuf[eqPos + 1])
+  ) != 0:
+    write("env: failed\n")
+
+  true
+
+
 ## Authenticates and switches the interactive shell to another user account.
 proc switchUser*(name: cstring) =
   if isEmpty(name):

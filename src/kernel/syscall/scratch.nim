@@ -36,6 +36,7 @@ type
     argBuf*: array[UserCStringMax, char]
     envEntries*: array[SysEnvMaxEntries, SysEnvEntry]
     envKeyBuf*: array[SysEnvKeyMax, char]
+    envValueBuf*: array[SysEnvValueMax, char]
     cwdCheckEntries*: array[2, FsDirEntry]
     fdInfoEntries*: array[SysFdMax, SysFdInfo]
 
