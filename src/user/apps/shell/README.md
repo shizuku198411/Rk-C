@@ -11,7 +11,7 @@ for a resident shell process.
 
 - Runs as the default interactive user process after service startup
 - Prints the banner from `user_start`
-- Loads command history from `/.history`
+- Loads command history from the current user's home directory
 - Repeatedly prints the prompt, reads one line, and dispatches the command
 
 ## Built-ins
@@ -56,7 +56,7 @@ with `sysExec`.
 - `help.nim`
   - Help text
 - `history.nim`
-  - In-memory history and `/.history` persistence
+  - In-memory history and per-user home directory persistence
 - `line_editor.nim`
   - Interactive line input and cursor editing
 - `prompt.nim`

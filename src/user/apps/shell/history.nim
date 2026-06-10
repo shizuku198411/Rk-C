@@ -125,7 +125,7 @@ proc appendHistoryPathCString(pos: var int, s: cstring): bool =
 ## Builds the current user's history file path.
 ##
 ## root:
-##   /.history
+##   /root/.history
 ##
 ## user:
 ##   /home/<user>/.history

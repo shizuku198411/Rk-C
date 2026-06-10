@@ -1,5 +1,6 @@
 ## Implements shell built-in commands for directory, identity, and diagnostics.
 import ./history
+import ./state
 import ../../lib/core/io
 import ../../lib/core/pathutils
 import ../../lib/core/passwd
@@ -11,7 +12,12 @@ import ../../lib/core/userdb
 ## Changes the current working directory after resolving the requested path.
 proc changeDirectory*(path: cstring) =
   if isEmpty(path):
-    write("usage: cd <path>\n")
+    if sysGetEnv(addr envBuf[0], cstring("HOME")) <= 0:
+      write("cd: failed to retrieve HOME\n")
+      return
+    if sysSetCwd(cast[cstring](addr envBuf[0])) != 0:
+      write("cd: failed\n")
+      return
     return
 
   let resolved = resolvePath(path)

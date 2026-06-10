@@ -327,6 +327,7 @@ proc syscallSetCwd*(pathVal: U64): U64 =
   if setCurrentCwd(path) != 0:
     return U64(-1'i64)
 
+  syncPwdEnv(currentProc)
   0
 
 
@@ -433,6 +434,7 @@ proc syscallSetUser*(uidVal, gidVal: U64): U64 =
 
   currentProc.identity.uid = uid
   currentProc.identity.gid = gid
+  initDefaultEnvForIdentity(currentProc, uid, gid)
   clearLastError()
   0
 
